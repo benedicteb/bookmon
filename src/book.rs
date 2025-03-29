@@ -30,10 +30,6 @@ pub fn get_book_input() -> io::Result<Book> {
 }
 
 pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
-    if storage.books.contains_key(&book.isbn) {
-        return Err("Book with this ISBN already exists".to_string());
-    }
-    
-    storage.books.insert(book.isbn.clone(), book);
+    storage.books.insert(book.id.clone(), book);
     Ok(())
 } 
