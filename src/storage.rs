@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Book {
     pub id: String,
     pub added_on: DateTime<Utc>,
@@ -60,4 +60,21 @@ pub fn load_storage(storage_path: &str) -> Result<Storage, Box<dyn std::error::E
     let contents = fs::read_to_string(storage_path)?;
     let storage: Storage = serde_json::from_str(&contents)?;
     Ok(storage)
+}
+
+pub fn save_storage(storage_path: &str, storage: &Storage) -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new(storage_path);
+    
+    // Ensure the parent directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Write the storage data
+    fs::write(
+        path,
+        serde_json::to_string_pretty(storage)?,
+    )?;
+    
+    Ok(())
 } 
