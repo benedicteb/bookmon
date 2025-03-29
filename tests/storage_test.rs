@@ -2,8 +2,7 @@ use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEv
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
-use chrono::{Utc, Duration};
-use uuid::Uuid;
+use chrono::Utc;
 
 #[test]
 fn test_storage_initialization() {
@@ -306,77 +305,143 @@ fn test_get_unstarted_books() {
 #[test]
 fn test_get_started_books() {
     let mut storage = Storage::new();
-    
+
     // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
-    storage.add_author(author);
+    storage.authors.insert(author.id.clone(), author);
 
-    let category = Category::new("Test Category".to_string(), None);
-    let category_id = category.id.clone();
-    storage.add_category(category);
-
-    // Create three books
-    let book1 = Book::new("Book 1".to_string(), "ISBN1".to_string(), category_id.clone(), author_id.clone());
-    let book2 = Book::new("Book 2".to_string(), "ISBN2".to_string(), category_id.clone(), author_id.clone());
-    let book3 = Book::new("Book 3".to_string(), "ISBN3".to_string(), category_id.clone(), author_id.clone());
-    
+    // Create multiple books
+    let book1 = Book::new(
+        "Started Book".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+    );
     let book1_id = book1.id.clone();
+    storage.books.insert(book1.id.clone(), book1);
+
+    let book2 = Book::new(
+        "Finished Book".to_string(),
+        "0987654321".to_string(),
+        category_id,
+        author_id,
+    );
     let book2_id = book2.id.clone();
-    let book3_id = book3.id.clone();
-    
-    storage.add_book(book1);
-    storage.add_book(book2);
-    storage.add_book(book3);
+    storage.books.insert(book2.id.clone(), book2);
 
-    // Test case 1: Book with only Started event
-    let reading1 = Reading {
-        id: Uuid::new_v4().to_string(),
-        created_on: Utc::now(),
-        book_id: book1_id.clone(),
-        event: ReadingEvent::Started,
-    };
-    storage.add_reading(reading1);
+    // Create reading events
+    let started_reading = Reading::new(book1_id.clone(), ReadingEvent::Started);
+    let finished_reading = Reading::new(book2_id.clone(), ReadingEvent::Finished);
 
-    // Test case 2: Book with Started then Finished events
-    let reading2_started = Reading {
-        id: Uuid::new_v4().to_string(),
-        created_on: Utc::now() - Duration::days(2),
-        book_id: book2_id.clone(),
-        event: ReadingEvent::Started,
-    };
-    let reading2_finished = Reading {
-        id: Uuid::new_v4().to_string(),
-        created_on: Utc::now() - Duration::days(1),
-        book_id: book2_id.clone(),
-        event: ReadingEvent::Finished,
-    };
-    storage.add_reading(reading2_started);
-    storage.add_reading(reading2_finished);
+    storage.add_reading(started_reading);
+    storage.add_reading(finished_reading);
 
-    // Test case 3: Book with Finished then Started events
-    let reading3_finished = Reading {
-        id: Uuid::new_v4().to_string(),
-        created_on: Utc::now() - Duration::days(2),
-        book_id: book3_id.clone(),
-        event: ReadingEvent::Finished,
-    };
-    let reading3_started = Reading {
-        id: Uuid::new_v4().to_string(),
-        created_on: Utc::now() - Duration::days(1),
-        book_id: book3_id.clone(),
-        event: ReadingEvent::Started,
-    };
-    storage.add_reading(reading3_finished);
-    storage.add_reading(reading3_started);
-
-    // Get started books
+    // Test getting started books
     let started_books = storage.get_started_books();
+    assert_eq!(started_books.len(), 1, "Should have 1 started book");
+    assert_eq!(started_books[0].title, "Started Book");
+}
 
-    // Verify results
-    assert_eq!(started_books.len(), 2);
-    let started_book_ids: Vec<String> = started_books.iter().map(|b| b.id.clone()).collect();
-    assert!(started_book_ids.contains(&book1_id));
-    assert!(started_book_ids.contains(&book3_id));
-    assert!(!started_book_ids.contains(&book2_id));
+#[test]
+fn test_get_finished_books() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    // Create multiple books
+    let book1 = Book::new(
+        "Started Book".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+    );
+    let book1_id = book1.id.clone();
+    storage.books.insert(book1.id.clone(), book1);
+
+    let book2 = Book::new(
+        "Finished Book".to_string(),
+        "0987654321".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+    );
+    let book2_id = book2.id.clone();
+    storage.books.insert(book2.id.clone(), book2);
+
+    // Create reading events with different timestamps
+    let started_reading = Reading::new(book1_id.clone(), ReadingEvent::Started);
+    let finished_reading = Reading::new(book2_id.clone(), ReadingEvent::Finished);
+
+    storage.add_reading(started_reading);
+    storage.add_reading(finished_reading);
+
+    // Test getting finished books
+    let finished_books = storage.get_finished_books();
+    assert_eq!(finished_books.len(), 1, "Should have 1 finished book");
+    assert_eq!(finished_books[0].title, "Finished Book");
+
+    // Test a book that was started then finished
+    let book3 = Book::new(
+        "Started Then Finished Book".to_string(),
+        "1111111111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+    );
+    let book3_id = book3.id.clone();
+    storage.books.insert(book3.id.clone(), book3);
+
+    // Add started then finished reading events
+    let started_reading2 = Reading::new(book3_id.clone(), ReadingEvent::Started);
+    let finished_reading2 = Reading::new(book3_id, ReadingEvent::Finished);
+
+    storage.add_reading(started_reading2);
+    storage.add_reading(finished_reading2);
+
+    // Test getting finished books again
+    let finished_books = storage.get_finished_books();
+    assert_eq!(finished_books.len(), 2, "Should have 2 finished books");
+    assert!(finished_books.iter().any(|b| b.title == "Finished Book"));
+    assert!(finished_books.iter().any(|b| b.title == "Started Then Finished Book"));
+
+    // Test a book that was finished then started (should not be returned)
+    let book4 = Book::new(
+        "Finished Then Started Book".to_string(),
+        "2222222222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+    );
+    let book4_id = book4.id.clone();
+    storage.books.insert(book4.id.clone(), book4);
+
+    // Add finished then started reading events with controlled timestamps
+    let mut finished_reading3 = Reading::new(book4_id.clone(), ReadingEvent::Finished);
+    finished_reading3.created_on = Utc::now() - chrono::Duration::hours(2); // 2 hours ago
+
+    let mut started_reading3 = Reading::new(book4_id, ReadingEvent::Started);
+    started_reading3.created_on = Utc::now() - chrono::Duration::hours(1); // 1 hour ago (more recent)
+
+    storage.add_reading(finished_reading3);
+    storage.add_reading(started_reading3);
+
+    // Test getting finished books again - should still only have 2 books
+    let finished_books = storage.get_finished_books();
+    assert_eq!(finished_books.len(), 2, "Should still have 2 finished books (not including the book that was finished then started)");
+    assert!(!finished_books.iter().any(|b| b.title == "Finished Then Started Book"), "Book that was finished then started should not be included");
 } 

@@ -186,6 +186,36 @@ impl Storage {
             })
             .collect()
     }
+
+    pub fn get_finished_books(&self) -> Vec<&Book> {
+        // Group readings by book_id
+        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
+        for reading in self.readings.values() {
+            book_readings.entry(reading.book_id.clone())
+                .or_default()
+                .push(reading);
+        }
+
+        // Filter books to only those that have been finished
+        self.books.values()
+            .filter(|book| {
+                if let Some(readings) = book_readings.get(&book.id) {
+                    // Sort readings by created_on in descending order
+                    let mut sorted_readings = readings.clone();
+                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+                    // Check if the most recent reading is Finished
+                    if let Some(most_recent) = sorted_readings.first() {
+                        most_recent.event == ReadingEvent::Finished
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .collect()
+    }
 }
 
 pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {

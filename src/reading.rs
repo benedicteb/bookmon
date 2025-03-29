@@ -93,10 +93,10 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 }
 
 pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
-    // Get all finished readings
-    let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
+    // Get all finished books using the new method
+    let finished_books = storage.get_finished_books();
 
-    if finished_readings.is_empty() {
+    if finished_books.is_empty() {
         println!("No finished books found.");
         return Ok(());
     }
@@ -106,16 +106,19 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Finished on".to_string()], // header
     ];
 
-    // For each finished reading, find the corresponding book and author
-    for reading in finished_readings {
-        let book = storage.books.get(&reading.book_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Book not found"))?;
-        
+    // For each finished book, find the corresponding author and most recent finished reading
+    for book in finished_books {
         let author = storage.authors.get(&book.author_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
 
+        // Find the most recent finished reading for this book
+        let most_recent_reading = storage.readings.values()
+            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Finished)
+            .max_by_key(|r| r.created_on)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
+
         // Format the finished date
-        let finished_date = reading.created_on.format("%Y-%m-%d").to_string();
+        let finished_date = most_recent_reading.created_on.format("%Y-%m-%d").to_string();
         
         // Add row to table data
         table_data.push(vec![
