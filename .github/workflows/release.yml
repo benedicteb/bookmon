@@ -150,8 +150,8 @@ jobs:
           cd artifacts
           for dir in bookmon-*; do
             if [ -d "$dir" ]; then
-              echo tar -czf "${dir}.tar.gz" -C "$dir"
-              tar -czf "${dir}.tar.gz" -C "$dir"
+              echo tar -czf "${dir}.tar.gz" "$dir"
+              tar -czf "${dir}.tar.gz" "$dir"
             fi
           done
           cd ..
