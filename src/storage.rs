@@ -252,11 +252,16 @@ impl Storage {
         if !readings.is_empty() {
             let mut sorted_readings = readings;
             sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-            if let Some(most_recent) = sorted_readings.first() {
-                most_recent.event == ReadingEvent::Started
-            } else {
-                false
+            
+            // Check if there's a Started event that isn't followed by a Finished event
+            for reading in sorted_readings {
+                match reading.event {
+                    ReadingEvent::Started => return true,
+                    ReadingEvent::Finished => return false,
+                    ReadingEvent::Update => continue,
+                }
             }
+            false
         } else {
             false
         }

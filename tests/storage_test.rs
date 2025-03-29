@@ -571,4 +571,41 @@ fn test_reading_event_default_metadata() {
     let readings = storage.get_readings_by_event(ReadingEvent::Started);
     assert_eq!(readings.len(), 1);
     assert_eq!(readings[0].metadata.current_page, None);
+}
+
+#[test]
+fn test_is_book_started_with_update_event() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a reading event sequence: Started -> Update
+    let started_reading = Reading::new(book_id.clone(), ReadingEvent::Started);
+    let update_reading = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 50);
+
+    storage.add_reading(started_reading);
+    storage.add_reading(update_reading);
+
+    // The book should be considered started even though the most recent event is Update
+    assert!(storage.is_book_started(&book_id), "Book should be considered started even with Update as most recent event");
 } 
