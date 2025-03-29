@@ -108,17 +108,38 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .map(|(id, _)| id.clone())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
     } else {
-        // Show author selection dialog
-        let options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        // Show author selection dialog with option to create new
+        let mut options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        options.push("+ Create new author");
+
         let selection = Select::new("Select author:", options)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        
-        // Find the selected author's ID
-        authors.iter()
-            .find(|(name, _)| name.as_str() == selection)
-            .map(|(_, id)| id.clone())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected author not found"))?
+
+        if selection == "+ Create new author" {
+            // Prompt for new author name
+            let author_name = Text::new("Enter new author name:")
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            
+            // Create a new author
+            let author = Author::new(author_name.trim().to_string());
+            
+            // Store the author and get its ID
+            storage.add_author(author);
+            
+            // Get the ID of the newly created author
+            storage.authors.iter()
+                .find(|(_, a)| a.name == author_name.trim())
+                .map(|(id, _)| id.clone())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
+        } else {
+            // Find the selected author's ID
+            authors.iter()
+                .find(|(name, _)| name.as_str() == selection)
+                .map(|(_, id)| id.clone())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected author not found"))?
+        }
     };
 
     Ok(Book {
