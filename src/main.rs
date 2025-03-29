@@ -1,8 +1,7 @@
 mod config;
 use clap::{Parser, Subcommand};
 use bookmon::{storage, book, category, author, reading};
-use inquire::{Select, Confirm};
-use pretty_table::prelude::*;
+use inquire::Select;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -153,12 +152,11 @@ fn main() {
             
             // Create options for book selection with status
             let options: Vec<String> = storage.books.iter()
+                .filter(|(id, _)| !storage.is_book_finished(id))
                 .map(|(_, b)| {
                     let author = storage.authors.get(&b.author_id)
                         .expect("Author not found");
-                    let status = if storage.is_book_finished(&b.id) {
-                        "[Finished]"
-                    } else if storage.is_book_started(&b.id) {
+                    let status = if storage.is_book_started(&b.id) {
                         "[Started]"
                     } else {
                         "[Not Started]"
