@@ -146,9 +146,11 @@ jobs:
         run: |
           ls -la
           ls -la artifacts
+          find artifacts
           cd artifacts
           for dir in bookmon-*; do
             if [ -d "$dir" ]; then
+              echo tar -czf "${dir}.tar.gz" -C "$dir"
               tar -czf "${dir}.tar.gz" -C "$dir"
             fi
           done
