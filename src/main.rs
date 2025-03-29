@@ -6,7 +6,7 @@ use bookmon::{storage, book, category, author, reading};
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -40,104 +40,138 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::AddBook => {
-            let mut storage = storage::load_storage(&settings.storage_file)
-                .expect("Failed to load storage");
-            
-            match book::get_book_input(&mut storage) {
-                Ok(book) => {
-                    match book::store_book(&mut storage, book) {
-                        Ok(_) => {
-                            storage::save_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Book added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add book: {}", e),
-                    }
-                }
-                Err(e) => eprintln!("Failed to get book input: {}", e),
-            }
-        }
-        Commands::AddCategory => {
-            match category::get_category_input() {
-                Ok(category) => {
+        Some(command) => {
+            match command {
+                Commands::AddBook => {
                     let mut storage = storage::load_storage(&settings.storage_file)
                         .expect("Failed to load storage");
                     
-                    match category::store_category(&mut storage, category) {
-                        Ok(_) => {
-                            storage::save_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Category added successfully!");
+                    match book::get_book_input(&mut storage) {
+                        Ok(book) => {
+                            match book::store_book(&mut storage, book) {
+                                Ok(_) => {
+                                    storage::save_storage(&settings.storage_file, &storage)
+                                        .expect("Failed to save storage");
+                                    println!("Book added successfully!");
+                                }
+                                Err(e) => eprintln!("Failed to add book: {}", e),
+                            }
                         }
-                        Err(e) => eprintln!("Failed to add category: {}", e),
+                        Err(e) => eprintln!("Failed to get book input: {}", e),
                     }
                 }
-                Err(e) => eprintln!("Failed to get category input: {}", e),
-            }
-        }
-        Commands::AddAuthor => {
-            match author::get_author_input() {
-                Ok(author) => {
-                    let mut storage = storage::load_storage(&settings.storage_file)
+                Commands::AddCategory => {
+                    match category::get_category_input() {
+                        Ok(category) => {
+                            let mut storage = storage::load_storage(&settings.storage_file)
+                                .expect("Failed to load storage");
+                            
+                            match category::store_category(&mut storage, category) {
+                                Ok(_) => {
+                                    storage::save_storage(&settings.storage_file, &storage)
+                                        .expect("Failed to save storage");
+                                    println!("Category added successfully!");
+                                }
+                                Err(e) => eprintln!("Failed to add category: {}", e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to get category input: {}", e),
+                    }
+                }
+                Commands::AddAuthor => {
+                    match author::get_author_input() {
+                        Ok(author) => {
+                            let mut storage = storage::load_storage(&settings.storage_file)
+                                .expect("Failed to load storage");
+                            
+                            match author::store_author(&mut storage, author) {
+                                Ok(_) => {
+                                    storage::save_storage(&settings.storage_file, &storage)
+                                        .expect("Failed to save storage");
+                                    println!("Author added successfully!");
+                                }
+                                Err(e) => eprintln!("Failed to add author: {}", e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to get author input: {}", e),
+                    }
+                }
+                Commands::AddReading => {
+                    let storage = storage::load_storage(&settings.storage_file)
                         .expect("Failed to load storage");
                     
-                    match author::store_author(&mut storage, author) {
-                        Ok(_) => {
-                            storage::save_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Author added successfully!");
+                    match reading::get_reading_input(&storage) {
+                        Ok(reading) => {
+                            let mut storage = storage;
+                            match reading::store_reading(&mut storage, reading) {
+                                Ok(_) => {
+                                    storage::save_storage(&settings.storage_file, &storage)
+                                        .expect("Failed to save storage");
+                                    println!("Reading event added successfully!");
+                                }
+                                Err(e) => eprintln!("Failed to add reading event: {}", e),
+                            }
                         }
-                        Err(e) => eprintln!("Failed to add author: {}", e),
+                        Err(e) => eprintln!("Failed to get reading input: {}", e),
                     }
                 }
-                Err(e) => eprintln!("Failed to get author input: {}", e),
-            }
-        }
-        Commands::AddReading => {
-            let storage = storage::load_storage(&settings.storage_file)
-                .expect("Failed to load storage");
-            
-            match reading::get_reading_input(&storage) {
-                Ok(reading) => {
-                    let mut storage = storage;
-                    match reading::store_reading(&mut storage, reading) {
-                        Ok(_) => {
-                            storage::save_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Reading event added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add reading event: {}", e),
+                Commands::GetStarted => {
+                    let storage = storage::load_storage(&settings.storage_file)
+                        .expect("Failed to load storage");
+                    
+                    match reading::show_started_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show started books: {}", e),
                     }
                 }
-                Err(e) => eprintln!("Failed to get reading input: {}", e),
+                Commands::GetFinished => {
+                    let storage = storage::load_storage(&settings.storage_file)
+                        .expect("Failed to load storage");
+                    
+                    match reading::show_finished_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show finished books: {}", e),
+                    }
+                }
+                Commands::GetUnstarted => {
+                    let storage = storage::load_storage(&settings.storage_file)
+                        .expect("Failed to load storage");
+                    
+                    match reading::show_unstarted_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+                    }
+                }
             }
         }
-        Commands::GetStarted => {
+        None => {
+            // Interactive mode - show unfinished books and allow interaction
             let storage = storage::load_storage(&settings.storage_file)
                 .expect("Failed to load storage");
             
-            match reading::show_started_books(&storage) {
-                Ok(_) => {}
-                Err(e) => eprintln!("Failed to show started books: {}", e),
+            // Show started books first
+            println!("\nCurrently Reading:");
+            if let Err(e) = reading::show_started_books(&storage) {
+                eprintln!("Failed to show started books: {}", e);
             }
-        }
-        Commands::GetFinished => {
-            let storage = storage::load_storage(&settings.storage_file)
-                .expect("Failed to load storage");
             
-            match reading::show_finished_books(&storage) {
-                Ok(_) => {}
-                Err(e) => eprintln!("Failed to show finished books: {}", e),
+            // Then show unstarted books
+            println!("\nNot Started Yet:");
+            if let Err(e) = reading::show_unstarted_books(&storage) {
+                eprintln!("Failed to show unstarted books: {}", e);
             }
-        }
-        Commands::GetUnstarted => {
-            let storage = storage::load_storage(&settings.storage_file)
-                .expect("Failed to load storage");
             
-            match reading::show_unstarted_books(&storage) {
-                Ok(_) => {}
-                Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+            // Get user input for book selection and action
+            let mut storage = storage;
+            if let Ok(reading) = reading::get_reading_input(&storage) {
+                match reading::store_reading(&mut storage, reading) {
+                    Ok(_) => {
+                        storage::save_storage(&settings.storage_file, &storage)
+                            .expect("Failed to save storage");
+                        println!("Reading event added successfully!");
+                    }
+                    Err(e) => eprintln!("Failed to add reading event: {}", e),
+                }
             }
         }
     }
