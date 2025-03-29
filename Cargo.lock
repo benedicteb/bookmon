@@ -130,6 +130,7 @@ dependencies = [
  "clap",
  "config",
  "dialoguer",
+ "pretty-table",
  "serde",
  "serde_json",
  "tempfile",
@@ -557,6 +558,15 @@ dependencies = [
  "once_cell",
  "pest",
  "sha2",
+]
+
+[[package]]
+name = "pretty-table"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ebabdeeb9dde45278a6fd4caf2ec417c8c8d81b75d4450dc8d8305c25a4ac1d"
+dependencies = [
+ "thiserror 1.0.69",
 ]
 
 [[package]]

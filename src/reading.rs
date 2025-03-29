@@ -2,6 +2,7 @@ use std::io;
 use dialoguer::Select;
 use crate::storage::{Storage, Reading, ReadingEvent};
 use chrono::Utc;
+use pretty_table::prelude::*;
 
 pub fn get_reading_input(storage: &Storage) -> io::Result<Reading> {
     // Get list of books with their IDs
@@ -58,10 +59,10 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         return Ok(());
     }
 
-    // Create a table header
-    println!("\nCurrently Reading:");
-    println!("{:<40} {:<30} {:<15}", "Title", "Author", "Days Started");
-    println!("{:-<85}", "");
+    // Create table data
+    let mut table_data = vec![
+        vec!["Title".to_string(), "Author".to_string(), "Days Started".to_string()], // header
+    ];
 
     // For each started reading, find the corresponding book and author
     for reading in started_readings {
@@ -74,14 +75,18 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         // Calculate days since started
         let days = (Utc::now() - reading.created_on).num_days();
         
-        // Print the row
-        println!("{:<40} {:<30} {:<15}", 
-            book.title,
-            author.name,
-            days
-        );
+        // Add row to table data
+        table_data.push(vec![
+            book.title.clone(),
+            author.name.clone(),
+            days.to_string()
+        ]);
     }
 
+    // Print the table
+    println!("\nCurrently Reading:");
+    print_table!(table_data);
     println!(); // Add a blank line at the end
+    
     Ok(())
 } 
