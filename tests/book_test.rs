@@ -33,6 +33,7 @@ fn test_store_book_with_valid_category_and_author() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
 
     assert!(store_book(&mut storage, book).is_ok());
@@ -54,6 +55,7 @@ fn test_store_book_with_invalid_category() {
         "1234567890".to_string(),
         "invalid-category-id".to_string(),
         author_id,
+        300,
     );
 
     // Attempting to store the book should fail
@@ -81,6 +83,7 @@ fn test_store_book_with_invalid_author() {
         "1234567890".to_string(),
         category_id,
         "invalid-author-id".to_string(),
+        300,
     );
 
     // Attempting to store the book should fail
@@ -112,6 +115,7 @@ fn test_book_id_matches_storage_key() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
 
     assert!(store_book(&mut storage, book.clone()).is_ok());
@@ -143,6 +147,7 @@ fn test_book_timestamp_format() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     
     // Serialize to JSON

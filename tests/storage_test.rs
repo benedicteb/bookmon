@@ -73,6 +73,7 @@ fn test_storage_save_and_load() {
         isbn: "1234567890".to_string(),
         category_id: category_id.clone(),
         author_id: author_id.clone(),
+        total_pages: 300,
     };
     storage.books.insert(book.isbn.clone(), book);
 
@@ -88,6 +89,7 @@ fn test_storage_save_and_load() {
     assert_eq!(loaded_book.id, "test-id");
     assert_eq!(loaded_book.category_id, category_id);
     assert_eq!(loaded_book.author_id, author_id);
+    assert_eq!(loaded_book.total_pages, 300);
 
     // Verify category and author were properly loaded with created_on
     let loaded_category = loaded_storage.categories.get(&category_id).expect("Category should exist");
@@ -117,6 +119,7 @@ fn test_id_matches_hashmap_keys() {
         isbn: "1234567890".to_string(),
         category_id: category_id,
         author_id: "author1".to_string(),
+        total_pages: 300,
     };
 
     let author = Author::new("Test Author".to_string());
@@ -136,6 +139,7 @@ fn test_id_matches_hashmap_keys() {
     // Verify that each item's id matches its HashMap key
     for (key, book) in &storage.books {
         assert_eq!(key, &book.id, "Book HashMap key does not match book id");
+        assert_eq!(book.total_pages, 300, "Book total_pages should be 300");
     }
 
     for (key, author) in &storage.authors {
@@ -163,6 +167,7 @@ fn test_automatic_uuid_generation() {
         "1234567890".to_string(),
         "Fiction".to_string(),
         "Test Author".to_string(),
+        300,
     );
 
     let author = Author::new("Test Author".to_string());
@@ -178,9 +183,10 @@ fn test_automatic_uuid_generation() {
     storage.add_reading(reading);
 
     // Verify that each item has a valid UUID
-    for (key, _book) in &storage.books {
+    for (key, book) in &storage.books {
         assert!(!key.is_empty(), "Book ID should not be empty");
         assert!(key.len() > 0, "Book ID should have length");
+        assert_eq!(book.total_pages, 300, "Book total_pages should be 300");
     }
 
     for (key, author) in &storage.authors {
@@ -216,6 +222,7 @@ fn test_get_readings_by_event() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -264,12 +271,14 @@ fn test_get_unstarted_books() {
         "ISBN1".to_string(),
         category.id.clone(),
         author.id.clone(),
+        300,
     );
     let book2 = Book::new(
         "Book 2".to_string(),
         "ISBN2".to_string(),
         category.id.clone(),
         author.id.clone(),
+        300,
     );
 
     // Add test data to storage
@@ -324,6 +333,7 @@ fn test_get_started_books() {
         "1234567890".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let book1_id = book1.id.clone();
     storage.books.insert(book1.id.clone(), book1);
@@ -333,6 +343,7 @@ fn test_get_started_books() {
         "0987654321".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book2_id = book2.id.clone();
     storage.books.insert(book2.id.clone(), book2);
@@ -372,6 +383,7 @@ fn test_get_finished_books() {
         "1234567890".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let book1_id = book1.id.clone();
     storage.books.insert(book1.id.clone(), book1);
@@ -381,6 +393,7 @@ fn test_get_finished_books() {
         "0987654321".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let book2_id = book2.id.clone();
     storage.books.insert(book2.id.clone(), book2);
@@ -403,6 +416,7 @@ fn test_get_finished_books() {
         "1111111111".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let book3_id = book3.id.clone();
     storage.books.insert(book3.id.clone(), book3);
@@ -426,6 +440,7 @@ fn test_get_finished_books() {
         "2222222222".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let book4_id = book4.id.clone();
     storage.books.insert(book4.id.clone(), book4);

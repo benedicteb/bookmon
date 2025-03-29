@@ -26,6 +26,7 @@ fn test_store_reading_with_valid_book() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -75,6 +76,7 @@ fn test_reading_id_matches_storage_key() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -111,6 +113,7 @@ fn test_reading_timestamp_format() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -167,6 +170,7 @@ fn test_show_started_books_with_data() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -205,12 +209,14 @@ fn test_show_started_books_with_multiple_books() {
         "1234567890".to_string(),
         category_id.clone(),
         author1_id,
+        300,
     );
     let book2 = Book::new(
         "Second Book".to_string(),
         "0987654321".to_string(),
         category_id,
         author2_id,
+        300,
     );
     let book1_id = book1.id.clone();
     let book2_id = book2.id.clone();
@@ -250,6 +256,7 @@ fn test_show_started_books_with_mixed_events() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);
@@ -287,6 +294,7 @@ fn test_show_started_books_table_format() {
         "1234567890".to_string(),
         category_id,
         author_id,
+        300,
     );
     let book_id = book.id.clone();
     storage.books.insert(book.id.clone(), book);

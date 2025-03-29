@@ -19,6 +19,7 @@ fn test_interactive_mode_book_selection() {
         "978-0-000000-00-0".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let unstarted_id = unstarted_book.id.clone();
     storage.books.insert(unstarted_id.clone(), unstarted_book);
@@ -28,6 +29,7 @@ fn test_interactive_mode_book_selection() {
         "978-0-000000-01-0".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let started_id = started_book.id.clone();
     storage.books.insert(started_id.clone(), started_book);
@@ -37,6 +39,7 @@ fn test_interactive_mode_book_selection() {
         "978-0-000000-02-0".to_string(),
         category_id.clone(),
         author_id.clone(),
+        300,
     );
     let finished_id = finished_book.id.clone();
     storage.books.insert(finished_id.clone(), finished_book);

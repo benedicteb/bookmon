@@ -28,6 +28,7 @@ pub struct Book {
     pub isbn: String,
     pub category_id: String,
     pub author_id: String,
+    pub total_pages: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
@@ -55,7 +56,7 @@ impl Author {
 }
 
 impl Book {
-    pub fn new(title: String, isbn: String, category_id: String, author_id: String) -> Self {
+    pub fn new(title: String, isbn: String, category_id: String, author_id: String, total_pages: i32) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             title,
@@ -63,6 +64,7 @@ impl Book {
             isbn,
             category_id,
             author_id,
+            total_pages,
         }
     }
 }

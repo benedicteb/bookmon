@@ -13,6 +13,13 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+    let total_pages = Text::new("Enter total pages:")
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        .trim()
+        .parse::<i32>()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
     // Get list of categories with their IDs
     let categories: Vec<(String, String)> = storage.categories.iter()
         .map(|(id, c)| (c.name.clone(), id.clone()))
@@ -94,6 +101,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         isbn: isbn.trim().to_string(),
         category_id,
         author_id,
+        total_pages,
     })
 }
 
