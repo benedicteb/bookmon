@@ -173,7 +173,7 @@ jobs:
         with:
           files: |
             artifacts/bookmon-linux.tar.gz
-            artifacts/bookmon-windows.tar.gz
+            artifacts/bookmon-windows.exe.tar.gz
             artifacts/bookmon-macos-x86_64.tar.gz
             artifacts/bookmon-macos-arm64.tar.gz
           body_path: release_notes.md
