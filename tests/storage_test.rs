@@ -1,4 +1,4 @@
-use bookmon::storage::{self, Storage, Book, Author, Reading, Category};
+use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEvent};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -109,7 +109,7 @@ fn test_id_matches_hashmap_keys() {
         id: "reading1".to_string(),
         created_on: Utc::now(),
         book_id: "book1".to_string(),
-        event: "started".to_string(),
+        event: ReadingEvent::Started,
     };
 
     // Add items to storage
@@ -146,7 +146,7 @@ fn test_automatic_uuid_generation() {
 
     let reading = Reading::new(
         "book1".to_string(),
-        "started".to_string(),
+        ReadingEvent::Started,
     );
 
     // Add items to storage

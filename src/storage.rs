@@ -28,11 +28,17 @@ pub struct Book {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ReadingEvent {
+    Finished,
+    Started,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Reading {
     pub id: String,
     pub created_on: DateTime<Utc>,
     pub book_id: String,
-    pub event: String,
+    pub event: ReadingEvent,
 }
 
 impl Author {
@@ -57,7 +63,7 @@ impl Book {
 }
 
 impl Reading {
-    pub fn new(book_id: String, event: String) -> Self {
+    pub fn new(book_id: String, event: ReadingEvent) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             created_on: Utc::now(),
