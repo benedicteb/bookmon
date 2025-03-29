@@ -1,4 +1,4 @@
-use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEvent};
+use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEvent, ReadingMetadata};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -129,6 +129,7 @@ fn test_id_matches_hashmap_keys() {
         created_on: Utc::now(),
         book_id: "book1".to_string(),
         event: ReadingEvent::Started,
+        metadata: ReadingMetadata::default(),
     };
 
     // Add items to storage
@@ -459,4 +460,115 @@ fn test_get_finished_books() {
     let finished_books = storage.get_finished_books();
     assert_eq!(finished_books.len(), 2, "Should still have 2 finished books (not including the book that was finished then started)");
     assert!(!finished_books.iter().any(|b| b.title == "Finished Then Started Book"), "Book that was finished then started should not be included");
+}
+
+#[test]
+fn test_reading_event_update() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a reading event with Update type and metadata
+    let reading = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 50);
+    storage.add_reading(reading);
+
+    // Verify the reading event was stored correctly
+    let readings = storage.get_readings_by_event(ReadingEvent::Update);
+    assert_eq!(readings.len(), 1);
+    assert_eq!(readings[0].metadata.current_page, Some(50));
+}
+
+#[test]
+fn test_reading_event_metadata_serialization() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a reading event with Update type and metadata
+    let reading = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 50);
+    
+    // Serialize to JSON
+    let json = serde_json::to_string(&reading).expect("Failed to serialize reading");
+    
+    // Deserialize back
+    let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize reading");
+    
+    // Verify the metadata was preserved
+    assert_eq!(deserialized.metadata.current_page, Some(50));
+}
+
+#[test]
+fn test_reading_event_default_metadata() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a reading event without metadata
+    let reading = Reading::new(book_id.clone(), ReadingEvent::Started);
+    storage.add_reading(reading);
+
+    // Verify the reading event was stored with default metadata
+    let readings = storage.get_readings_by_event(ReadingEvent::Started);
+    assert_eq!(readings.len(), 1);
+    assert_eq!(readings[0].metadata.current_page, None);
 } 

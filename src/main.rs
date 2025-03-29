@@ -2,6 +2,7 @@ mod config;
 use clap::{Parser, Subcommand};
 use bookmon::{storage, book, category, author, reading};
 use inquire::Select;
+use inquire::Text;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -28,7 +29,7 @@ enum Commands {
     PrintBacklog,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = config::Settings::load().expect("Failed to load config");
     println!("Starting {} in {} mode", settings.app_name, if settings.debug { "debug" } else { "release" });
     
@@ -167,7 +168,7 @@ fn main() {
 
             if options.is_empty() {
                 println!("No books available. Please add a book first.");
-                return;
+                return Ok(());
             }
 
             // Let user select a book
@@ -196,7 +197,7 @@ fn main() {
 
                     if actions.is_empty() {
                         println!("No available actions for this book.");
-                        return;
+                        return Ok(());
                     }
 
                     // Let user select an action
@@ -206,16 +207,28 @@ fn main() {
                             let event = match action_selection {
                                 "Start reading" => storage::ReadingEvent::Started,
                                 "Mark as finished" => storage::ReadingEvent::Finished,
+                                "Update progress" => storage::ReadingEvent::Update,
                                 _ => unreachable!(),
                             };
 
-                            let reading = storage::Reading::new(selected_book.id.clone(), event);
+                            let reading = if event == storage::ReadingEvent::Update {
+                                let current_page = Text::new("Enter current page:")
+                                    .prompt()
+                                    .map_err(|e| format!("Failed to get current page: {}", e))?
+                                    .trim()
+                                    .parse::<i32>()
+                                    .map_err(|e| format!("Invalid page number: {}", e))?;
+
+                                storage::Reading::with_metadata(selected_book.id.clone(), event, current_page)
+                            } else {
+                                storage::Reading::new(selected_book.id.clone(), event)
+                            };
+
                             let mut storage = storage;
 
                             match reading::store_reading(&mut storage, reading) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)
-                                        .expect("Failed to save storage");
+                                    storage::save_storage(&settings.storage_file, &storage)?;
                                     println!("Reading event added successfully!");
                                 }
                                 Err(e) => eprintln!("Failed to add reading event: {}", e),
@@ -228,4 +241,6 @@ fn main() {
             }
         }
     }
+
+    Ok(())
 }

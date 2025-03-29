@@ -1,5 +1,5 @@
 use std::io;
-use inquire::Select;
+use inquire::{Select, Text};
 use crate::storage::{Storage, Reading, ReadingEvent};
 use chrono::Utc;
 use pretty_table::prelude::*;
@@ -26,7 +26,7 @@ pub fn get_reading_input(storage: &Storage) -> io::Result<Reading> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected book not found"))?;
 
     // Show reading event selection dialog
-    let events = vec!["Started", "Finished"];
+    let events = vec!["Started", "Finished", "Update"];
     let event_selection = Select::new("Select reading event:", events)
         .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -34,10 +34,23 @@ pub fn get_reading_input(storage: &Storage) -> io::Result<Reading> {
     let event = match event_selection {
         "Started" => ReadingEvent::Started,
         "Finished" => ReadingEvent::Finished,
+        "Update" => ReadingEvent::Update,
         _ => unreachable!(),
     };
 
-    Ok(Reading::new(book_id, event))
+    // If Update event is selected, get the current page
+    if event == ReadingEvent::Update {
+        let current_page = Text::new("Enter current page:")
+            .prompt()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Invalid page number: {}", e)))?;
+
+        Ok(Reading::with_metadata(book_id, event, current_page))
+    } else {
+        Ok(Reading::new(book_id, event))
+    }
 }
 
 pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), String> {

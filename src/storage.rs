@@ -37,6 +37,13 @@ pub struct Book {
 pub enum ReadingEvent {
     Finished,
     Started,
+    Update,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ReadingMetadata {
+    #[serde(default)]
+    pub current_page: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,6 +52,8 @@ pub struct Reading {
     pub created_on: DateTime<Utc>,
     pub book_id: String,
     pub event: ReadingEvent,
+    #[serde(default)]
+    pub metadata: ReadingMetadata,
 }
 
 impl Author {
@@ -78,6 +87,17 @@ impl Reading {
             created_on: Utc::now(),
             book_id,
             event,
+            metadata: ReadingMetadata { current_page: None },
+        }
+    }
+
+    pub fn with_metadata(book_id: String, event: ReadingEvent, current_page: i32) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            event,
+            metadata: ReadingMetadata { current_page: Some(current_page) },
         }
     }
 }
