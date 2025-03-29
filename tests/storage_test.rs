@@ -1,4 +1,4 @@
-use bookmon::storage;
+use bookmon::storage::{self, Storage};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -17,12 +17,10 @@ fn test_storage_initialization() {
     
     // Read and verify contents
     let contents = fs::read_to_string(&storage_path).expect("Failed to read storage file");
-    let data: serde_json::Value = serde_json::from_str(&contents).expect("Failed to parse JSON");
+    let storage: Storage = serde_json::from_str(&contents).expect("Failed to parse JSON");
     
-    assert!(data["books"].is_object(), "books should be an object");
-    assert!(data["readings"].is_object(), "readings should be an object");
-    assert!(data["books"].as_object().unwrap().is_empty(), "books should be empty");
-    assert!(data["readings"].as_object().unwrap().is_empty(), "readings should be empty");
+    assert!(storage.books.is_empty(), "books should be empty");
+    assert!(storage.readings.is_empty(), "readings should be empty");
 }
 
 #[test]
@@ -35,10 +33,8 @@ fn test_storage_load() {
     storage::initialize_storage_file(&storage_path).expect("Failed to initialize storage");
     
     // Test loading
-    let data = storage::load_storage(&storage_path).expect("Failed to load storage");
+    let storage = storage::load_storage(&storage_path).expect("Failed to load storage");
     
-    assert!(data["books"].is_object(), "books should be an object");
-    assert!(data["readings"].is_object(), "readings should be an object");
-    assert!(data["books"].as_object().unwrap().is_empty(), "books should be empty");
-    assert!(data["readings"].as_object().unwrap().is_empty(), "readings should be empty");
+    assert!(storage.books.is_empty(), "books should be empty");
+    assert!(storage.readings.is_empty(), "readings should be empty");
 } 
