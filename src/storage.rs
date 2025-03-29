@@ -3,6 +3,7 @@ use std::path::Path;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Author {
@@ -25,6 +26,38 @@ pub struct Reading {
     pub created_on: DateTime<Utc>,
     pub book_id: String,
     pub event: String,
+}
+
+impl Author {
+    pub fn new(name: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+        }
+    }
+}
+
+impl Book {
+    pub fn new(title: String, isbn: String, category: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            title,
+            added_on: Utc::now(),
+            isbn,
+            category,
+        }
+    }
+}
+
+impl Reading {
+    pub fn new(book_id: String, event: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            event,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

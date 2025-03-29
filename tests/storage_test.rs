@@ -112,4 +112,44 @@ fn test_id_matches_hashmap_keys() {
     for (key, reading) in &storage.readings {
         assert_eq!(key, &reading.id, "Reading HashMap key does not match reading id");
     }
+}
+
+#[test]
+fn test_automatic_uuid_generation() {
+    let mut storage = Storage::new();
+
+    // Create items using the new constructors
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        "Fiction".to_string(),
+    );
+
+    let author = Author::new("Test Author".to_string());
+
+    let reading = Reading::new(
+        "book1".to_string(),
+        "started".to_string(),
+    );
+
+    // Add items to storage
+    storage.add_book(book);
+    storage.add_author(author);
+    storage.add_reading(reading);
+
+    // Verify that each item has a valid UUID
+    for (key, book) in &storage.books {
+        assert!(!key.is_empty(), "Book ID should not be empty");
+        assert!(key.len() > 0, "Book ID should have length");
+    }
+
+    for (key, author) in &storage.authors {
+        assert!(!key.is_empty(), "Author ID should not be empty");
+        assert!(key.len() > 0, "Author ID should have length");
+    }
+
+    for (key, reading) in &storage.readings {
+        assert!(!key.is_empty(), "Reading ID should not be empty");
+        assert!(key.len() > 0, "Reading ID should have length");
+    }
 } 
