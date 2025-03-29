@@ -1,8 +1,7 @@
 mod config;
 use clap::{Parser, Subcommand};
 use bookmon::{storage, book, category, author, reading};
-use inquire::Select;
-use inquire::Text;
+use inquire::{Select, Text};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,10 +26,32 @@ enum Commands {
     PrintFinished,
     /// Show books that have not been started yet
     PrintBacklog,
+    /// Change the storage file path
+    ChangeStoragePath {
+        /// The new path for the storage file
+        path: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let settings = config::Settings::load().expect("Failed to load config");
+    let mut settings = config::Settings::load().expect("Failed to load config");
+    let cli = Cli::parse();
+
+    match cli.command {
+        Some(Commands::ChangeStoragePath { path }) => {
+            settings.storage_file = path;
+            settings.save()?;
+            println!("Storage path updated successfully!");
+            return Ok(());
+        }
+        _ => {
+            if settings.storage_file.is_empty() {
+                eprintln!("Error: Storage path not set. Please set it using the change-storage-path command.");
+                std::process::exit(1);
+            }
+        }
+    }
+
     println!("Starting {} in {} mode", settings.app_name, if settings.debug { "debug" } else { "release" });
     
     // Initialize storage file if it doesn't exist
@@ -38,8 +59,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Failed to initialize storage file: {}", e);
         std::process::exit(1);
     }
-
-    let cli = Cli::parse();
 
     match cli.command {
         Some(command) => {
@@ -144,6 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Err(e) => eprintln!("Failed to show unstarted books: {}", e),
                     }
                 }
+                Commands::ChangeStoragePath { .. } => unreachable!(),
             }
         }
         None => {

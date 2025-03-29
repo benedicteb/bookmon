@@ -1,6 +1,3 @@
 # Application settings
 app_name: BookMon
 debug: false
-
-# Storage
-storage_file: ./books.json
