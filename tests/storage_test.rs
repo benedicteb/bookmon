@@ -2,7 +2,8 @@ use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEv
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
-use chrono::Utc;
+use chrono::{Utc, Duration};
+use uuid::Uuid;
 
 #[test]
 fn test_storage_initialization() {
@@ -300,4 +301,82 @@ fn test_get_unstarted_books() {
     // Now no books should be unstarted
     let unstarted = storage.get_unstarted_books();
     assert!(unstarted.is_empty());
+}
+
+#[test]
+fn test_get_started_books() {
+    let mut storage = Storage::new();
+    
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Test Category".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // Create three books
+    let book1 = Book::new("Book 1".to_string(), "ISBN1".to_string(), category_id.clone(), author_id.clone());
+    let book2 = Book::new("Book 2".to_string(), "ISBN2".to_string(), category_id.clone(), author_id.clone());
+    let book3 = Book::new("Book 3".to_string(), "ISBN3".to_string(), category_id.clone(), author_id.clone());
+    
+    let book1_id = book1.id.clone();
+    let book2_id = book2.id.clone();
+    let book3_id = book3.id.clone();
+    
+    storage.add_book(book1);
+    storage.add_book(book2);
+    storage.add_book(book3);
+
+    // Test case 1: Book with only Started event
+    let reading1 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc::now(),
+        book_id: book1_id.clone(),
+        event: ReadingEvent::Started,
+    };
+    storage.add_reading(reading1);
+
+    // Test case 2: Book with Started then Finished events
+    let reading2_started = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc::now() - Duration::days(2),
+        book_id: book2_id.clone(),
+        event: ReadingEvent::Started,
+    };
+    let reading2_finished = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc::now() - Duration::days(1),
+        book_id: book2_id.clone(),
+        event: ReadingEvent::Finished,
+    };
+    storage.add_reading(reading2_started);
+    storage.add_reading(reading2_finished);
+
+    // Test case 3: Book with Finished then Started events
+    let reading3_finished = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc::now() - Duration::days(2),
+        book_id: book3_id.clone(),
+        event: ReadingEvent::Finished,
+    };
+    let reading3_started = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc::now() - Duration::days(1),
+        book_id: book3_id.clone(),
+        event: ReadingEvent::Started,
+    };
+    storage.add_reading(reading3_finished);
+    storage.add_reading(reading3_started);
+
+    // Get started books
+    let started_books = storage.get_started_books();
+
+    // Verify results
+    assert_eq!(started_books.len(), 2);
+    let started_book_ids: Vec<String> = started_books.iter().map(|b| b.id.clone()).collect();
+    assert!(started_book_ids.contains(&book1_id));
+    assert!(started_book_ids.contains(&book3_id));
+    assert!(!started_book_ids.contains(&book2_id));
 } 
