@@ -1,6 +1,8 @@
 mod config;
 use clap::{Parser, Subcommand};
 use bookmon::{storage, book, category, author, reading};
+use inquire::{Select, Confirm};
+use pretty_table::prelude::*;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -145,33 +147,86 @@ fn main() {
             }
         }
         None => {
-            // Interactive mode - show unfinished books and allow interaction
+            // Interactive mode - show books and allow interaction
             let storage = storage::load_storage(&settings.storage_file)
                 .expect("Failed to load storage");
             
-            // Show started books first
-            println!("\nCurrently Reading:");
-            if let Err(e) = reading::show_started_books(&storage) {
-                eprintln!("Failed to show started books: {}", e);
+            // Create options for book selection with status
+            let options: Vec<String> = storage.books.iter()
+                .map(|(_, b)| {
+                    let author = storage.authors.get(&b.author_id)
+                        .expect("Author not found");
+                    let status = if storage.is_book_finished(&b.id) {
+                        "[Finished]"
+                    } else if storage.is_book_started(&b.id) {
+                        "[Started]"
+                    } else {
+                        "[Not Started]"
+                    };
+                    format!("{} {} by {}", status, b.title, author.name)
+                })
+                .collect();
+
+            if options.is_empty() {
+                println!("No books available. Please add a book first.");
+                return;
             }
-            
-            // Then show unstarted books
-            println!("\nNot Started Yet:");
-            if let Err(e) = reading::show_unstarted_books(&storage) {
-                eprintln!("Failed to show unstarted books: {}", e);
-            }
-            
-            // Get user input for book selection and action
-            let mut storage = storage;
-            if let Ok(reading) = reading::get_reading_input(&storage) {
-                match reading::store_reading(&mut storage, reading) {
-                    Ok(_) => {
-                        storage::save_storage(&settings.storage_file, &storage)
-                            .expect("Failed to save storage");
-                        println!("Reading event added successfully!");
+
+            // Let user select a book
+            match Select::new("Select a book to update:", options).prompt() {
+                Ok(book_selection) => {
+                    // Extract book title from selection (remove status and author)
+                    let title = book_selection.split(" by ").next()
+                        .unwrap()
+                        .split("] ")
+                        .nth(1)
+                        .unwrap();
+
+                    // Find the selected book
+                    let selected_book = storage.books.values()
+                        .find(|b| b.title == title)
+                        .expect("Selected book not found");
+
+                    // Determine available actions based on book status
+                    let mut actions = Vec::new();
+                    if !storage.is_book_started(&selected_book.id) {
+                        actions.push("Start reading");
                     }
-                    Err(e) => eprintln!("Failed to add reading event: {}", e),
+                    if storage.is_book_started(&selected_book.id) && !storage.is_book_finished(&selected_book.id) {
+                        actions.push("Mark as finished");
+                    }
+
+                    if actions.is_empty() {
+                        println!("No available actions for this book.");
+                        return;
+                    }
+
+                    // Let user select an action
+                    match Select::new("Select an action:", actions).prompt() {
+                        Ok(action_selection) => {
+                            // Create and store the reading event
+                            let event = match action_selection {
+                                "Start reading" => storage::ReadingEvent::Started,
+                                "Mark as finished" => storage::ReadingEvent::Finished,
+                                _ => unreachable!(),
+                            };
+
+                            let reading = storage::Reading::new(selected_book.id.clone(), event);
+                            let mut storage = storage;
+
+                            match reading::store_reading(&mut storage, reading) {
+                                Ok(_) => {
+                                    storage::save_storage(&settings.storage_file, &storage)
+                                        .expect("Failed to save storage");
+                                    println!("Reading event added successfully!");
+                                }
+                                Err(e) => eprintln!("Failed to add reading event: {}", e),
+                            }
+                        }
+                        Err(_) => println!("Operation cancelled"),
+                    }
                 }
+                Err(_) => println!("Operation cancelled"),
             }
         }
     }

@@ -216,6 +216,42 @@ impl Storage {
             })
             .collect()
     }
+
+    pub fn is_book_started(&self, book_id: &str) -> bool {
+        let readings: Vec<_> = self.readings.values()
+            .filter(|r| r.book_id == book_id)
+            .collect();
+        
+        if !readings.is_empty() {
+            let mut sorted_readings = readings;
+            sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+            if let Some(most_recent) = sorted_readings.first() {
+                most_recent.event == ReadingEvent::Started
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn is_book_finished(&self, book_id: &str) -> bool {
+        let readings: Vec<_> = self.readings.values()
+            .filter(|r| r.book_id == book_id)
+            .collect();
+        
+        if !readings.is_empty() {
+            let mut sorted_readings = readings;
+            sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+            if let Some(most_recent) = sorted_readings.first() {
+                most_recent.event == ReadingEvent::Finished
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
 }
 
 pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {
