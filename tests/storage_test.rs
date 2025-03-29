@@ -1,4 +1,4 @@
-use bookmon::storage::{self, Storage, Book};
+use bookmon::storage::{self, Storage, Book, Author, Reading};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -50,6 +50,7 @@ fn test_storage_save_and_load() {
     let mut storage = Storage::new();
     let book = Book {
         id: "test-id".to_string(),
+        title: "Test Book".to_string(),
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
         category: "Fiction".to_string(),
@@ -67,4 +68,48 @@ fn test_storage_save_and_load() {
     let loaded_book = loaded_storage.books.get("1234567890").expect("Book should exist");
     assert_eq!(loaded_book.id, "test-id");
     assert_eq!(loaded_book.category, "Fiction");
+}
+
+#[test]
+fn test_id_matches_hashmap_keys() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let book = Book {
+        id: "book1".to_string(),
+        title: "Test Book".to_string(),
+        added_on: Utc::now(),
+        isbn: "1234567890".to_string(),
+        category: "Fiction".to_string(),
+    };
+
+    let author = Author {
+        id: "author1".to_string(),
+        name: "Test Author".to_string(),
+    };
+
+    let reading = Reading {
+        id: "reading1".to_string(),
+        created_on: Utc::now(),
+        book_id: "book1".to_string(),
+        event: "started".to_string(),
+    };
+
+    // Add items to storage
+    storage.add_book(book.clone());
+    storage.add_author(author.clone());
+    storage.add_reading(reading.clone());
+
+    // Verify that each item's id matches its HashMap key
+    for (key, book) in &storage.books {
+        assert_eq!(key, &book.id, "Book HashMap key does not match book id");
+    }
+
+    for (key, author) in &storage.authors {
+        assert_eq!(key, &author.id, "Author HashMap key does not match author id");
+    }
+
+    for (key, reading) in &storage.readings {
+        assert_eq!(key, &reading.id, "Reading HashMap key does not match reading id");
+    }
 } 

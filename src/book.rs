@@ -6,6 +6,11 @@ use crate::storage::{Book, Storage};
 pub fn get_book_input() -> io::Result<Book> {
     let mut isbn = String::new();
     let mut category = String::new();
+    let mut title = String::new();
+
+    print!("Enter title: ");
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut title)?;
 
     print!("Enter ISBN: ");
     io::stdout().flush()?;
@@ -17,6 +22,7 @@ pub fn get_book_input() -> io::Result<Book> {
 
     Ok(Book {
         id: Uuid::new_v4().to_string(),
+        title: title.trim().to_string(),
         added_on: Utc::now(),
         isbn: isbn.trim().to_string(),
         category: category.trim().to_string(),

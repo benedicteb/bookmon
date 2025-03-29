@@ -14,6 +14,7 @@ fn test_store_book() {
     let mut storage = Storage::new();
     let book = Book {
         id: "test-id".to_string(),
+        title: "Test Book".to_string(),
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
         category: "Fiction".to_string(),
@@ -28,6 +29,7 @@ fn test_store_duplicate_book() {
     let mut storage = Storage::new();
     let book = Book {
         id: "test-id".to_string(),
+        title: "Test Book".to_string(),
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
         category: "Fiction".to_string(),

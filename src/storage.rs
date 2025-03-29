@@ -5,14 +5,21 @@ use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Author {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Book {
     pub id: String,
+    pub title: String,
     pub added_on: DateTime<Utc>,
     pub isbn: String,
     pub category: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Reading {
     pub id: String,
     pub created_on: DateTime<Utc>,
@@ -24,6 +31,7 @@ pub struct Reading {
 pub struct Storage {
     pub books: HashMap<String, Book>,
     pub readings: HashMap<String, Reading>,
+    pub authors: HashMap<String, Author>,
 }
 
 impl Storage {
@@ -31,7 +39,32 @@ impl Storage {
         Storage {
             books: HashMap::new(),
             readings: HashMap::new(),
+            authors: HashMap::new(),
         }
+    }
+
+    pub fn add_book(&mut self, book: Book) -> Option<Book> {
+        self.books.insert(book.id.clone(), book)
+    }
+
+    pub fn add_reading(&mut self, reading: Reading) -> Option<Reading> {
+        self.readings.insert(reading.id.clone(), reading)
+    }
+
+    pub fn add_author(&mut self, author: Author) -> Option<Author> {
+        self.authors.insert(author.id.clone(), author)
+    }
+
+    pub fn get_book(&self, id: &str) -> Option<&Book> {
+        self.books.get(id)
+    }
+
+    pub fn get_reading(&self, id: &str) -> Option<&Reading> {
+        self.readings.get(id)
+    }
+
+    pub fn get_author(&self, id: &str) -> Option<&Author> {
+        self.authors.get(id)
     }
 }
 
