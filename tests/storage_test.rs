@@ -193,4 +193,61 @@ fn test_automatic_uuid_generation() {
         assert!(!key.is_empty(), "Reading ID should not be empty");
         assert!(key.len() > 0, "Reading ID should have length");
     }
+}
+
+#[test]
+fn test_get_readings_by_event() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create multiple reading events with different types
+    let started_reading1 = Reading::new(book_id.clone(), ReadingEvent::Started);
+    let started_reading2 = Reading::new(book_id.clone(), ReadingEvent::Started);
+    let finished_reading = Reading::new(book_id, ReadingEvent::Finished);
+
+    storage.add_reading(started_reading1);
+    storage.add_reading(started_reading2);
+    storage.add_reading(finished_reading);
+
+    // Test getting started readings
+    let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
+    assert_eq!(started_readings.len(), 2, "Should have 2 started readings");
+    assert!(started_readings.iter().all(|r| matches!(r.event, ReadingEvent::Started)));
+
+    // Test getting finished readings
+    let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
+    assert_eq!(finished_readings.len(), 1, "Should have 1 finished reading");
+    assert!(finished_readings.iter().all(|r| matches!(r.event, ReadingEvent::Finished)));
+}
+
+#[test]
+fn test_get_readings_by_event_empty() {
+    let storage = Storage::new();
+
+    // Test getting readings when storage is empty
+    let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
+    assert!(started_readings.is_empty(), "Should have no started readings");
+
+    let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
+    assert!(finished_readings.is_empty(), "Should have no finished readings");
 } 

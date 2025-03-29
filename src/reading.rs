@@ -50,10 +50,8 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
 }
 
 pub fn show_started_books(storage: &Storage) -> io::Result<()> {
-    // Get all started readings
-    let started_readings: Vec<&Reading> = storage.readings.values()
-        .filter(|r| matches!(r.event, ReadingEvent::Started))
-        .collect();
+    // Get all started readings using the new method
+    let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
 
     if started_readings.is_empty() {
         println!("No books currently being read.");

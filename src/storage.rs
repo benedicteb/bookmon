@@ -30,7 +30,7 @@ pub struct Book {
     pub author_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum ReadingEvent {
     Finished,
     Started,
@@ -137,6 +137,12 @@ impl Storage {
 
     pub fn get_category(&self, id: &str) -> Option<&Category> {
         self.categories.get(id)
+    }
+
+    pub fn get_readings_by_event(&self, event_type: ReadingEvent) -> Vec<&Reading> {
+        self.readings.values()
+            .filter(|r| r.event == event_type)
+            .collect()
     }
 }
 
