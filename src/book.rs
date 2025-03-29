@@ -1,20 +1,17 @@
-use std::io::{self, Write};
+use std::io;
 use uuid::Uuid;
 use chrono::Utc;
-use dialoguer::{Select, Input};
+use inquire::{Select, Text};
 use crate::storage::{Book, Storage, Category, Author};
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
-    let mut isbn = String::new();
-    let mut title = String::new();
+    let title = Text::new("Enter title:")
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    print!("Enter title: ");
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut title)?;
-
-    print!("Enter ISBN: ");
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut isbn)?;
+    let isbn = Text::new("Enter ISBN:")
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     // Get list of categories with their IDs
     let categories: Vec<(String, String)> = storage.categories.iter()
@@ -23,9 +20,8 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
 
     let category_id = if categories.is_empty() {
         // If no categories exist, prompt for a new one
-        let category_name: String = Input::new()
-            .with_prompt("Enter new category")
-            .interact_text()
+        let category_name = Text::new("Enter new category:")
+            .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         
         // Create a new category
@@ -45,12 +41,15 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get category ID"))?
     } else {
         // Show category selection dialog
-        let selection = Select::new()
-            .with_prompt("Select category")
-            .items(&categories.iter().map(|(name, _)| name).collect::<Vec<_>>())
-            .interact()
+        let selection = Select::new("Select category:", categories.iter().map(|(name, _)| name).collect())
+            .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        categories[selection].1.clone()
+        
+        // Find the selected category's ID
+        categories.iter()
+            .find(|(name, _)| name == selection)
+            .map(|(_, id)| id.clone())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected category not found"))?
     };
 
     // Get list of authors with their IDs
@@ -60,9 +59,8 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
 
     let author_id = if authors.is_empty() {
         // If no authors exist, prompt for a new one
-        let author_name: String = Input::new()
-            .with_prompt("Enter new author name")
-            .interact_text()
+        let author_name = Text::new("Enter new author name:")
+            .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         
         // Create a new author
@@ -78,12 +76,15 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
     } else {
         // Show author selection dialog
-        let selection = Select::new()
-            .with_prompt("Select author")
-            .items(&authors.iter().map(|(name, _)| name).collect::<Vec<_>>())
-            .interact()
+        let selection = Select::new("Select author:", authors.iter().map(|(name, _)| name).collect())
+            .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        authors[selection].1.clone()
+        
+        // Find the selected author's ID
+        authors.iter()
+            .find(|(name, _)| name == selection)
+            .map(|(_, id)| id.clone())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected author not found"))?
     };
 
     Ok(Book {

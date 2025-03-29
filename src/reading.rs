@@ -1,5 +1,5 @@
 use std::io;
-use dialoguer::Select;
+use inquire::Select;
 use crate::storage::{Storage, Reading, ReadingEvent};
 use chrono::Utc;
 use pretty_table::prelude::*;
@@ -15,25 +15,25 @@ pub fn get_reading_input(storage: &Storage) -> io::Result<Reading> {
     }
 
     // Show book selection dialog
-    let selection = Select::new()
-        .with_prompt("Select book")
-        .items(&books.iter().map(|(title, _)| title).collect::<Vec<_>>())
-        .interact()
+    let selection = Select::new("Select book:", books.iter().map(|(title, _)| title).collect())
+        .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     
-    let book_id = books[selection].1.clone();
+    // Find the selected book's ID
+    let book_id = books.iter()
+        .find(|(title, _)| title == selection)
+        .map(|(_, id)| id.clone())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected book not found"))?;
 
     // Show reading event selection dialog
     let events = vec!["Started", "Finished"];
-    let event_selection = Select::new()
-        .with_prompt("Select reading event")
-        .items(&events)
-        .interact()
+    let event_selection = Select::new("Select reading event:", events)
+        .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     let event = match event_selection {
-        0 => ReadingEvent::Started,
-        1 => ReadingEvent::Finished,
+        "Started" => ReadingEvent::Started,
+        "Finished" => ReadingEvent::Finished,
         _ => unreachable!(),
     };
 

@@ -1,17 +1,15 @@
-use std::io::{self, Write};
+use std::io;
 use crate::storage::{Category, Storage};
+use inquire::Text;
 
 pub fn get_category_input() -> io::Result<Category> {
-    let mut name = String::new();
-    let mut description = String::new();
+    let name = Text::new("Enter category name:")
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    print!("Enter category name: ");
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut name)?;
-
-    print!("Enter category description (optional, press Enter to skip): ");
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut description)?;
+    let description = Text::new("Enter category description (optional, press Enter to skip):")
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     Ok(Category::new(
         name.trim().to_string(),

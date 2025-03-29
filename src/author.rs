@@ -1,11 +1,9 @@
 use crate::storage::{Storage, Author};
+use inquire::Text;
 
 pub fn get_author_input() -> Result<Author, String> {
-    println!("Enter author details:");
-    
-    let name = dialoguer::Input::<String>::new()
-        .with_prompt("Name")
-        .interact()
+    let name = Text::new("Enter author name:")
+        .prompt()
         .map_err(|e| e.to_string())?;
 
     Ok(Author::new(name))
