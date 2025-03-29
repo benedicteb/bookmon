@@ -1,6 +1,7 @@
 use bookmon::storage::{Storage, Category};
 use bookmon::category::store_category;
-use chrono::Utc;
+use chrono::{Utc, DateTime};
+use serde_json;
 
 #[test]
 fn test_category_creation() {
@@ -74,4 +75,31 @@ fn test_multiple_categories() {
         assert_eq!(stored.id, category.id);
         assert!(stored.created_on <= Utc::now());
     }
+}
+
+#[test]
+fn test_category_timestamp_format() {
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    
+    // Serialize to JSON
+    let json = serde_json::to_string(&category).expect("Failed to serialize category");
+    
+    // Parse the JSON to a Value to extract the timestamp string
+    let value: serde_json::Value = serde_json::from_str(&json).expect("Failed to parse JSON");
+    let timestamp_str = value["created_on"].as_str().expect("created_on should be a string");
+    
+    // Parse the timestamp string - this will fail if it's not a valid ISO 8601 format
+    let parsed_date: DateTime<Utc> = DateTime::parse_from_rfc3339(timestamp_str)
+        .expect("Timestamp should be in RFC 3339/ISO 8601 format")
+        .into();
+    
+    // Verify timezone is UTC
+    assert_eq!(parsed_date.timezone(), Utc, "Timestamp should be in UTC");
+    
+    // Make sure it can be deserialized back to the original category
+    let deserialized: Category = serde_json::from_str(&json).expect("Failed to deserialize category");
+    assert_eq!(deserialized.created_on, category.created_on);
 } 
