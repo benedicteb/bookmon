@@ -36,7 +36,10 @@ jobs:
             artifact_name: bookmon-windows.exe
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: bookmon-macos
+            artifact_name: bookmon-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: bookmon-macos-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +125,8 @@ jobs:
           files: |
             artifacts/bookmon-linux
             artifacts/bookmon-windows.exe
-            artifacts/bookmon-macos
+            artifacts/bookmon-macos-x86_64
+            artifacts/bookmon-macos-arm64
           body_path: release_notes.md
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
