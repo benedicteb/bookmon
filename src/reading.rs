@@ -51,10 +51,10 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
 }
 
 pub fn show_started_books(storage: &Storage) -> io::Result<()> {
-    // Get all started readings using the new method
-    let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
+    // Get all started books using the new method
+    let started_books = storage.get_started_books();
 
-    if started_readings.is_empty() {
+    if started_books.is_empty() {
         println!("No books currently being read.");
         return Ok(());
     }
@@ -64,16 +64,19 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Days since started".to_string()], // header
     ];
 
-    // For each started reading, find the corresponding book and author
-    for reading in started_readings {
-        let book = storage.books.get(&reading.book_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Book not found"))?;
-        
+    // For each started book, find the corresponding author and most recent started reading
+    for book in started_books {
         let author = storage.authors.get(&book.author_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
 
+        // Find the most recent started reading for this book
+        let most_recent_reading = storage.readings.values()
+            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Started)
+            .max_by_key(|r| r.created_on)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
+
         // Calculate days since started
-        let days = (Utc::now() - reading.created_on).num_days();
+        let days = (Utc::now() - most_recent_reading.created_on).num_days();
         
         // Add row to table data
         table_data.push(vec![
