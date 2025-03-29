@@ -111,6 +111,14 @@ jobs:
           path: artifacts
           pattern: bookmon-*
 
+      - name: Debug artifacts
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Contents of artifacts directory:"
+          ls -la artifacts/
+          echo "Contents of current directory:"
+          ls -la
+
       - name: Generate release notes
         id: release_notes
         run: |
@@ -124,7 +132,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: artifacts/*
+          files: |
+            artifacts/bookmon-linux
+            artifacts/bookmon-windows.exe
+            artifacts/bookmon-macos-x86_64
+            artifacts/bookmon-macos-arm64
           body_path: release_notes.md
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
