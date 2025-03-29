@@ -19,6 +19,8 @@ enum Commands {
     AddAuthor,
     /// Add a reading event for a book
     AddReading,
+    /// Show books that have been started but not finished
+    Started,
 }
 
 fn main() {
@@ -105,6 +107,15 @@ fn main() {
                     }
                 }
                 Err(e) => eprintln!("Failed to get reading input: {}", e),
+            }
+        }
+        Commands::Started => {
+            let storage = storage::load_storage(&settings.storage_file)
+                .expect("Failed to load storage");
+            
+            match reading::show_started_books(&storage) {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to show started books: {}", e),
             }
         }
     }

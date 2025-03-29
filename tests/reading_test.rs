@@ -1,5 +1,5 @@
 use bookmon::storage::{Storage, Reading, ReadingEvent, Book, Category, Author};
-use bookmon::reading::store_reading;
+use bookmon::reading::{store_reading, show_started_books};
 use chrono::{Utc, DateTime};
 use serde_json;
 
@@ -136,4 +136,130 @@ fn test_reading_timestamp_format() {
     // Make sure it can be deserialized back to the original reading
     let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize reading");
     assert_eq!(deserialized.created_on, reading.created_on);
+}
+
+#[test]
+fn test_show_started_books_empty() {
+    let storage = Storage::new();
+    assert!(show_started_books(&storage).is_ok());
+}
+
+#[test]
+fn test_show_started_books_with_data() {
+    let mut storage = Storage::new();
+    
+    // Create and store a category
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    // Create and store an author
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+    
+    // Create and store a book
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a reading event
+    let reading = Reading::new(book_id, ReadingEvent::Started);
+    storage.add_reading(reading);
+
+    // Test showing started books
+    assert!(show_started_books(&storage).is_ok());
+}
+
+#[test]
+fn test_show_started_books_with_multiple_books() {
+    let mut storage = Storage::new();
+    
+    // Create and store a category
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    // Create and store authors
+    let author1 = Author::new("Author One".to_string());
+    let author2 = Author::new("Author Two".to_string());
+    let author1_id = author1.id.clone();
+    let author2_id = author2.id.clone();
+    storage.authors.insert(author1.id.clone(), author1);
+    storage.authors.insert(author2.id.clone(), author2);
+    
+    // Create and store books
+    let book1 = Book::new(
+        "First Book".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author1_id,
+    );
+    let book2 = Book::new(
+        "Second Book".to_string(),
+        "0987654321".to_string(),
+        category_id,
+        author2_id,
+    );
+    let book1_id = book1.id.clone();
+    let book2_id = book2.id.clone();
+    storage.books.insert(book1.id.clone(), book1);
+    storage.books.insert(book2.id.clone(), book2);
+
+    // Create reading events
+    let reading1 = Reading::new(book1_id, ReadingEvent::Started);
+    let reading2 = Reading::new(book2_id, ReadingEvent::Started);
+    storage.add_reading(reading1);
+    storage.add_reading(reading2);
+
+    // Test showing started books
+    assert!(show_started_books(&storage).is_ok());
+}
+
+#[test]
+fn test_show_started_books_with_mixed_events() {
+    let mut storage = Storage::new();
+    
+    // Create and store a category
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    // Create and store an author
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+    
+    // Create and store a book
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create both started and finished reading events
+    let started_reading = Reading::new(book_id.clone(), ReadingEvent::Started);
+    let finished_reading = Reading::new(book_id, ReadingEvent::Finished);
+    storage.add_reading(started_reading);
+    storage.add_reading(finished_reading);
+
+    // Test showing started books
+    assert!(show_started_books(&storage).is_ok());
 } 
