@@ -121,12 +121,10 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: |
-            artifacts/bookmon-linux
-            artifacts/bookmon-windows.exe
-            artifacts/bookmon-macos-x86_64
-            artifacts/bookmon-macos-arm64
+          files: artifacts/*
           body_path: release_notes.md
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
