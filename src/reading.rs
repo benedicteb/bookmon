@@ -61,7 +61,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 
     // Create table data
     let mut table_data = vec![
-        vec!["Title".to_string(), "Author".to_string(), "Days Started".to_string()], // header
+        vec!["Title".to_string(), "Author".to_string(), "Days since started".to_string()], // header
     ];
 
     // For each started reading, find the corresponding book and author
