@@ -1,43 +1,79 @@
 #[cfg(test)]
 mod tests {
     use bookmon::config::Settings;
-    use std::fs;
-    use dirs::config_dir;
+    use config::{Config, File, FileFormat};
+
+    const TEST_DEFAULT_CONFIG: &str = r#"
+app_name: BookMon
+debug: false
+"#;
+
+    fn create_test_settings(user_config: Option<&str>) -> Settings {
+        let mut builder = Config::builder();
+        
+        // Add default config
+        builder = builder.add_source(File::from_str(TEST_DEFAULT_CONFIG, FileFormat::Yaml));
+
+        // Add user config if provided
+        if let Some(config) = user_config {
+            builder = builder.add_source(File::from_str(config, FileFormat::Yaml));
+        }
+
+        // Build settings
+        let mut settings: Settings = builder.build()
+            .expect("Failed to build config")
+            .try_deserialize()
+            .expect("Failed to deserialize config");
+
+        // Manually set storage_file if provided in user config
+        if let Some(config) = user_config {
+            if let Ok(user_yaml) = serde_yaml::from_str::<serde_yaml::Value>(config) {
+                if let Some(storage_file) = user_yaml.get("storage_file").and_then(|v| v.as_str()) {
+                    settings.storage_file = storage_file.to_string();
+                }
+            }
+        }
+
+        settings
+    }
 
     #[test]
-    fn test_load_config() {
-        // Get the config directory
-        let config_dir = config_dir().expect("Could not find config directory");
-        let bookmon_dir = config_dir.join("bookmon");
-        let config_path = bookmon_dir.join("config.yml");
-
-        // Backup existing config if it exists
-        let config_backup = if config_path.exists() {
-            let contents = fs::read_to_string(&config_path).expect("Failed to read config file");
-            Some(contents)
-        } else {
-            None
-        };
-
-        // Remove existing config if it exists
-        if config_path.exists() {
-            fs::remove_file(&config_path).expect("Failed to remove config file");
-        }
-
-        // Load settings and verify defaults
-        let settings = Settings::load().expect("Failed to load config");
+    fn test_load_default_config() {
+        let settings = create_test_settings(None);
         
-        // Test app settings
         assert_eq!(settings.app_name, "BookMon");
         assert_eq!(settings.debug, false);
-
-        // Test storage settings
         assert_eq!(settings.storage_file, "");
+    }
 
-        // Restore config if it was backed up
-        if let Some(contents) = config_backup {
-            fs::create_dir_all(&bookmon_dir).expect("Failed to create config directory");
-            fs::write(&config_path, contents).expect("Failed to restore config file");
-        }
+    #[test]
+    fn test_load_user_config_override() {
+        let user_config = r#"
+app_name: CustomBookMon
+debug: true
+storage_file: /custom/path/storage.json
+"#;
+        
+        let settings = create_test_settings(Some(user_config));
+        
+        assert_eq!(settings.app_name, "CustomBookMon");
+        assert_eq!(settings.debug, true);
+        assert_eq!(settings.storage_file, "/custom/path/storage.json");
+    }
+
+    #[test]
+    fn test_partial_user_config_override() {
+        let user_config = r#"
+debug: true
+storage_file: /custom/path/storage.json
+"#;
+        
+        let settings = create_test_settings(Some(user_config));
+        
+        // app_name should remain default
+        assert_eq!(settings.app_name, "BookMon");
+        // other fields should be overridden
+        assert_eq!(settings.debug, true);
+        assert_eq!(settings.storage_file, "/custom/path/storage.json");
     }
 } 

@@ -4,6 +4,9 @@ use std::fs;
 use dirs::config_dir;
 use serde_yaml;
 
+// Embed the default configuration directly in the binary
+const DEFAULT_CONFIG: &str = include_str!("../config/default.yml");
+
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub app_name: String,
@@ -28,8 +31,8 @@ impl Settings {
         // Create config builder
         let mut builder = Config::builder();
 
-        // Add default config first
-        builder = builder.add_source(File::new("config/default", FileFormat::Yaml));
+        // Add embedded default config
+        builder = builder.add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Yaml));
 
         // If user config exists, add it to override defaults
         if config_path.exists() {
