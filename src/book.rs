@@ -47,16 +47,42 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .map(|(id, _)| id.clone())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get category ID"))?
     } else {
-        // Show category selection dialog
-        let selection = Select::new("Select category:", categories.iter().map(|(name, _)| name).collect())
+        // Show category selection dialog with option to create new
+        let mut options = categories.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        options.push("+ Create new category");
+
+        let selection = Select::new("Select category:", options)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        
-        // Find the selected category's ID
-        categories.iter()
-            .find(|(name, _)| name == selection)
-            .map(|(_, id)| id.clone())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected category not found"))?
+
+        if selection == "+ Create new category" {
+            // Prompt for new category name
+            let category_name = Text::new("Enter new category name:")
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            
+            // Create a new category
+            let category = Category::new(
+                category_name.trim().to_string(),
+                None,
+            );
+            
+            // Store the category and get its ID
+            crate::category::store_category(storage, category)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            
+            // Get the ID of the newly created category
+            storage.categories.iter()
+                .find(|(_, c)| c.name == category_name.trim())
+                .map(|(id, _)| id.clone())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get category ID"))?
+        } else {
+            // Find the selected category's ID
+            categories.iter()
+                .find(|(name, _)| name.as_str() == selection)
+                .map(|(_, id)| id.clone())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected category not found"))?
+        }
     };
 
     // Get list of authors with their IDs
@@ -83,13 +109,14 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
     } else {
         // Show author selection dialog
-        let selection = Select::new("Select author:", authors.iter().map(|(name, _)| name).collect())
+        let options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        let selection = Select::new("Select author:", options)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         
         // Find the selected author's ID
         authors.iter()
-            .find(|(name, _)| name == selection)
+            .find(|(name, _)| name.as_str() == selection)
             .map(|(_, id)| id.clone())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected author not found"))?
     };
