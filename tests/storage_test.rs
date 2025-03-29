@@ -1,4 +1,4 @@
-use bookmon::storage::{self, Storage, Book, Author, Reading};
+use bookmon::storage::{self, Storage, Book, Author, Reading, Category};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
@@ -48,12 +48,21 @@ fn test_storage_save_and_load() {
 
     // Create a storage with a book
     let mut storage = Storage::new();
+    
+    // Create a category first
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+    
     let book = Book {
         id: "test-id".to_string(),
         title: "Test Book".to_string(),
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
-        category: "Fiction".to_string(),
+        category_id: category_id.clone(),
     };
     storage.books.insert(book.isbn.clone(), book);
 
@@ -67,7 +76,7 @@ fn test_storage_save_and_load() {
     assert_eq!(loaded_storage.books.len(), 1, "Should have one book");
     let loaded_book = loaded_storage.books.get("1234567890").expect("Book should exist");
     assert_eq!(loaded_book.id, "test-id");
-    assert_eq!(loaded_book.category, "Fiction");
+    assert_eq!(loaded_book.category_id, category_id);
 }
 
 #[test]
@@ -75,12 +84,20 @@ fn test_id_matches_hashmap_keys() {
     let mut storage = Storage::new();
 
     // Create test data
+    // Create a category first
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+    
     let book = Book {
         id: "book1".to_string(),
         title: "Test Book".to_string(),
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
-        category: "Fiction".to_string(),
+        category_id: category_id,
     };
 
     let author = Author {

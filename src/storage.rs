@@ -24,7 +24,7 @@ pub struct Book {
     pub title: String,
     pub added_on: DateTime<Utc>,
     pub isbn: String,
-    pub category: String,
+    pub category_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,13 +45,13 @@ impl Author {
 }
 
 impl Book {
-    pub fn new(title: String, isbn: String, category: String) -> Self {
+    pub fn new(title: String, isbn: String, category_id: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             title,
             added_on: Utc::now(),
             isbn,
-            category,
+            category_id,
         }
     }
 }

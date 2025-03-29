@@ -31,13 +31,11 @@ fn main() {
 
     match cli.command {
         Commands::AddBook => {
-            let storage = storage::load_storage(&settings.storage_file)
+            let mut storage = storage::load_storage(&settings.storage_file)
                 .expect("Failed to load storage");
             
-            match book::get_book_input(&storage) {
+            match book::get_book_input(&mut storage) {
                 Ok(book) => {
-                    let mut storage = storage;
-                    
                     match book::store_book(&mut storage, book) {
                         Ok(_) => {
                             storage::save_storage(&settings.storage_file, &storage)
