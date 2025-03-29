@@ -1,0 +1,14 @@
+# Application settings
+app_name = "BookMon"
+debug = false
+
+# Database settings
+[database]
+host = "localhost"
+port = 5432
+name = "bookmon_db"
+
+# Feature flags
+[features]
+enable_logging = true
+enable_metrics = false 
