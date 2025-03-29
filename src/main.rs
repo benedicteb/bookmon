@@ -1,6 +1,6 @@
 mod config;
 use clap::{Parser, Subcommand};
-use bookmon::{storage, book, category, author};
+use bookmon::{storage, book, category, author, reading};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -17,6 +17,8 @@ enum Commands {
     AddCategory,
     /// Add a new author
     AddAuthor,
+    /// Add a reading event for a book
+    AddReading,
 }
 
 fn main() {
@@ -84,6 +86,25 @@ fn main() {
                     }
                 }
                 Err(e) => eprintln!("Failed to get author input: {}", e),
+            }
+        }
+        Commands::AddReading => {
+            let storage = storage::load_storage(&settings.storage_file)
+                .expect("Failed to load storage");
+            
+            match reading::get_reading_input(&storage) {
+                Ok(reading) => {
+                    let mut storage = storage;
+                    match reading::store_reading(&mut storage, reading) {
+                        Ok(_) => {
+                            storage::save_storage(&settings.storage_file, &storage)
+                                .expect("Failed to save storage");
+                            println!("Reading event added successfully!");
+                        }
+                        Err(e) => eprintln!("Failed to add reading event: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Failed to get reading input: {}", e),
             }
         }
     }
