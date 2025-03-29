@@ -22,6 +22,7 @@ fn test_storage_initialization() {
     
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
+    assert!(storage.authors.is_empty(), "authors should be empty");
 }
 
 #[test]
@@ -38,6 +39,7 @@ fn test_storage_load() {
     
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
+    assert!(storage.authors.is_empty(), "authors should be empty");
 }
 
 #[test]
@@ -56,6 +58,11 @@ fn test_storage_save_and_load() {
     );
     let category_id = category.id.clone();
     storage.categories.insert(category.id.clone(), category);
+
+    // Create an author
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
     
     let book = Book {
         id: "test-id".to_string(),
@@ -63,6 +70,7 @@ fn test_storage_save_and_load() {
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
         category_id: category_id.clone(),
+        author_id: author_id.clone(),
     };
     storage.books.insert(book.isbn.clone(), book);
 
@@ -77,6 +85,7 @@ fn test_storage_save_and_load() {
     let loaded_book = loaded_storage.books.get("1234567890").expect("Book should exist");
     assert_eq!(loaded_book.id, "test-id");
     assert_eq!(loaded_book.category_id, category_id);
+    assert_eq!(loaded_book.author_id, author_id);
 }
 
 #[test]
@@ -98,6 +107,7 @@ fn test_id_matches_hashmap_keys() {
         added_on: Utc::now(),
         isbn: "1234567890".to_string(),
         category_id: category_id,
+        author_id: "author1".to_string(),
     };
 
     let author = Author {
@@ -140,6 +150,7 @@ fn test_automatic_uuid_generation() {
         "Test Book".to_string(),
         "1234567890".to_string(),
         "Fiction".to_string(),
+        "Test Author".to_string(),
     );
 
     let author = Author::new("Test Author".to_string());

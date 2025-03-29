@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use uuid::Uuid;
 use chrono::Utc;
 use dialoguer::{Select, Input};
-use crate::storage::{Book, Storage, Category};
+use crate::storage::{Book, Storage, Category, Author};
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
     let mut isbn = String::new();
@@ -53,12 +53,46 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         categories[selection].1.clone()
     };
 
+    // Get list of authors with their IDs
+    let authors: Vec<(String, String)> = storage.authors.iter()
+        .map(|(id, a)| (a.name.clone(), id.clone()))
+        .collect();
+
+    let author_id = if authors.is_empty() {
+        // If no authors exist, prompt for a new one
+        let author_name: String = Input::new()
+            .with_prompt("Enter new author name")
+            .interact_text()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        
+        // Create a new author
+        let author = Author::new(author_name.trim().to_string());
+        
+        // Store the author and get its ID
+        storage.add_author(author);
+        
+        // Get the ID of the newly created author
+        storage.authors.iter()
+            .find(|(_, a)| a.name == author_name.trim())
+            .map(|(id, _)| id.clone())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
+    } else {
+        // Show author selection dialog
+        let selection = Select::new()
+            .with_prompt("Select author")
+            .items(&authors.iter().map(|(name, _)| name).collect::<Vec<_>>())
+            .interact()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        authors[selection].1.clone()
+    };
+
     Ok(Book {
         id: Uuid::new_v4().to_string(),
         title: title.trim().to_string(),
         added_on: Utc::now(),
         isbn: isbn.trim().to_string(),
         category_id,
+        author_id,
     })
 }
 
@@ -66,6 +100,11 @@ pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
     // Validate that the category exists
     if !storage.categories.contains_key(&book.category_id) {
         return Err(format!("Category with ID {} does not exist", book.category_id));
+    }
+    
+    // Validate that the author exists
+    if !storage.authors.contains_key(&book.author_id) {
+        return Err(format!("Author with ID {} does not exist", book.author_id));
     }
     
     storage.books.insert(book.id.clone(), book);
