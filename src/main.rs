@@ -21,11 +21,11 @@ enum Commands {
     /// Add a reading event for a book
     AddReading,
     /// Show books that have been started but not finished
-    GetStarted,
+    CurrentlyReading,
     /// Show books that have been finished
-    GetFinished,
+    PrintFinished,
     /// Show books that have not been started yet
-    GetUnstarted,
+    PrintBacklog,
 }
 
 fn main() {
@@ -116,7 +116,7 @@ fn main() {
                         Err(e) => eprintln!("Failed to get reading input: {}", e),
                     }
                 }
-                Commands::GetStarted => {
+                Commands::CurrentlyReading => {
                     let storage = storage::load_storage(&settings.storage_file)
                         .expect("Failed to load storage");
                     
@@ -125,7 +125,7 @@ fn main() {
                         Err(e) => eprintln!("Failed to show started books: {}", e),
                     }
                 }
-                Commands::GetFinished => {
+                Commands::PrintFinished => {
                     let storage = storage::load_storage(&settings.storage_file)
                         .expect("Failed to load storage");
                     
@@ -134,7 +134,7 @@ fn main() {
                         Err(e) => eprintln!("Failed to show finished books: {}", e),
                     }
                 }
-                Commands::GetUnstarted => {
+                Commands::PrintBacklog => {
                     let storage = storage::load_storage(&settings.storage_file)
                         .expect("Failed to load storage");
                     
