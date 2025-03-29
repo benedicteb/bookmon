@@ -132,7 +132,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
           pattern: bookmon-*
 
       - name: Debug artifacts
@@ -142,6 +141,16 @@ jobs:
           ls -la artifacts/
           echo "Contents of current directory:"
           ls -la
+
+      - name: Create archives
+        run: |
+          cd artifacts
+          for dir in bookmon-*; do
+            if [ -d "$dir" ]; then
+              tar -czf "${dir}.tar.gz" -C "$dir" bookmon
+            fi
+          done
+          cd ..
 
       - name: Generate release notes
         id: release_notes
@@ -157,10 +166,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
-            artifacts/bookmon-linux
-            artifacts/bookmon-windows.exe
-            artifacts/bookmon-macos-x86_64
-            artifacts/bookmon-macos-arm64
+            artifacts/bookmon-linux.tar.gz
+            artifacts/bookmon-windows.tar.gz
+            artifacts/bookmon-macos-x86_64.tar.gz
+            artifacts/bookmon-macos-arm64.tar.gz
           body_path: release_notes.md
           tag_name: v${{ steps.get_version.outputs.version }}
           fail_on_unmatched_files: true
