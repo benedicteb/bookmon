@@ -147,7 +147,7 @@ jobs:
           ls -la
           ls -la artifacts
           cd artifacts
-          for dir in "bookmon-*"; do
+          for dir in *; do
             if [ -d "$dir" ]; then
               tar -czf "${dir}.tar.gz" -C "$dir" bookmon
             fi
