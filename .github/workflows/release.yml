@@ -139,6 +139,7 @@ jobs:
             artifacts/bookmon-macos-arm64
           body_path: release_notes.md
           tag_name: v${{ steps.get_version.outputs.version }}
+          fail_on_unmatched_files: true
           name: Release v${{ steps.get_version.outputs.version }}
           draft: false
           prerelease: false 
