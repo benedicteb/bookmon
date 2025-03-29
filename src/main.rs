@@ -21,6 +21,10 @@ enum Commands {
     AddReading,
     /// Show books that have been started but not finished
     GetStarted,
+    /// Show books that have been finished
+    GetFinished,
+    /// Show books that have not been started yet
+    GetUnstarted,
 }
 
 fn main() {
@@ -116,6 +120,24 @@ fn main() {
             match reading::show_started_books(&storage) {
                 Ok(_) => {}
                 Err(e) => eprintln!("Failed to show started books: {}", e),
+            }
+        }
+        Commands::GetFinished => {
+            let storage = storage::load_storage(&settings.storage_file)
+                .expect("Failed to load storage");
+            
+            match reading::show_finished_books(&storage) {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to show finished books: {}", e),
+            }
+        }
+        Commands::GetUnstarted => {
+            let storage = storage::load_storage(&settings.storage_file)
+                .expect("Failed to load storage");
+            
+            match reading::show_unstarted_books(&storage) {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to show unstarted books: {}", e),
             }
         }
     }

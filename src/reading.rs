@@ -87,4 +87,79 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     print_table!(table_data);
 
     Ok(())
+}
+
+pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
+    // Get all finished readings
+    let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
+
+    if finished_readings.is_empty() {
+        println!("No finished books found.");
+        return Ok(());
+    }
+
+    // Create table data
+    let mut table_data = vec![
+        vec!["Title".to_string(), "Author".to_string(), "Finished on".to_string()], // header
+    ];
+
+    // For each finished reading, find the corresponding book and author
+    for reading in finished_readings {
+        let book = storage.books.get(&reading.book_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Book not found"))?;
+        
+        let author = storage.authors.get(&book.author_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+
+        // Format the finished date
+        let finished_date = reading.created_on.format("%Y-%m-%d").to_string();
+        
+        // Add row to table data
+        table_data.push(vec![
+            book.title.clone(),
+            author.name.clone(),
+            finished_date
+        ]);
+    }
+
+    // Print the table
+    print_table!(table_data);
+
+    Ok(())
+}
+
+pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
+    // Get all unstarted books
+    let unstarted_books = storage.get_unstarted_books();
+
+    if unstarted_books.is_empty() {
+        println!("No unstarted books found.");
+        return Ok(());
+    }
+
+    // Create table data
+    let mut table_data = vec![
+        vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
+    ];
+
+    // For each unstarted book, find the corresponding author and category
+    for book in unstarted_books {
+        let author = storage.authors.get(&book.author_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+        
+        let category = storage.categories.get(&book.category_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Category not found"))?;
+
+        // Add row to table data
+        table_data.push(vec![
+            book.title.clone(),
+            author.name.clone(),
+            category.name.clone()
+        ]);
+    }
+
+    // Print the table
+    print_table!(table_data);
+
+    Ok(())
 } 

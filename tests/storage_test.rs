@@ -250,4 +250,54 @@ fn test_get_readings_by_event_empty() {
 
     let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
     assert!(finished_readings.is_empty(), "Should have no finished readings");
+}
+
+#[test]
+fn test_get_unstarted_books() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let category = Category::new("Test Category".to_string(), None);
+    let book1 = Book::new(
+        "Book 1".to_string(),
+        "ISBN1".to_string(),
+        category.id.clone(),
+        author.id.clone(),
+    );
+    let book2 = Book::new(
+        "Book 2".to_string(),
+        "ISBN2".to_string(),
+        category.id.clone(),
+        author.id.clone(),
+    );
+
+    // Add test data to storage
+    storage.add_author(author);
+    storage.add_category(category);
+    storage.add_book(book1.clone());
+    storage.add_book(book2.clone());
+
+    // Initially both books should be unstarted
+    let unstarted = storage.get_unstarted_books();
+    assert_eq!(unstarted.len(), 2);
+    assert!(unstarted.iter().any(|b| b.id == book1.id));
+    assert!(unstarted.iter().any(|b| b.id == book2.id));
+
+    // Add a started reading for book1
+    let reading = Reading::new(book1.id.clone(), ReadingEvent::Started);
+    storage.add_reading(reading);
+
+    // Now only book2 should be unstarted
+    let unstarted = storage.get_unstarted_books();
+    assert_eq!(unstarted.len(), 1);
+    assert_eq!(unstarted[0].id, book2.id);
+
+    // Add a finished reading for book2
+    let reading = Reading::new(book2.id.clone(), ReadingEvent::Finished);
+    storage.add_reading(reading);
+
+    // Now no books should be unstarted
+    let unstarted = storage.get_unstarted_books();
+    assert!(unstarted.is_empty());
 } 

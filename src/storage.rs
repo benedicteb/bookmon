@@ -144,6 +144,18 @@ impl Storage {
             .filter(|r| r.event == event_type)
             .collect()
     }
+
+    pub fn get_unstarted_books(&self) -> Vec<&Book> {
+        // Get all book IDs that have either started or finished readings
+        let started_or_finished: std::collections::HashSet<String> = self.readings.iter()
+            .map(|(_, r)| r.book_id.clone())
+            .collect();
+
+        // Find books that have no readings
+        self.books.values()
+            .filter(|book| !started_or_finished.contains(&book.id))
+            .collect()
+    }
 }
 
 pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {
