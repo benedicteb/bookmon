@@ -74,7 +74,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 
     // Create table data
     let mut table_data = vec![
-        vec!["Title".to_string(), "Author".to_string(), "Days since started".to_string()], // header
+        vec!["Title".to_string(), "Author".to_string(), "Days since started".to_string(), "Progress".to_string()], // header
     ];
 
     // For each started book, find the corresponding author and most recent started reading
@@ -90,12 +90,33 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 
         // Calculate days since started
         let days = (Utc::now() - most_recent_reading.created_on).num_days();
+
+        // Find the most recent update reading for this book
+        let most_recent_update = storage.readings.values()
+            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Update)
+            .max_by_key(|r| r.created_on);
+
+        // Calculate progress percentage if we have both current page and total pages
+        let progress = if let Some(update) = most_recent_update {
+            if let Some(current_page) = update.metadata.current_page {
+                if book.total_pages > 0 {
+                    format!("{:.1}%", (current_page as f64 / book.total_pages as f64) * 100.0)
+                } else {
+                    "".to_string()
+                }
+            } else {
+                "".to_string()
+            }
+        } else {
+            "".to_string()
+        };
         
         // Add row to table data
         table_data.push(vec![
             book.title.clone(),
             author.name.clone(),
-            days.to_string()
+            days.to_string(),
+            progress
         ]);
     }
 
