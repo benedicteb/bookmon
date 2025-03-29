@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use config::{Config, ConfigError, File};
+use config::{Config, ConfigError, File, FileFormat};
 
 #[derive(Debug, Deserialize)]
 pub struct DatabaseConfig {
@@ -25,7 +25,7 @@ pub struct Settings {
 impl Settings {
     pub fn load() -> Result<Self, ConfigError> {
         let config = Config::builder()
-            .add_source(File::with_name("config/default"))
+            .add_source(File::new("config/default", FileFormat::Yaml))
             .build()?;
 
         config.try_deserialize()
