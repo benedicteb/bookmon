@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use inquire::Text;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Author {
@@ -28,6 +29,7 @@ pub struct Book {
     pub isbn: String,
     pub category_id: String,
     pub author_id: String,
+    #[serde(default)]
     pub total_pages: i32,
 }
 
@@ -277,9 +279,135 @@ pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::error::Error>> {
+    // First, collect all missing references
+    let mut missing_authors: Vec<(String, String)> = Vec::new(); // (book_title, author_id)
+    let mut missing_categories: Vec<(String, String)> = Vec::new(); // (book_title, category_id)
+    let mut missing_books: Vec<(String, String)> = Vec::new(); // (reading_id, book_id)
+    let mut books_missing_fields: Vec<String> = Vec::new(); // book_ids
+
+    // Check books for missing fields and references
+    for (book_id, book) in storage.books.iter() {
+        if !storage.authors.contains_key(&book.author_id) {
+            missing_authors.push((book.title.clone(), book.author_id.clone()));
+        }
+        if !storage.categories.contains_key(&book.category_id) {
+            missing_categories.push((book.title.clone(), book.category_id.clone()));
+        }
+        if book.total_pages <= 0 {
+            books_missing_fields.push(book_id.clone());
+        }
+    }
+
+    // Check readings for missing book references
+    for (reading_id, reading) in storage.readings.iter() {
+        if !storage.books.contains_key(&reading.book_id) {
+            missing_books.push((reading_id.clone(), reading.book_id.clone()));
+        }
+    }
+
+    // Handle missing authors
+    for (book_title, _author_id) in missing_authors {
+        println!("Book '{}' references a missing author. Please provide the author name:", book_title);
+        let author_name = Text::new("Enter author name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get author input: {}", e))?;
+        
+        let author = Author::new(author_name.trim().to_string());
+        storage.add_author(author);
+    }
+
+    // Handle missing categories
+    for (book_title, _category_id) in missing_categories {
+        println!("Book '{}' references a missing category. Please provide the category name:", book_title);
+        let category_name = Text::new("Enter category name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get category input: {}", e))?;
+        
+        let category = Category::new(
+            category_name.trim().to_string(),
+            None,
+        );
+        storage.add_category(category);
+    }
+
+    // Handle books with missing fields
+    for book_id in books_missing_fields {
+        let book = storage.books.get(&book_id).unwrap();
+        println!("Book '{}' is missing total pages. Please provide the total pages:", book.title);
+        let total_pages = Text::new("Enter total pages:")
+            .prompt()
+            .map_err(|e| format!("Failed to get total pages: {}", e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| format!("Invalid total pages: {}", e))?;
+
+        if let Some(book) = storage.books.get_mut(&book_id) {
+            book.total_pages = total_pages;
+        }
+    }
+
+    // Handle missing books
+    for (reading_id, _book_id) in missing_books {
+        println!("Reading event {} references a missing book. Please provide the book details:", reading_id);
+        
+        let title = Text::new("Enter book title:")
+            .prompt()
+            .map_err(|e| format!("Failed to get book title: {}", e))?;
+        
+        let isbn = Text::new("Enter book ISBN:")
+            .prompt()
+            .map_err(|e| format!("Failed to get book ISBN: {}", e))?;
+        
+        let total_pages = Text::new("Enter total pages:")
+            .prompt()
+            .map_err(|e| format!("Failed to get total pages: {}", e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| format!("Invalid total pages: {}", e))?;
+
+        // Get or create author
+        let author_name = Text::new("Enter author name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get author name: {}", e))?;
+        
+        let author = Author::new(author_name.trim().to_string());
+        let author_id = author.id.clone();
+        storage.add_author(author);
+
+        // Get or create category
+        let category_name = Text::new("Enter category name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get category name: {}", e))?;
+        
+        let category = Category::new(
+            category_name.trim().to_string(),
+            None,
+        );
+        let category_id = category.id.clone();
+        storage.add_category(category);
+
+        // Create and add the book
+        let book = Book::new(
+            title.trim().to_string(),
+            isbn.trim().to_string(),
+            category_id,
+            author_id,
+            total_pages,
+        );
+        storage.add_book(book);
+    }
+
+    Ok(())
+}
+
 pub fn load_storage(storage_path: &str) -> Result<Storage, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(storage_path)?;
-    let storage: Storage = serde_json::from_str(&contents)?;
+    let mut storage: Storage = serde_json::from_str(&contents)?;
+    
+    // Handle any missing fields
+    handle_missing_fields(&mut storage)?;
+    
     Ok(storage)
 }
 
