@@ -1,6 +1,6 @@
 mod config;
 use clap::{Parser, Subcommand};
-use bookmon::{storage, book};
+use bookmon::{storage, book, category};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -13,6 +13,8 @@ struct Cli {
 enum Commands {
     /// Add a new book to the collection
     AddBook,
+    /// Add a new category
+    AddCategory,
 }
 
 fn main() {
@@ -44,6 +46,24 @@ fn main() {
                     }
                 }
                 Err(e) => eprintln!("Failed to get book input: {}", e),
+            }
+        }
+        Commands::AddCategory => {
+            match category::get_category_input() {
+                Ok(category) => {
+                    let mut storage = storage::load_storage(&settings.storage_file)
+                        .expect("Failed to load storage");
+                    
+                    match category::store_category(&mut storage, category) {
+                        Ok(_) => {
+                            storage::save_storage(&settings.storage_file, &storage)
+                                .expect("Failed to save storage");
+                            println!("Category added successfully!");
+                        }
+                        Err(e) => eprintln!("Failed to add category: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Failed to get category input: {}", e),
             }
         }
     }

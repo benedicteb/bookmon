@@ -12,6 +12,13 @@ pub struct Author {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Category {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Book {
     pub id: String,
     pub title: String,
@@ -60,11 +67,22 @@ impl Reading {
     }
 }
 
+impl Category {
+    pub fn new(name: String, description: Option<String>) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            description,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Storage {
     pub books: HashMap<String, Book>,
     pub readings: HashMap<String, Reading>,
     pub authors: HashMap<String, Author>,
+    pub categories: HashMap<String, Category>,
 }
 
 impl Storage {
@@ -73,6 +91,7 @@ impl Storage {
             books: HashMap::new(),
             readings: HashMap::new(),
             authors: HashMap::new(),
+            categories: HashMap::new(),
         }
     }
 
@@ -88,6 +107,10 @@ impl Storage {
         self.authors.insert(author.id.clone(), author)
     }
 
+    pub fn add_category(&mut self, category: Category) -> Option<Category> {
+        self.categories.insert(category.id.clone(), category)
+    }
+
     pub fn get_book(&self, id: &str) -> Option<&Book> {
         self.books.get(id)
     }
@@ -98,6 +121,10 @@ impl Storage {
 
     pub fn get_author(&self, id: &str) -> Option<&Author> {
         self.authors.get(id)
+    }
+
+    pub fn get_category(&self, id: &str) -> Option<&Category> {
+        self.categories.get(id)
     }
 }
 
