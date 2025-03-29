@@ -23,6 +23,7 @@ fn test_storage_initialization() {
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
     assert!(storage.authors.is_empty(), "authors should be empty");
+    assert!(storage.categories.is_empty(), "categories should be empty");
 }
 
 #[test]
@@ -40,6 +41,7 @@ fn test_storage_load() {
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
     assert!(storage.authors.is_empty(), "authors should be empty");
+    assert!(storage.categories.is_empty(), "categories should be empty");
 }
 
 #[test]
@@ -86,6 +88,13 @@ fn test_storage_save_and_load() {
     assert_eq!(loaded_book.id, "test-id");
     assert_eq!(loaded_book.category_id, category_id);
     assert_eq!(loaded_book.author_id, author_id);
+
+    // Verify category and author were properly loaded with created_on
+    let loaded_category = loaded_storage.categories.get(&category_id).expect("Category should exist");
+    assert!(loaded_category.created_on <= Utc::now());
+
+    let loaded_author = loaded_storage.authors.get(&author_id).expect("Author should exist");
+    assert!(loaded_author.created_on <= Utc::now());
 }
 
 #[test]
@@ -110,10 +119,7 @@ fn test_id_matches_hashmap_keys() {
         author_id: "author1".to_string(),
     };
 
-    let author = Author {
-        id: "author1".to_string(),
-        name: "Test Author".to_string(),
-    };
+    let author = Author::new("Test Author".to_string());
 
     let reading = Reading {
         id: "reading1".to_string(),
@@ -134,10 +140,16 @@ fn test_id_matches_hashmap_keys() {
 
     for (key, author) in &storage.authors {
         assert_eq!(key, &author.id, "Author HashMap key does not match author id");
+        assert!(author.created_on <= Utc::now(), "Author created_on should be set");
     }
 
     for (key, reading) in &storage.readings {
         assert_eq!(key, &reading.id, "Reading HashMap key does not match reading id");
+    }
+
+    for (key, category) in &storage.categories {
+        assert_eq!(key, &category.id, "Category HashMap key does not match category id");
+        assert!(category.created_on <= Utc::now(), "Category created_on should be set");
     }
 }
 
@@ -171,9 +183,10 @@ fn test_automatic_uuid_generation() {
         assert!(key.len() > 0, "Book ID should have length");
     }
 
-    for (key, _author) in &storage.authors {
+    for (key, author) in &storage.authors {
         assert!(!key.is_empty(), "Author ID should not be empty");
         assert!(key.len() > 0, "Author ID should have length");
+        assert!(author.created_on <= Utc::now(), "Author created_on should be set");
     }
 
     for (key, _reading) in &storage.readings {

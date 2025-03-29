@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub struct Author {
     pub id: String,
     pub name: String,
+    pub created_on: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -16,6 +17,7 @@ pub struct Category {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
+    pub created_on: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -47,6 +49,7 @@ impl Author {
         Self {
             id: Uuid::new_v4().to_string(),
             name,
+            created_on: Utc::now(),
         }
     }
 }
@@ -81,6 +84,7 @@ impl Category {
             id: Uuid::new_v4().to_string(),
             name,
             description,
+            created_on: Utc::now(),
         }
     }
 }

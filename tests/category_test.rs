@@ -1,5 +1,6 @@
 use bookmon::storage::{Storage, Category};
 use bookmon::category::store_category;
+use chrono::Utc;
 
 #[test]
 fn test_category_creation() {
@@ -11,6 +12,7 @@ fn test_category_creation() {
     assert_eq!(category.name, "Fiction");
     assert_eq!(category.description, Some("Fictional books and novels".to_string()));
     assert!(!category.id.is_empty());
+    assert!(category.created_on <= Utc::now());
 }
 
 #[test]
@@ -30,6 +32,7 @@ fn test_category_storage() {
     assert_eq!(stored_category.name, category.name);
     assert_eq!(stored_category.description, category.description);
     assert_eq!(stored_category.id, category.id);
+    assert!(stored_category.created_on <= Utc::now());
 }
 
 #[test]
@@ -42,6 +45,7 @@ fn test_category_without_description() {
     assert_eq!(category.name, "Non-Fiction");
     assert!(category.description.is_none());
     assert!(!category.id.is_empty());
+    assert!(category.created_on <= Utc::now());
 }
 
 #[test]
@@ -68,5 +72,6 @@ fn test_multiple_categories() {
         assert_eq!(stored.name, category.name);
         assert_eq!(stored.description, category.description);
         assert_eq!(stored.id, category.id);
+        assert!(stored.created_on <= Utc::now());
     }
 } 

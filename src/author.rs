@@ -8,9 +8,7 @@ pub fn get_author_input() -> Result<Author, String> {
         .interact()
         .map_err(|e| e.to_string())?;
 
-    let id = uuid::Uuid::new_v4().to_string();
-
-    Ok(Author { id, name })
+    Ok(Author::new(name))
 }
 
 pub fn store_author(storage: &mut Storage, author: Author) -> Result<(), String> {
