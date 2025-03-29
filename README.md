@@ -1,4 +1,4 @@
-# Bookmon
+# bookmon
 
 A Rust-based command-line book management system that helps you track your reading progress, manage your book collection, and organize books by categories and authors.
 
