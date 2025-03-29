@@ -192,6 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         actions.push("Start reading");
                     }
                     if storage.is_book_started(&selected_book.id) && !storage.is_book_finished(&selected_book.id) {
+                        actions.push("Update progress");
                         actions.push("Mark as finished");
                     }
 
