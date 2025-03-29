@@ -66,6 +66,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Increment version
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(grep '^version' Cargo.toml | cut -d '"' -f 2)
+          
+          # Split version into major.minor.patch
+          IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
+          MAJOR="${version_parts[0]}"
+          MINOR="${version_parts[1]}"
+          PATCH="${version_parts[2]}"
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          # Update Cargo.toml
+          sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+          
+          # Commit the change
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Cargo.toml
+          git commit -m "chore: bump version to $NEW_VERSION"
+          git push
+
       - name: Get version from Cargo.toml
         id: get_version
         run: echo "version=$(grep '^version' Cargo.toml | cut -d '"' -f 2)" >> $GITHUB_OUTPUT
