@@ -153,6 +153,8 @@ jobs:
             fi
           done
           cd ..
+          ls -la
+          ls -la artifacts
 
       - name: Generate release notes
         id: release_notes
