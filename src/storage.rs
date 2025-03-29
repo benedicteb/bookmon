@@ -279,7 +279,7 @@ pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::error::Error>> {
+pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // First, collect all missing references
     let mut missing_authors: Vec<(String, String)> = Vec::new(); // (book_title, author_id)
     let mut missing_categories: Vec<(String, String)> = Vec::new(); // (book_title, category_id)
@@ -315,6 +315,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
         
         let author = Author::new(author_name.trim().to_string());
         storage.add_author(author);
+        
+        // Save after each author is added
+        save_storage(storage_path, storage)?;
     }
 
     // Handle missing categories
@@ -329,6 +332,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
             None,
         );
         storage.add_category(category);
+        
+        // Save after each category is added
+        save_storage(storage_path, storage)?;
     }
 
     // Handle books with missing fields
@@ -345,6 +351,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
         if let Some(book) = storage.books.get_mut(&book_id) {
             book.total_pages = total_pages;
         }
+        
+        // Save after each book's total_pages is updated
+        save_storage(storage_path, storage)?;
     }
 
     // Handle missing books
@@ -374,6 +383,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
         let author = Author::new(author_name.trim().to_string());
         let author_id = author.id.clone();
         storage.add_author(author);
+        
+        // Save after author is added
+        save_storage(storage_path, storage)?;
 
         // Get or create category
         let category_name = Text::new("Enter category name:")
@@ -386,6 +398,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
         );
         let category_id = category.id.clone();
         storage.add_category(category);
+        
+        // Save after category is added
+        save_storage(storage_path, storage)?;
 
         // Create and add the book
         let book = Book::new(
@@ -396,6 +411,9 @@ pub fn handle_missing_fields(storage: &mut Storage) -> Result<(), Box<dyn std::e
             total_pages,
         );
         storage.add_book(book);
+        
+        // Save after book is added
+        save_storage(storage_path, storage)?;
     }
 
     Ok(())
@@ -406,7 +424,7 @@ pub fn load_storage(storage_path: &str) -> Result<Storage, Box<dyn std::error::E
     let mut storage: Storage = serde_json::from_str(&contents)?;
     
     // Handle any missing fields
-    handle_missing_fields(&mut storage)?;
+    handle_missing_fields(&mut storage, storage_path)?;
     
     Ok(storage)
 }
