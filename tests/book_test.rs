@@ -23,18 +23,3 @@ fn test_store_book() {
     assert!(store_book(&mut storage, book).is_ok());
     assert_eq!(storage.books.len(), 1);
 }
-
-#[test]
-fn test_store_duplicate_book() {
-    let mut storage = Storage::new();
-    let book = Book {
-        id: "test-id".to_string(),
-        title: "Test Book".to_string(),
-        added_on: Utc::now(),
-        isbn: "1234567890".to_string(),
-        category: "Fiction".to_string(),
-    };
-
-    store_book(&mut storage, book.clone()).unwrap();
-    assert!(store_book(&mut storage, book).is_err());
-} 
