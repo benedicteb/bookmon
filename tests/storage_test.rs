@@ -138,17 +138,17 @@ fn test_automatic_uuid_generation() {
     storage.add_reading(reading);
 
     // Verify that each item has a valid UUID
-    for (key, book) in &storage.books {
+    for (key, _book) in &storage.books {
         assert!(!key.is_empty(), "Book ID should not be empty");
         assert!(key.len() > 0, "Book ID should have length");
     }
 
-    for (key, author) in &storage.authors {
+    for (key, _author) in &storage.authors {
         assert!(!key.is_empty(), "Author ID should not be empty");
         assert!(key.len() > 0, "Author ID should have length");
     }
 
-    for (key, reading) in &storage.readings {
+    for (key, _reading) in &storage.readings {
         assert!(!key.is_empty(), "Reading ID should not be empty");
         assert!(key.len() > 0, "Reading ID should have length");
     }
