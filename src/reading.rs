@@ -84,9 +84,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     }
 
     // Print the table
-    println!("\nCurrently Reading:");
     print_table!(table_data);
-    println!(); // Add a blank line at the end
-    
+
     Ok(())
 } 
