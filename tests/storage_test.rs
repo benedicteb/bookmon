@@ -736,4 +736,109 @@ fn test_json_sorting() {
     }
     
     assert!(check_keys_sorted(&value), "JSON keys are not properly sorted");
+}
+
+#[test]
+fn test_sort_books() {
+    let mut storage = Storage::new();
+    
+    // Create and store a category
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    // Create and store authors
+    let author1 = Author::new("Author One".to_string());
+    let author2 = Author::new("Author Two".to_string());
+    let author1_id = author1.id.clone();
+    let author2_id = author2.id.clone();
+    storage.authors.insert(author1.id.clone(), author1);
+    storage.authors.insert(author2.id.clone(), author2);
+    
+    // Create and store books with different statuses
+    let book1 = Book::new(
+        "First Book".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author1_id.clone(),
+        300,
+    );
+    let book2 = Book::new(
+        "Second Book".to_string(),
+        "0987654321".to_string(),
+        category_id.clone(),
+        author2_id.clone(),
+        300,
+    );
+    let book3 = Book::new(
+        "Third Book".to_string(),
+        "1111111111".to_string(),
+        category_id.clone(),
+        author1_id.clone(),
+        300,
+    );
+    let book4 = Book::new(
+        "Fourth Book".to_string(),
+        "2222222222".to_string(),
+        category_id.clone(),
+        author2_id.clone(),
+        300,
+    );
+
+    // Add books to storage
+    storage.add_book(book1.clone());
+    storage.add_book(book2.clone());
+    storage.add_book(book3.clone());
+    storage.add_book(book4.clone());
+
+    // Add reading events to set different statuses
+    // Book1: Currently reading
+    storage.add_reading(Reading::new(book1.id.clone(), ReadingEvent::Started));
+    
+    // Book2: Finished
+    storage.add_reading(Reading::new(book2.id.clone(), ReadingEvent::Started));
+    storage.add_reading(Reading::new(book2.id.clone(), ReadingEvent::Finished));
+    
+    // Book3: Not started (no reading events)
+    
+    // Book4: Currently reading
+    storage.add_reading(Reading::new(book4.id.clone(), ReadingEvent::Started));
+
+    // Sort books
+    let sorted_books = storage.sort_books();
+
+    // Verify sorting order
+    assert_eq!(sorted_books.len(), 4);
+    
+    // First two should be currently reading (sorted by author then title)
+    assert!(storage.is_book_started(&sorted_books[0].id));
+    assert!(storage.is_book_started(&sorted_books[1].id));
+    assert!(!storage.is_book_finished(&sorted_books[0].id));
+    assert!(!storage.is_book_finished(&sorted_books[1].id));
+    
+    // Third should be not started
+    assert!(!storage.is_book_started(&sorted_books[2].id));
+    assert!(!storage.is_book_finished(&sorted_books[2].id));
+    
+    // Fourth should be finished
+    assert!(storage.is_book_finished(&sorted_books[3].id));
+
+    // Verify author and title sorting within each status group
+    // Currently reading books should be sorted by author then title
+    let author1_name = storage.authors.get(&author1_id).unwrap().name.clone();
+    let author2_name = storage.authors.get(&author2_id).unwrap().name.clone();
+    
+    if author1_name < author2_name {
+        assert_eq!(sorted_books[0].title, "First Book"); // Author1's book
+        assert_eq!(sorted_books[1].title, "Fourth Book"); // Author2's book
+    } else {
+        assert_eq!(sorted_books[0].title, "Fourth Book"); // Author2's book
+        assert_eq!(sorted_books[1].title, "First Book"); // Author1's book
+    }
+
+    // Not started book should be sorted by author then title
+    assert_eq!(sorted_books[2].title, "Third Book");
 } 
