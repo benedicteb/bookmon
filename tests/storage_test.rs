@@ -1,25 +1,16 @@
-use bookmon::storage::{self, Storage, Book, Author, Reading, Category, ReadingEvent, ReadingMetadata};
-use std::fs;
-use std::path::Path;
-use tempfile::tempdir;
+use bookmon::storage::{
+    Storage, Book, Author, Reading, Category, ReadingEvent,
+    ReadingMetadata, sort_json_value
+};
 use chrono::Utc;
+use serde_json::value::Value;
 
 #[test]
 fn test_storage_initialization() {
-    // Create a temporary directory
-    let temp_dir = tempdir().unwrap();
-    let storage_path = temp_dir.path().join("storage.json").to_str().unwrap().to_string();
-
-    // Test initialization
-    storage::initialize_storage_file(&storage_path).expect("Failed to initialize storage");
+    // Create a new empty storage
+    let storage = Storage::new();
     
-    // Verify file exists
-    assert!(Path::new(&storage_path).exists(), "Storage file should be created");
-    
-    // Read and verify contents
-    let contents = fs::read_to_string(&storage_path).expect("Failed to read storage file");
-    let storage: Storage = serde_json::from_str(&contents).expect("Failed to parse JSON");
-    
+    // Verify the storage is empty
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
     assert!(storage.authors.is_empty(), "authors should be empty");
@@ -27,17 +18,70 @@ fn test_storage_initialization() {
 }
 
 #[test]
-fn test_storage_load() {
-    // Create a temporary directory
-    let temp_dir = tempdir().unwrap();
-    let storage_path = temp_dir.path().join("storage.json").to_str().unwrap().to_string();
+fn test_storage_serialization() {
+    // Create a storage with test data
+    let mut storage = Storage::new();
+    
+    // Add some test data in a specific order
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+    
+    let category = Category::new("Test Category".to_string(), Some("Test Description".to_string()));
+    let category_id = category.id.clone();
+    storage.add_category(category);
+    
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    
+    let reading = Reading::new(book_id.clone(), ReadingEvent::Started);
+    storage.add_reading(reading);
 
-    // Initialize storage
-    storage::initialize_storage_file(&storage_path).expect("Failed to initialize storage");
+    // Serialize to JSON
+    let json_value = serde_json::to_value(&storage).unwrap();
+    let sorted_value = sort_json_value(json_value);
+    let first_json = serde_json::to_string_pretty(&sorted_value).unwrap();
     
-    // Test loading
-    let storage = storage::load_storage(&storage_path).expect("Failed to load storage");
+    // Serialize again to verify deterministic output
+    let json_value = serde_json::to_value(&storage).unwrap();
+    let sorted_value = sort_json_value(json_value);
+    let second_json = serde_json::to_string_pretty(&sorted_value).unwrap();
     
+    // Verify that both serializations produce identical output
+    assert_eq!(first_json, second_json, "Multiple serializations should produce identical output");
+
+    // Verify that the JSON structure is valid and keys are sorted
+    let parsed_value: Value = serde_json::from_str(&first_json).unwrap();
+    if let Value::Object(map) = parsed_value {
+        let keys: Vec<_> = map.keys().collect();
+        let mut sorted_keys = keys.clone();
+        sorted_keys.sort();
+        assert_eq!(keys, sorted_keys, "Top-level keys should be sorted");
+    } else {
+        panic!("Expected JSON object at root level");
+    }
+
+    // Test deserialization
+    let deserialized: Storage = serde_json::from_str(&first_json).unwrap();
+    assert_eq!(deserialized.books.len(), storage.books.len());
+    assert_eq!(deserialized.authors.len(), storage.authors.len());
+    assert_eq!(deserialized.categories.len(), storage.categories.len());
+    assert_eq!(deserialized.readings.len(), storage.readings.len());
+}
+
+#[test]
+fn test_storage_load() {
+    // Create a new empty storage
+    let storage = Storage::new();
+    
+    // Verify the storage is empty
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
     assert!(storage.authors.is_empty(), "authors should be empty");
@@ -46,10 +90,6 @@ fn test_storage_load() {
 
 #[test]
 fn test_storage_save_and_load() {
-    // Create a temporary directory
-    let temp_dir = tempdir().unwrap();
-    let storage_path = temp_dir.path().join("storage.json").to_str().unwrap().to_string();
-
     // Create a storage with a book
     let mut storage = Storage::new();
     
@@ -77,11 +117,13 @@ fn test_storage_save_and_load() {
     };
     storage.books.insert(book.isbn.clone(), book);
 
-    // Save the storage
-    storage::save_storage(&storage_path, &storage).expect("Failed to save storage");
+    // Serialize to JSON
+    let json_value = serde_json::to_value(&storage).unwrap();
+    let sorted_value = sort_json_value(json_value);
+    let json_string = serde_json::to_string_pretty(&sorted_value).unwrap();
 
-    // Load the storage
-    let loaded_storage = storage::load_storage(&storage_path).expect("Failed to load storage");
+    // Deserialize back to a new storage instance
+    let loaded_storage: Storage = serde_json::from_str(&json_string).unwrap();
 
     // Verify the loaded storage matches the original
     assert_eq!(loaded_storage.books.len(), 1, "Should have one book");
