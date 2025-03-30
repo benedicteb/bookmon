@@ -1,7 +1,9 @@
 use std::io;
+use std::time::Duration;
 use uuid::Uuid;
 use chrono::Utc;
 use inquire::{Select, Text};
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::storage::{Book, Storage, Category, Author};
 use crate::http_client::{HttpClient, OpenLibraryBook};
 
@@ -11,19 +13,35 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+    // Create a spinner for the lookup
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+            .template("{spinner} Looking up book details...")
+            .unwrap()
+    );
+    spinner.enable_steady_tick(Duration::from_millis(100));
+
     // Look up book details
     let client = HttpClient::new();
     let book_info = match tokio::runtime::Runtime::new()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         .block_on(client.get_book_by_isbn(&isbn))
     {
-        Ok(info) => info,
-        Err(_) => OpenLibraryBook {
-            title: String::new(),
-            authors: vec![],
-            description: None,
-            first_publish_date: None,
-            covers: None,
+        Ok(info) => {
+            spinner.finish_and_clear();
+            info
+        }
+        Err(_) => {
+            spinner.finish_and_clear();
+            OpenLibraryBook {
+                title: String::new(),
+                authors: vec![],
+                description: None,
+                first_publish_date: None,
+                covers: None,
+            }
         }
     };
 
