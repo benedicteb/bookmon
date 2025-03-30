@@ -219,8 +219,8 @@ impl HttpClient {
                         author.alternate_names = detailed_author.alternate_names;
                         author.links = detailed_author.links;
                     }
-                    Err(e) => {
-                        eprintln!("Warning: Failed to fetch author data for {}: {}", work_author.data.key, e);
+                    Err(_) => {
+                        // Silently continue with basic author data
                     }
                 }
                 authors.push(author);
