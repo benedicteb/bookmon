@@ -98,7 +98,26 @@ Available commands:
 - `currently-reading` - Show books that have been started but not finished
 - `print-finished` - Show books that have been finished
 - `print-backlog` - Show books that have not been started yet
+- `print-all` - Show all books in your library
 - `change-storage-path` - Change the storage file path
+- `get-config-path` - Print the path to the config file
+- `get-isbn <isbn>` - Fetch detailed book information using an ISBN
+
+### ISBN Lookup
+
+The application can fetch detailed book information using ISBNs through the Open Library API. When you use the `get-isbn` command, it will retrieve:
+- Book title
+- Author information (including personal name, birth/death dates, and biography)
+- First publication date
+- Book description
+- Cover image IDs
+
+Example:
+```bash
+bookmon get-isbn 0451524934
+```
+
+This feature is particularly useful when adding new books to your collection, as it can automatically populate many details for you.
 
 ### Interactive Mode
 
