@@ -98,41 +98,38 @@ jobs:
           fetch-tags: true
           ref: main
 
-      - name: Increment version
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3.1.11
+        with:
+          versionSpec: '6.0.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3.1.11
+
+      - name: Generate release notes
+        id: release_notes
         run: |
-          # Get current version
-          CURRENT_VERSION=$(grep '^version' Cargo.toml | cut -d '"' -f 2)
-          
-          # Split version into major.minor.patch
-          IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
-          MAJOR="${version_parts[0]}"
-          MINOR="${version_parts[1]}"
-          PATCH="${version_parts[2]}"
-          
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          
-          # Update Cargo.toml
-          sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
-          
-          # Commit the change
+          echo "## Changes in v${{ steps.gitversion.outputs.semVer }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### Commits" >> release_notes.md
+          git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"* %s (%h)" >> release_notes.md
+
+      - name: Update Cargo.toml version
+        run: |
+          sed -i "s/^version = \".*\"/version = \"${{ steps.gitversion.outputs.semVer }}\"/" Cargo.toml
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Cargo.toml
-          git commit -m "chore: bump version to $NEW_VERSION"
+          git commit -m "chore: bump version to ${{ steps.gitversion.outputs.semVer }}"
           git push
-
-      - name: Get version from Cargo.toml
-        id: get_version
-        run: echo "version=$(grep '^version' Cargo.toml | cut -d '"' -f 2)" >> $GITHUB_OUTPUT
 
       - name: Create tag
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "v${{ steps.get_version.outputs.version }}" -m "Release v${{ steps.get_version.outputs.version }}"
-          git push origin "v${{ steps.get_version.outputs.version }}"
+          git tag -a "v${{ steps.gitversion.outputs.semVer }}" -m "Release v${{ steps.gitversion.outputs.semVer }}"
+          git push origin "v${{ steps.gitversion.outputs.semVer }}"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -140,38 +137,15 @@ jobs:
           path: artifacts
           pattern: bookmon-*
 
-      - name: Debug artifacts
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Contents of artifacts directory:"
-          ls -la artifacts/
-          echo "Contents of current directory:"
-          ls -la
-
       - name: Create archives
         run: |
-          ls -la
-          ls -la artifacts
-          find artifacts
           cd artifacts
           for dir in bookmon-*; do
             if [ -d "$dir" ]; then
-              echo tar -czf "${dir}.tar.gz" "$dir"
               tar -czf "${dir}.tar.gz" "$dir"
             fi
           done
           cd ..
-          ls -la
-          ls -la artifacts
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          echo "## Changes in v${{ steps.get_version.outputs.version }}" > release_notes.md
-          echo "" >> release_notes.md
-          echo "### Commits" >> release_notes.md
-          echo git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"* %s (%h)" >> release_notes.md
-          git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"* %s (%h)" >> release_notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -184,8 +158,8 @@ jobs:
             artifacts/bookmon-macos-x86_64.tar.gz
             artifacts/bookmon-macos-arm64.tar.gz
           body_path: release_notes.md
-          tag_name: v${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.gitversion.outputs.semVer }}
           fail_on_unmatched_files: true
-          name: Release v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.gitversion.outputs.semVer }}
           draft: false
           prerelease: false 
