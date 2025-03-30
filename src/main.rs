@@ -26,6 +26,8 @@ enum Commands {
     PrintFinished,
     /// Show books that have not been started yet
     PrintBacklog,
+    /// Show all books in the library
+    PrintAll,
     /// Change the storage file path
     ChangeStoragePath {
         /// The new path for the storage file
@@ -168,6 +170,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match reading::show_unstarted_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+                    }
+                }
+                Commands::PrintAll => {
+                    let storage = storage::load_storage(&settings.storage_file)
+                        .expect("Failed to load storage");
+                    
+                    match reading::show_all_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show all books: {}", e),
                     }
                 }
                 Commands::GetConfigPath => {
