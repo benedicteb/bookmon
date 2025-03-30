@@ -691,4 +691,49 @@ fn test_sort_json_value() {
             }
         }
     }
+}
+
+#[test]
+fn test_json_sorting() {
+    let mut storage = Storage::new();
+    
+    // Add some test data
+    let author = Author::new("Test Author".to_string());
+    let category = Category::new("Test Category".to_string(), None);
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category.id.clone(),
+        author.id.clone(),
+        100,
+    );
+    
+    storage.add_author(author);
+    storage.add_category(category);
+    storage.add_book(book);
+    
+    // Convert to JSON string
+    let json_string = storage.to_sorted_json_string().unwrap();
+    
+    // Parse back to Value to verify sorting
+    let value: Value = serde_json::from_str(&json_string).unwrap();
+    
+    // Helper function to check if keys are sorted
+    fn check_keys_sorted(value: &Value) -> bool {
+        match value {
+            Value::Object(map) => {
+                let keys: Vec<_> = map.keys().collect();
+                let sorted_keys: Vec<_> = {
+                    let mut sorted = keys.clone();
+                    sorted.sort();
+                    sorted
+                };
+                keys == sorted_keys && map.values().all(check_keys_sorted)
+            }
+            Value::Array(arr) => arr.iter().all(check_keys_sorted),
+            _ => true,
+        }
+    }
+    
+    assert!(check_keys_sorted(&value), "JSON keys are not properly sorted");
 } 
