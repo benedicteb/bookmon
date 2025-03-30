@@ -182,21 +182,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("Authors:");
                             for author in book.authors {
                                 println!("  - {}", author.name.unwrap_or_else(|| "Unknown".to_string()));
+                                if let Some(personal_name) = author.personal_name {
+                                    println!("    Personal Name: {}", personal_name);
+                                }
+                                if let Some(birth_date) = author.birth_date {
+                                    println!("    Born: {}", birth_date);
+                                }
+                                if let Some(death_date) = author.death_date {
+                                    println!("    Died: {}", death_date);
+                                }
+                                if let Some(bio) = author.bio {
+                                    println!("    Bio: {}", bio);
+                                }
                             }
-                            if let Some(publish_date) = book.publish_date {
-                                println!("Publish Date: {}", publish_date);
+                            if let Some(publish_date) = book.first_publish_date {
+                                println!("First Published: {}", publish_date);
                             }
-                            if let Some(publishers) = book.publishers {
-                                println!("Publishers: {}", publishers.join(", "));
+                            if let Some(description) = book.description {
+                                println!("Description: {}", description);
                             }
-                            if let Some(pages) = book.number_of_pages {
-                                println!("Number of Pages: {}", pages);
-                            }
-                            if let Some(isbn_10) = book.isbn_10 {
-                                println!("ISBN-10: {}", isbn_10.join(", "));
-                            }
-                            if let Some(isbn_13) = book.isbn_13 {
-                                println!("ISBN-13: {}", isbn_13.join(", "));
+                            if let Some(covers) = book.covers {
+                                let cover_strings: Vec<String> = covers.iter().map(|id| id.to_string()).collect();
+                                println!("Cover IDs: {}", cover_strings.join(", "));
                             }
                         }
                         Err(e) => eprintln!("Failed to fetch book information: {}", e),
