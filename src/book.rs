@@ -3,15 +3,41 @@ use uuid::Uuid;
 use chrono::Utc;
 use inquire::{Select, Text};
 use crate::storage::{Book, Storage, Category, Author};
+use crate::http_client::{HttpClient, OpenLibraryBook};
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
-    let title = Text::new("Enter title:")
-        .prompt()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
+    // First get ISBN
     let isbn = Text::new("Enter ISBN:")
         .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    // Look up book details
+    let client = HttpClient::new();
+    let book_info = match tokio::runtime::Runtime::new()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        .block_on(client.get_book_by_isbn(&isbn))
+    {
+        Ok(info) => info,
+        Err(_) => OpenLibraryBook {
+            title: String::new(),
+            authors: vec![],
+            description: None,
+            first_publish_date: None,
+            covers: None,
+        }
+    };
+
+    // Suggest title from lookup or prompt for new one
+    let title = if !book_info.title.is_empty() {
+        Text::new("Enter title:")
+            .with_default(&book_info.title)
+            .prompt()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+    } else {
+        Text::new("Enter title:")
+            .prompt()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+    };
 
     let total_pages = Text::new("Enter total pages:")
         .prompt()
@@ -91,10 +117,21 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         .collect();
 
     let author_id = if authors.is_empty() {
-        // If no authors exist, prompt for a new one
-        let author_name = Text::new("Enter new author name:")
-            .prompt()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        // If no authors exist, suggest the first author from lookup or prompt for new one
+        let suggested_author = book_info.authors.first()
+            .and_then(|a| a.name.clone())
+            .unwrap_or_default();
+
+        let author_name = if !suggested_author.is_empty() {
+            Text::new("Enter new author name:")
+                .with_default(&suggested_author)
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        } else {
+            Text::new("Enter new author name:")
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        };
         
         // Create a new author
         let author = Author::new(author_name.trim().to_string());
@@ -112,15 +149,39 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         let mut options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
         options.push("+ Create new author");
 
+        // Get suggested author from lookup
+        let suggested_author = book_info.authors.first()
+            .and_then(|a| a.name.clone())
+            .unwrap_or_default();
+
+        // Track if we added the suggested author to options
+        let suggested_author_added = if !suggested_author.is_empty() {
+            options.insert(0, &suggested_author);
+            true
+        } else {
+            false
+        };
+
         let selection = Select::new("Select author:", options)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         if selection == "+ Create new author" {
-            // Prompt for new author name
-            let author_name = Text::new("Enter new author name:")
-                .prompt()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            // Suggest the first author from lookup or prompt for new one
+            let suggested_author = book_info.authors.first()
+                .and_then(|a| a.name.clone())
+                .unwrap_or_default();
+
+            let author_name = if !suggested_author.is_empty() {
+                Text::new("Enter new author name:")
+                    .with_default(&suggested_author)
+                    .prompt()
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            } else {
+                Text::new("Enter new author name:")
+                    .prompt()
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            };
             
             // Create a new author
             let author = Author::new(author_name.trim().to_string());
@@ -133,8 +194,18 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
                 .find(|(_, a)| a.name == author_name.trim())
                 .map(|(id, _)| id.clone())
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
+        } else if suggested_author_added && selection == suggested_author {
+            // User selected the suggested author, add it to storage
+            let author = Author::new(suggested_author.trim().to_string());
+            storage.add_author(author);
+            
+            // Get the ID of the newly created author
+            storage.authors.iter()
+                .find(|(_, a)| a.name == suggested_author.trim())
+                .map(|(id, _)| id.clone())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
         } else {
-            // Find the selected author's ID
+            // Find the selected author's ID from existing authors
             authors.iter()
                 .find(|(name, _)| name.as_str() == selection)
                 .map(|(_, id)| id.clone())
