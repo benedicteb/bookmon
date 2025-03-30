@@ -108,7 +108,7 @@ jobs:
         uses: gittools/actions/gitversion/execute@v3.1.11
         with:
           overrideConfig: |
-            mode=Mainline
+            mode=ContinuousDeployment
 
       - name: Generate release notes
         id: release_notes
