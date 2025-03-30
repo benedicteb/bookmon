@@ -1,6 +1,6 @@
 [package]
 name = "bookmon"
-version = "1.0.22-1"
+version = "1.0.22-3"
 edition = "2021"
 
 [dependencies]
