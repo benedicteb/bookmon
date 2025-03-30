@@ -75,11 +75,56 @@ pub struct Author {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub personal_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub fuller_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialize_bio")]
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub birth_date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub death_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternate_names: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<Vec<Link>>,
+}
+
+fn deserialize_bio<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::String(s) => Ok(Some(s)),
+        serde_json::Value::Object(map) => {
+            if let Some(value) = map.get("value") {
+                if let Some(text) = value.as_str() {
+                    Ok(Some(text.to_string()))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
+        }
+        serde_json::Value::Null => Ok(None),
+        _ => Err(D::Error::custom("unexpected bio format")),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Link {
+    pub title: Option<String>,
+    pub url: String,
+    #[serde(rename = "type")]
+    pub type_: LinkType,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LinkType {
+    pub key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -113,7 +158,8 @@ impl HttpClient {
     async fn fetch_author_data(&self, author_key: &str) -> Result<Author, Box<dyn Error>> {
         let url = format!("https://openlibrary.org{}.json", author_key);
         let response = self.client.get(&url).send().await?;
-        let author: Author = response.json().await?;
+        let response_text = response.text().await?;
+        let author: Author = serde_json::from_str(&response_text)?;
         Ok(author)
     }
 
@@ -155,9 +201,12 @@ impl HttpClient {
                     key: work_author.data.key.clone(),
                     name: Some(name.clone()),
                     personal_name: None,
+                    fuller_name: None,
                     bio: None,
                     birth_date: None,
                     death_date: None,
+                    alternate_names: None,
+                    links: None,
                 };
 
                 // Then try to fetch detailed author data
@@ -165,9 +214,12 @@ impl HttpClient {
                     Ok(detailed_author) => {
                         // Keep the name from search but use other fields from detailed data
                         author.personal_name = detailed_author.personal_name;
+                        author.fuller_name = detailed_author.fuller_name;
                         author.bio = detailed_author.bio;
                         author.birth_date = detailed_author.birth_date;
                         author.death_date = detailed_author.death_date;
+                        author.alternate_names = detailed_author.alternate_names;
+                        author.links = detailed_author.links;
                     }
                     Err(e) => {
                         eprintln!("Warning: Failed to fetch author data for {}: {}", work_author.data.key, e);
