@@ -608,4 +608,45 @@ fn test_is_book_started_with_update_event() {
 
     // The book should be considered started even though the most recent event is Update
     assert!(storage.is_book_started(&book_id), "Book should be considered started even with Update as most recent event");
+}
+
+#[test]
+fn test_sort_json_value() {
+    // Test with a nested structure
+    let input = serde_json::json!({
+        "c": {
+            "b": 2,
+            "a": 1
+        },
+        "a": {
+            "z": 3,
+            "y": 2
+        },
+        "b": [{
+            "b": 2,
+            "a": 1
+        }]
+    });
+
+    let sorted = sort_json_value(input);
+    
+    // Verify the structure is maintained but keys are sorted
+    if let Value::Object(map) = sorted {
+        let keys: Vec<_> = map.keys().collect();
+        assert_eq!(keys, vec!["a", "b", "c"]);
+        
+        // Check nested object
+        if let Some(Value::Object(nested)) = map.get("c") {
+            let nested_keys: Vec<_> = nested.keys().collect();
+            assert_eq!(nested_keys, vec!["a", "b"]);
+        }
+        
+        // Check array contents
+        if let Some(Value::Array(arr)) = map.get("b") {
+            if let Some(Value::Object(arr_obj)) = arr.first() {
+                let arr_keys: Vec<_> = arr_obj.keys().collect();
+                assert_eq!(arr_keys, vec!["a", "b"]);
+            }
+        }
+    }
 } 
