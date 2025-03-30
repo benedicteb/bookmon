@@ -71,11 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Some(command) => {
+            let mut storage = storage::load_storage(&settings.storage_file)
+                .expect("Failed to load storage");
+            
             match command {
                 Commands::AddBook => {
-                    let mut storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match book::get_book_input(&mut storage) {
                         Ok(book) => {
                             match book::store_book(&mut storage, book) {
@@ -93,9 +93,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Commands::AddCategory => {
                     match category::get_category_input() {
                         Ok(category) => {
-                            let mut storage = storage::load_storage(&settings.storage_file)
-                                .expect("Failed to load storage");
-                            
                             match category::store_category(&mut storage, category) {
                                 Ok(_) => {
                                     storage::write_storage(&settings.storage_file, &storage)
@@ -111,9 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Commands::AddAuthor => {
                     match author::get_author_input() {
                         Ok(author) => {
-                            let mut storage = storage::load_storage(&settings.storage_file)
-                                .expect("Failed to load storage");
-                            
                             match author::store_author(&mut storage, author) {
                                 Ok(_) => {
                                     storage::write_storage(&settings.storage_file, &storage)
@@ -127,12 +121,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Commands::AddReading => {
-                    let storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match reading::get_reading_input(&storage) {
                         Ok(reading) => {
-                            let mut storage = storage;
                             match reading::store_reading(&mut storage, reading) {
                                 Ok(_) => {
                                     storage::write_storage(&settings.storage_file, &storage)
@@ -146,36 +136,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Commands::CurrentlyReading => {
-                    let storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match reading::show_started_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show started books: {}", e),
                     }
                 }
                 Commands::PrintFinished => {
-                    let storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match reading::show_finished_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show finished books: {}", e),
                     }
                 }
                 Commands::PrintBacklog => {
-                    let storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match reading::show_unstarted_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show unstarted books: {}", e),
                     }
                 }
                 Commands::PrintAll => {
-                    let storage = storage::load_storage(&settings.storage_file)
-                        .expect("Failed to load storage");
-                    
                     match reading::show_all_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show all books: {}", e),
