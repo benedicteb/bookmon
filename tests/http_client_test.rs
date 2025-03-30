@@ -14,6 +14,16 @@ async fn test_get_book_by_isbn() {
             birth_date: "15 September 1890",
             death_date: "12 January 1976",
         })),
+        ("9780241970775", "The Big Sleep", "Raymond Chandler", Some(AuthorDetails {
+            personal_name: "Chandler, Raymond",
+            birth_date: "1888",
+            death_date: "1959",
+        })),
+        ("9780008129576", "Sad Cypress", "Agatha Christie", Some(AuthorDetails {
+            personal_name: "Agatha Christie",
+            birth_date: "15 September 1890",
+            death_date: "12 January 1976",
+        })),
     ];
 
     for (isbn, expected_title, expected_author, author_details) in test_cases {
