@@ -1,6 +1,6 @@
 use std::io;
 use inquire::{Select, Text};
-use crate::storage::{Storage, Reading, ReadingEvent, Book};
+use crate::storage::{Storage, Reading, ReadingEvent};
 use chrono::Utc;
 use pretty_table::prelude::*;
 
@@ -77,8 +77,21 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Days since started".to_string(), "Progress".to_string()], // header
     ];
 
+    // Sort the started books by author and title
+    let mut sorted_books = started_books;
+    sorted_books.sort_by(|a, b| {
+        let a_author = storage.authors.get(&a.author_id).unwrap();
+        let b_author = storage.authors.get(&b.author_id).unwrap();
+        
+        if a_author.name != b_author.name {
+            a_author.name.cmp(&b_author.name)
+        } else {
+            a.title.cmp(&b.title)
+        }
+    });
+
     // For each started book, find the corresponding author and most recent started reading
-    for book in started_books {
+    for book in sorted_books {
         let author = storage.authors.get(&book.author_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
 
@@ -140,8 +153,21 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Finished on".to_string()], // header
     ];
 
+    // Sort the finished books by author and title
+    let mut sorted_books = finished_books;
+    sorted_books.sort_by(|a, b| {
+        let a_author = storage.authors.get(&a.author_id).unwrap();
+        let b_author = storage.authors.get(&b.author_id).unwrap();
+        
+        if a_author.name != b_author.name {
+            a_author.name.cmp(&b_author.name)
+        } else {
+            a.title.cmp(&b.title)
+        }
+    });
+
     // For each finished book, find the corresponding author and most recent finished reading
-    for book in finished_books {
+    for book in sorted_books {
         let author = storage.authors.get(&book.author_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
 
@@ -182,8 +208,21 @@ pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
     ];
 
+    // Sort the unstarted books by author and title
+    let mut sorted_books = unstarted_books;
+    sorted_books.sort_by(|a, b| {
+        let a_author = storage.authors.get(&a.author_id).unwrap();
+        let b_author = storage.authors.get(&b.author_id).unwrap();
+        
+        if a_author.name != b_author.name {
+            a_author.name.cmp(&b_author.name)
+        } else {
+            a.title.cmp(&b.title)
+        }
+    });
+
     // For each unstarted book, find the corresponding author and category
-    for book in unstarted_books {
+    for book in sorted_books {
         let author = storage.authors.get(&book.author_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
         
@@ -215,25 +254,8 @@ pub fn show_all_books(storage: &Storage) -> io::Result<()> {
         vec!["Title".to_string(), "Author".to_string(), "Category".to_string(), "Status".to_string(), "Progress".to_string()], // header
     ];
 
-    // Sort books by status
-    let mut books: Vec<&Book> = storage.books.values().collect();
-    books.sort_by(|a, b| {
-        let a_status = if storage.is_book_started(&a.id) {
-            0 // Currently reading
-        } else if storage.is_book_finished(&a.id) {
-            2 // Finished
-        } else {
-            1 // Not started
-        };
-        let b_status = if storage.is_book_started(&b.id) {
-            0 // Currently reading
-        } else if storage.is_book_finished(&b.id) {
-            2 // Finished
-        } else {
-            1 // Not started
-        };
-        a_status.cmp(&b_status)
-    });
+    // Use the common sorting method
+    let books = storage.sort_books();
 
     // For each book, find the corresponding author and category
     for book in books {

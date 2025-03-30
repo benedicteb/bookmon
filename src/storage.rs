@@ -312,6 +312,44 @@ impl Storage {
             false
         }
     }
+
+    /// Sorts books by reading status, author name, and title
+    pub fn sort_books(&self) -> Vec<&Book> {
+        let mut books: Vec<&Book> = self.books.values().collect();
+        books.sort_by(|a, b| {
+            // First sort by reading status
+            let a_status = if self.is_book_started(&a.id) {
+                0 // Currently reading
+            } else if self.is_book_finished(&a.id) {
+                2 // Finished
+            } else {
+                1 // Not started
+            };
+            let b_status = if self.is_book_started(&b.id) {
+                0 // Currently reading
+            } else if self.is_book_finished(&b.id) {
+                2 // Finished
+            } else {
+                1 // Not started
+            };
+            
+            if a_status != b_status {
+                a_status.cmp(&b_status)
+            } else {
+                // Then sort by author name
+                let a_author = self.authors.get(&a.author_id).unwrap();
+                let b_author = self.authors.get(&b.author_id).unwrap();
+                
+                if a_author.name != b_author.name {
+                    a_author.name.cmp(&b_author.name)
+                } else {
+                    // Finally sort by title
+                    a.title.cmp(&b.title)
+                }
+            }
+        });
+        books
+    }
 }
 
 pub fn sort_json_value(value: Value) -> Value {
