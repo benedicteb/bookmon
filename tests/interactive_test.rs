@@ -59,7 +59,7 @@ fn test_interactive_mode_book_selection() {
             } else {
                 "[Not Started]"
             };
-            format!("{} {} by {}", status, b.title, author.name)
+            format!("{} \"{}\" by {}", status, b.title, author.name)
         })
         .collect();
 
@@ -67,4 +67,47 @@ fn test_interactive_mode_book_selection() {
     assert!(options.iter().any(|opt| opt.contains("Unstarted Book")));
     assert!(options.iter().any(|opt| opt.contains("Started Book")));
     assert!(!options.iter().any(|opt| opt.contains("Finished Book")));
+}
+
+#[test]
+fn test_book_selection_with_quoted_titles() {
+    let mut storage = Storage::new();
+    
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author_id.clone(), author);
+
+    let category = Category::new("Test Category".to_string(), None);
+    let category_id = category.id.clone();
+    storage.categories.insert(category_id.clone(), category);
+
+    // Create a book with a quoted title
+    let book = Book::new(
+        "The \"Great\" Gatsby".to_string(),
+        "978-0-000000-00-0".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book_id.clone(), book);
+
+    // Create the display string as it would appear in the selection
+    let display = format!("[Not Started] \"The \"Great\" Gatsby\" by Test Author");
+
+    // Extract the title from the display string
+    let title = display.split(" by ").next()
+        .unwrap()
+        .split("] ")
+        .nth(1)
+        .unwrap()
+        .trim_matches('"');
+
+    // Find the book by title
+    let selected_book = storage.books.values()
+        .find(|b| b.title == title)
+        .expect("Selected book not found");
+
+    assert_eq!(selected_book.id, book_id, "Should find the correct book by title");
 } 
