@@ -1,6 +1,6 @@
 mod config;
 use clap::{Parser, Subcommand};
-use bookmon::{storage, book, category, author, reading};
+use bookmon::{storage, book, category, author, reading, http_client};
 use inquire::{Select, Text};
 
 #[derive(Parser)]
@@ -33,6 +33,11 @@ enum Commands {
     },
     /// Print the path to the config file
     GetConfigPath,
+    /// Get book information by ISBN
+    GetIsbn {
+        /// The ISBN to look up
+        isbn: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -167,6 +172,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Commands::GetConfigPath => {
                     println!("Config file path: {}", config::get_config_path()?.display());
+                }
+                Commands::GetIsbn { isbn } => {
+                    let client = http_client::HttpClient::new();
+                    match tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(&isbn)) {
+                        Ok(book) => {
+                            println!("Book Information:");
+                            println!("Title: {}", book.title);
+                            println!("Authors:");
+                            for author in book.authors {
+                                println!("  - {}", author.name.unwrap_or_else(|| "Unknown".to_string()));
+                            }
+                            if let Some(publish_date) = book.publish_date {
+                                println!("Publish Date: {}", publish_date);
+                            }
+                            if let Some(publishers) = book.publishers {
+                                println!("Publishers: {}", publishers.join(", "));
+                            }
+                            if let Some(pages) = book.number_of_pages {
+                                println!("Number of Pages: {}", pages);
+                            }
+                            if let Some(isbn_10) = book.isbn_10 {
+                                println!("ISBN-10: {}", isbn_10.join(", "));
+                            }
+                            if let Some(isbn_13) = book.isbn_13 {
+                                println!("ISBN-13: {}", isbn_13.join(", "));
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to fetch book information: {}", e),
+                    }
                 }
                 Commands::ChangeStoragePath { .. } => unreachable!(),
             }
