@@ -330,19 +330,27 @@ pub fn sort_json_value(value: Value) -> Value {
     }
 }
 
+/// Writes the storage to a file, creating the file and parent directories if they don't exist
+pub fn write_storage(storage_path: &str, storage: &Storage) -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new(storage_path);
+    
+    // Ensure the parent directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Write the storage data using the new method
+    fs::write(path, storage.to_sorted_json_string()?)?;
+    
+    Ok(())
+}
+
 pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(storage_path);
     
     if !path.exists() {
         let initial_storage = Storage::new();
-        
-        // Ensure the parent directory exists
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        
-        // Write the initial data using the new method
-        fs::write(path, initial_storage.to_sorted_json_string()?)?;
+        write_storage(storage_path, &initial_storage)?;
     }
     
     Ok(())
@@ -386,7 +394,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         storage.add_author(author);
         
         // Save after each author is added
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
     }
 
     // Handle missing categories
@@ -403,7 +411,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         storage.add_category(category);
         
         // Save after each category is added
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
     }
 
     // Handle books with missing fields
@@ -422,7 +430,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         }
         
         // Save after each book's total_pages is updated
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
     }
 
     // Handle missing books
@@ -454,7 +462,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         storage.add_author(author);
         
         // Save after author is added
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
 
         // Get or create category
         let category_name = Text::new("Enter category name:")
@@ -469,7 +477,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         storage.add_category(category);
         
         // Save after category is added
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
 
         // Create and add the book
         let book = Book::new(
@@ -482,7 +490,7 @@ pub fn handle_missing_fields(storage: &mut Storage, storage_path: &str) -> Resul
         storage.add_book(book);
         
         // Save after book is added
-        save_storage(storage_path, storage)?;
+        write_storage(storage_path, storage)?;
     }
 
     Ok(())
@@ -496,18 +504,4 @@ pub fn load_storage(storage_path: &str) -> Result<Storage, Box<dyn std::error::E
     handle_missing_fields(&mut storage, storage_path)?;
     
     Ok(storage)
-}
-
-pub fn save_storage(storage_path: &str, storage: &Storage) -> Result<(), Box<dyn std::error::Error>> {
-    let path = Path::new(storage_path);
-    
-    // Ensure the parent directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    
-    // Write the storage data using the new method
-    fs::write(path, storage.to_sorted_json_string()?)?;
-    
-    Ok(())
 } 

@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Ok(book) => {
                             match book::store_book(&mut storage, book) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)
+                                    storage::write_storage(&settings.storage_file, &storage)
                                         .expect("Failed to save storage");
                                     println!("Book added successfully!");
                                 }
@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             
                             match category::store_category(&mut storage, category) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)
+                                    storage::write_storage(&settings.storage_file, &storage)
                                         .expect("Failed to save storage");
                                     println!("Category added successfully!");
                                 }
@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             
                             match author::store_author(&mut storage, author) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)
+                                    storage::write_storage(&settings.storage_file, &storage)
                                         .expect("Failed to save storage");
                                     println!("Author added successfully!");
                                 }
@@ -135,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let mut storage = storage;
                             match reading::store_reading(&mut storage, reading) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)
+                                    storage::write_storage(&settings.storage_file, &storage)
                                         .expect("Failed to save storage");
                                     println!("Reading event added successfully!");
                                 }
@@ -327,7 +327,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                             match reading::store_reading(&mut storage, reading) {
                                 Ok(_) => {
-                                    storage::save_storage(&settings.storage_file, &storage)?;
+                                    storage::write_storage(&settings.storage_file, &storage)?;
                                     println!("Reading event added successfully!");
                                 }
                                 Err(e) => eprintln!("Failed to add reading event: {}", e),
