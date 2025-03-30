@@ -165,6 +165,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
     } else {
         // Show author selection dialog with option to create new
         let mut options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        options.sort(); // Sort alphabetically
         options.push("+ Create new author");
 
         // Get suggested author from lookup
