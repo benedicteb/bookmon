@@ -31,6 +31,8 @@ enum Commands {
         /// The new path for the storage file
         path: String,
     },
+    /// Print the path to the config file
+    GetConfigPath,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -162,6 +164,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show unstarted books: {}", e),
                     }
+                }
+                Commands::GetConfigPath => {
+                    println!("Config file path: {}", config::get_config_path()?.display());
                 }
                 Commands::ChangeStoragePath { .. } => unreachable!(),
             }
