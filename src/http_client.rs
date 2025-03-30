@@ -93,8 +93,6 @@ fn deserialize_bio<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::de::Error;
-    
     let value = serde_json::Value::deserialize(deserializer)?;
     match value {
         serde_json::Value::String(s) => Ok(Some(s)),
@@ -110,7 +108,7 @@ where
             }
         }
         serde_json::Value::Null => Ok(None),
-        _ => Err(D::Error::custom("unexpected bio format")),
+        _ => Ok(None),
     }
 }
 
