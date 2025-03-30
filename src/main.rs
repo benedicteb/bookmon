@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Failed to load storage");
             
             // Create options for book selection with status
-            let options: Vec<String> = storage.books.iter()
+            let mut options: Vec<(String, String)> = storage.books.iter()
                 .filter(|(id, _)| !storage.is_book_finished(id))
                 .map(|(_, b)| {
                     let author = storage.authors.get(&b.author_id)
@@ -239,9 +239,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         "[Not Started]"
                     };
-                    format!("{} {} by {}", status, b.title, author.name)
+                    let display = format!("{} \"{}\" by {}", status, b.title, author.name);
+                    (display, b.id.clone())
                 })
                 .collect();
+
+            // Sort options by:
+            // 1. Reading status (Started first)
+            // 2. Author name
+            // 3. Book title
+            options.sort_by(|a, b| {
+                let a_started = a.0.starts_with("[Started]");
+                let b_started = b.0.starts_with("[Started]");
+                
+                if a_started != b_started {
+                    b_started.cmp(&a_started)
+                } else {
+                    let a_author = a.0.split(" by ").nth(1).unwrap();
+                    let b_author = b.0.split(" by ").nth(1).unwrap();
+                    
+                    if a_author != b_author {
+                        a_author.cmp(b_author)
+                    } else {
+                        let a_title = a.0.split("] ").nth(1).unwrap().split(" by ").next().unwrap();
+                        let b_title = b.0.split("] ").nth(1).unwrap().split(" by ").next().unwrap();
+                        a_title.cmp(b_title)
+                    }
+                }
+            });
+
+            let options: Vec<String> = options.into_iter().map(|(display, _)| display).collect();
 
             if options.is_empty() {
                 println!("No books available. Please add a book first.");
