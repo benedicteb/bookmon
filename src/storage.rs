@@ -81,6 +81,24 @@ impl Book {
             total_pages,
         }
     }
+
+    /// Creates a display string for a book with its status and author name
+    pub fn to_display_string(&self, storage: &Storage, status: &str) -> String {
+        let author = storage.authors.get(&self.author_id).unwrap();
+        format!("[{}] \"{}\" by {}", status, self.title, author.name)
+    }
+
+    /// Extracts a book title from a display string
+    pub fn title_from_display_string(display: &str) -> String {
+        display.split(" by ")
+            .next()
+            .unwrap()
+            .split("] ")
+            .nth(1)
+            .unwrap()
+            .trim_matches('"')
+            .to_string()
+    }
 }
 
 impl Reading {

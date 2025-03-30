@@ -1,6 +1,6 @@
 mod config;
 use clap::{Parser, Subcommand};
-use bookmon::{storage, book, category, author, reading, http_client};
+use bookmon::{storage::{self, Book}, book, category, author, reading, http_client};
 use inquire::{Select, Text};
 
 #[derive(Parser)]
@@ -232,14 +232,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut options: Vec<(String, String)> = storage.books.iter()
                 .filter(|(id, _)| !storage.is_book_finished(id))
                 .map(|(_, b)| {
-                    let author = storage.authors.get(&b.author_id)
-                        .expect("Author not found");
                     let status = if storage.is_book_started(&b.id) {
-                        "[Started]"
+                        "Started"
                     } else {
-                        "[Not Started]"
+                        "Not Started"
                     };
-                    let display = format!("{} \"{}\" by {}", status, b.title, author.name);
+                    let display = b.to_display_string(&storage, status);
                     (display, b.id.clone())
                 })
                 .collect();
@@ -261,9 +259,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if a_author != b_author {
                         a_author.cmp(b_author)
                     } else {
-                        let a_title = a.0.split("] ").nth(1).unwrap().split(" by ").next().unwrap();
-                        let b_title = b.0.split("] ").nth(1).unwrap().split(" by ").next().unwrap();
-                        a_title.cmp(b_title)
+                        let a_title = Book::title_from_display_string(&a.0);
+                        let b_title = Book::title_from_display_string(&b.0);
+                        a_title.cmp(&b_title)
                     }
                 }
             });
@@ -278,12 +276,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Let user select a book
             match Select::new("Select a book to update:", options).prompt() {
                 Ok(book_selection) => {
-                    // Extract book title from selection (remove status and author)
-                    let title = book_selection.split(" by ").next()
-                        .unwrap()
-                        .split("] ")
-                        .nth(1)
-                        .unwrap();
+                    // Extract book title from selection
+                    let title = Book::title_from_display_string(&book_selection);
 
                     // Find the selected book
                     let selected_book = storage.books.values()
