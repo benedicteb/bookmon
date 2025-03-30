@@ -5,6 +5,9 @@ use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use inquire::Text;
+use serde_json::value::Value;
+use std::collections::BTreeMap;
+use serde_json::Map;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Author {
@@ -286,6 +289,22 @@ impl Storage {
     }
 }
 
+pub fn sort_json_value(value: Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut sorted_map = BTreeMap::new();
+            for (k, v) in map {
+                sorted_map.insert(k, sort_json_value(v));
+            }
+            Value::Object(Map::from_iter(sorted_map))
+        }
+        Value::Array(vec) => {
+            Value::Array(vec.into_iter().map(sort_json_value).collect())
+        }
+        _ => value,
+    }
+}
+
 pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(storage_path);
     
@@ -297,11 +316,13 @@ pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::er
             fs::create_dir_all(parent)?;
         }
         
+        // Convert to JSON value, sort keys, then convert back to string
+        let json_value = serde_json::to_value(&initial_storage)?;
+        let sorted_value = sort_json_value(json_value);
+        let json_string = serde_json::to_string_pretty(&sorted_value)?;
+        
         // Write the initial data
-        fs::write(
-            path,
-            serde_json::to_string_pretty(&initial_storage)?,
-        )?;
+        fs::write(path, json_string)?;
     }
     
     Ok(())
@@ -465,11 +486,13 @@ pub fn save_storage(storage_path: &str, storage: &Storage) -> Result<(), Box<dyn
         fs::create_dir_all(parent)?;
     }
     
+    // Convert to JSON value, sort keys, then convert back to string
+    let json_value = serde_json::to_value(storage)?;
+    let sorted_value = sort_json_value(json_value);
+    let json_string = serde_json::to_string_pretty(&sorted_value)?;
+    
     // Write the storage data
-    fs::write(
-        path,
-        serde_json::to_string_pretty(storage)?,
-    )?;
+    fs::write(path, json_string)?;
     
     Ok(())
 } 
