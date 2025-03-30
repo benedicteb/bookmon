@@ -173,7 +173,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
             .unwrap_or_default();
 
         // Track if we added the suggested author to options
-        let suggested_author_added = if !suggested_author.is_empty() {
+        let suggested_author_added = if !suggested_author.is_empty() && !options.contains(&suggested_author.as_str()) {
             options.insert(0, &suggested_author);
             true
         } else {
