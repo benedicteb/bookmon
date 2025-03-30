@@ -152,6 +152,13 @@ impl Storage {
         }
     }
 
+    /// Converts the storage to a sorted JSON string
+    pub fn to_sorted_json_string(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let json_value = serde_json::to_value(self)?;
+        let sorted_value = sort_json_value(json_value);
+        Ok(serde_json::to_string_pretty(&sorted_value)?)
+    }
+
     pub fn add_book(&mut self, book: Book) -> Option<Book> {
         self.books.insert(book.id.clone(), book)
     }
@@ -334,13 +341,8 @@ pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::er
             fs::create_dir_all(parent)?;
         }
         
-        // Convert to JSON value, sort keys, then convert back to string
-        let json_value = serde_json::to_value(&initial_storage)?;
-        let sorted_value = sort_json_value(json_value);
-        let json_string = serde_json::to_string_pretty(&sorted_value)?;
-        
-        // Write the initial data
-        fs::write(path, json_string)?;
+        // Write the initial data using the new method
+        fs::write(path, initial_storage.to_sorted_json_string()?)?;
     }
     
     Ok(())
@@ -504,13 +506,8 @@ pub fn save_storage(storage_path: &str, storage: &Storage) -> Result<(), Box<dyn
         fs::create_dir_all(parent)?;
     }
     
-    // Convert to JSON value, sort keys, then convert back to string
-    let json_value = serde_json::to_value(storage)?;
-    let sorted_value = sort_json_value(json_value);
-    let json_string = serde_json::to_string_pretty(&sorted_value)?;
-    
-    // Write the storage data
-    fs::write(path, json_string)?;
+    // Write the storage data using the new method
+    fs::write(path, storage.to_sorted_json_string()?)?;
     
     Ok(())
 } 
