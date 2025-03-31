@@ -7,6 +7,20 @@ A Rust-based command-line book management system that helps you track your readi
 - Rust toolchain (latest stable version)
 - Cargo (comes with Rust)
 
+## Installation via Homebrew
+
+If you're on macOS, you can install bookmon using Homebrew:
+
+1. Add the tap:
+   ```bash
+   brew tap benedicteb/bookmon
+   ```
+
+2. Install bookmon:
+   ```bash
+   brew install bookmon
+   ```
+
 ## Installation
 
 1. Install Rust by following the instructions at [rustup.rs](https://rustup.rs/)
