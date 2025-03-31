@@ -1,0 +1,31 @@
+name: Update Homebrew Formula
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-homebrew:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get release version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update formula version
+        run: |
+          sed -i "s/tag: \"v.*\"/tag: \"v${{ steps.get_version.outputs.version }}\"/" homebrew-bookmon/bookmon.rb
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add homebrew-bookmon/bookmon.rb
+          git commit -m "chore: update formula version to v${{ steps.get_version.outputs.version }}"
+          git push 
