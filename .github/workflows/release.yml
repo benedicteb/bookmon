@@ -91,6 +91,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
+    outputs:
+      semver: ${{ steps.gitversion.outputs.semVer }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,10 +112,6 @@ jobs:
         with:
           overrideConfig: |
             mode=ContinuousDeployment
-
-      - name: Set version output
-        id: version
-        run: echo "semver=${{ steps.gitversion.outputs.semVer }}" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
         id: release_notes
