@@ -190,4 +190,5 @@ jobs:
           git config --local user.name "GitHub Action"
           git add homebrew-bookmon/bookmon.rb
           git commit -m "chore: update formula version to v${{ needs.release.outputs.version }}"
-          git push 
+          git pull --rebase
+          git push
