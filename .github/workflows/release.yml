@@ -184,7 +184,7 @@ jobs:
 
       - name: Update formula version
         run: |
-          sed -i 's/tag: "v.*?"/tag: "v${{ needs.release.outputs.semver }}"/' homebrew-bookmon/bookmon.rb
+          sed -r -i 's/tag: "v.*?"/tag: "v${{ needs.release.outputs.semver }}"/' homebrew-bookmon/bookmon.rb
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add homebrew-bookmon/bookmon.rb
