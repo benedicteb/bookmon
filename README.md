@@ -13,7 +13,7 @@ If you're on macOS, you can install bookmon using Homebrew:
 
 1. Add the tap:
    ```bash
-   brew tap benedicteb/bookmon
+   brew tap benedicteb/bookmon git@github.com:benedicteb/bookmon.git
    ```
 
 2. Install bookmon:
