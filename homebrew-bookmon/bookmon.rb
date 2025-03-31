@@ -1,7 +1,7 @@
 class Bookmon < Formula
   desc "A command-line tool for tracking your reading progress"
   homepage "https://github.com/benedicte/bookmon"
-  url "https://github.com/benedicte/bookmon.git", tag: "v"
+  url "https://github.com/benedicte/bookmon.git", tag: "v1.0.37"
 
   depends_on "rust" => :build
 
