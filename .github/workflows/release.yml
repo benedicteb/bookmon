@@ -87,7 +87,7 @@ jobs:
           path: target/${{ matrix.target }}/release/bookmon${{ matrix.os == 'windows-latest' && '.exe' || '' }}
 
   release:
-    name: Create Release and Update Formula
+    name: Create Release
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -122,30 +122,13 @@ jobs:
           echo "### Commits" >> release_notes.md
           git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"* %s (%h)" >> release_notes.md
 
-      - name: Download release tarball
+      - name: Update Cargo.toml version
         run: |
-          curl -L -o bookmon.tar.gz "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ steps.gitversion.outputs.semVer }}.tar.gz"
-
-      - name: Calculate SHA256 hash
-        id: hash
-        run: |
-          SHA256=$(shasum -a 256 bookmon.tar.gz | cut -d' ' -f1)
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-
-      - name: Update version and formula
-        run: |
-          # Update Cargo.toml version
           sed -i "s/^version = \".*\"/version = \"${{ steps.gitversion.outputs.semVer }}\"/" Cargo.toml
-          
-          # Update formula version and hash
-          sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ steps.gitversion.outputs.semVer }}.tar.gz"|' ${{ env.FORMULA_PATH }}
-          sed -r -i 's|sha256 ".*"|sha256 "${{ steps.hash.outputs.sha256 }}"|' ${{ env.FORMULA_PATH }}
-          
-          # Configure git and commit changes
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add Cargo.toml ${{ env.FORMULA_PATH }}
-          git commit -m "chore: bump version to ${{ steps.gitversion.outputs.semVer }} and update formula"
+          git add Cargo.toml
+          git commit -m "chore: bump version to ${{ steps.gitversion.outputs.semVer }}"
           git push
 
       - name: Create tag
@@ -187,3 +170,36 @@ jobs:
           name: Release v${{ steps.gitversion.outputs.semVer }}
           draft: false
           prerelease: false
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download release tarball
+        run: |
+          curl -L -o bookmon.tar.gz "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"
+
+      - name: Calculate SHA256 hash
+        id: hash
+        run: |
+          SHA256=$(shasum -a 256 bookmon.tar.gz | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Update formula version and hash
+        run: |
+          sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"|' ${{ env.FORMULA_PATH }}
+          sed -r -i 's|sha256 ".*"|sha256 "${{ steps.hash.outputs.sha256 }}"|' ${{ env.FORMULA_PATH }}
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add ${{ env.FORMULA_PATH }}
+          git commit -m "chore: update formula version to v${{ needs.release.outputs.semver }} and add SHA256 hash"
+          git pull --rebase
+          git push
