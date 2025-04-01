@@ -196,7 +196,7 @@ jobs:
       - name: Update formula version and hash
         run: |
           sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"|' ${{ env.FORMULA_PATH }}
-          sed -r -i '/^  url/a\  sha256 "${{ steps.hash.outputs.sha256 }}"' ${{ env.FORMULA_PATH }}
+          sed -r -i 's|sha256 ".*"|sha256 "${{ steps.hash.outputs.sha256 }}"|' ${{ env.FORMULA_PATH }}
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add ${{ env.FORMULA_PATH }}
