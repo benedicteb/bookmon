@@ -182,12 +182,23 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Update formula version
+      - name: Download release tarball
         run: |
-          sed -r -i 's/tag: "v.*?"/tag: "v${{ needs.release.outputs.semver }}"/' homebrew-bookmon/bookmon.rb
+          curl -L -o bookmon.tar.gz "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"
+
+      - name: Calculate SHA256 hash
+        id: hash
+        run: |
+          SHA256=$(shasum -a 256 bookmon.tar.gz | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Update formula version and hash
+        run: |
+          sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"|' Formula/bookmon.rb
+          sed -r -i '/^  url/a\  sha256 "${{ steps.hash.outputs.sha256 }}"' Formula/bookmon.rb
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add homebrew-bookmon/bookmon.rb
-          git commit -m "chore: update formula version to v${{ needs.release.outputs.semver }}"
+          git commit -m "chore: update formula version to v${{ needs.release.outputs.semver }} and add SHA256 hash"
           git pull --rebase
           git push
