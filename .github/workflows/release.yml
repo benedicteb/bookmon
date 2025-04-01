@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  FORMULA_PATH: Formula/bookmon.rb
 
 jobs:
   test:
@@ -194,11 +195,11 @@ jobs:
 
       - name: Update formula version and hash
         run: |
-          sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"|' Formula/bookmon.rb
-          sed -r -i '/^  url/a\  sha256 "${{ steps.hash.outputs.sha256 }}"' Formula/bookmon.rb
+          sed -r -i 's|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v.*?.tar.gz"|url "https://github.com/benedicteb/bookmon/archive/refs/tags/v${{ needs.release.outputs.semver }}.tar.gz"|' ${{ env.FORMULA_PATH }}
+          sed -r -i '/^  url/a\  sha256 "${{ steps.hash.outputs.sha256 }}"' ${{ env.FORMULA_PATH }}
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add homebrew-bookmon/bookmon.rb
+          git add ${{ env.FORMULA_PATH }}
           git commit -m "chore: update formula version to v${{ needs.release.outputs.semver }} and add SHA256 hash"
           git pull --rebase
           git push
