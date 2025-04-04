@@ -60,8 +60,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
-    println!("Starting {} in {} mode", settings.app_name, if settings.debug { "debug" } else { "release" });
     
     // Initialize storage file if it doesn't exist
     if let Err(e) = storage::initialize_storage_file(&settings.storage_file) {
