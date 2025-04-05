@@ -1,7 +1,9 @@
-use bookmon::storage::{Storage, Book, Category, Author};
+use std::io;
+use bookmon::storage::{Storage, Book, Author, Category, Reading, ReadingEvent};
 use bookmon::book::store_book;
 use chrono::{Utc, DateTime};
 use serde_json;
+use std::collections::HashMap;
 
 #[test]
 fn test_get_book_input() {
@@ -168,4 +170,109 @@ fn test_book_timestamp_format() {
     // Make sure it can be deserialized back to the original book
     let deserialized: Book = serde_json::from_str(&json).expect("Failed to deserialize book");
     assert_eq!(deserialized.added_on, book.added_on);
+}
+
+#[test]
+fn test_book_with_bought_status() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+
+    // Store book and add Bought event
+    storage.add_book(book.clone());
+    let reading = Reading::new(book.id.clone(), ReadingEvent::Bought);
+    storage.add_reading(reading);
+
+    // Verify the book has a Bought event
+    let bought_readings = storage.get_readings_by_event(ReadingEvent::Bought);
+    assert_eq!(bought_readings.len(), 1, "Should have 1 bought reading");
+    assert_eq!(bought_readings[0].book_id, book.id);
+}
+
+#[test]
+fn test_book_with_want_to_read_status() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+
+    // Store book and add WantToRead event
+    storage.add_book(book.clone());
+    let reading = Reading::new(book.id.clone(), ReadingEvent::WantToRead);
+    storage.add_reading(reading);
+
+    // Verify the book has a WantToRead event
+    let want_to_read_readings = storage.get_readings_by_event(ReadingEvent::WantToRead);
+    assert_eq!(want_to_read_readings.len(), 1, "Should have 1 want to read reading");
+    assert_eq!(want_to_read_readings[0].book_id, book.id);
+}
+
+#[test]
+fn test_book_with_no_status() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+
+    // Store book without any event
+    storage.add_book(book.clone());
+
+    // Verify the book has no events
+    let bought_readings = storage.get_readings_by_event(ReadingEvent::Bought);
+    let want_to_read_readings = storage.get_readings_by_event(ReadingEvent::WantToRead);
+    
+    assert_eq!(bought_readings.len(), 0, "Should have no bought readings");
+    assert_eq!(want_to_read_readings.len(), 0, "Should have no want to read readings");
 }

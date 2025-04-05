@@ -75,9 +75,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match command {
                 Commands::AddBook => {
                     match book::get_book_input(&mut storage) {
-                        Ok(book) => {
-                            match book::store_book(&mut storage, book) {
+                        Ok((book, event)) => {
+                            match book::store_book(&mut storage, book.clone()) {
                                 Ok(_) => {
+                                    // If there's an event, store it
+                                    if let Some(event_type) = event {
+                                        let reading = storage::Reading::new(book.id.clone(), event_type);
+                                        if let Err(e) = reading::store_reading(&mut storage, reading) {
+                                            eprintln!("Failed to store reading event: {}", e);
+                                        }
+                                    }
+                                    
                                     storage::write_storage(&settings.storage_file, &storage)
                                         .expect("Failed to save storage");
                                     println!("Book added successfully!");
