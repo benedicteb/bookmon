@@ -356,6 +356,66 @@ impl Storage {
         });
         books
     }
+
+    pub fn get_bought_books(&self) -> Vec<&Book> {
+        // Group readings by book_id
+        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
+        for reading in self.readings.values() {
+            book_readings.entry(reading.book_id.clone())
+                .or_default()
+                .push(reading);
+        }
+
+        // Filter books to only those that have been bought
+        self.books.values()
+            .filter(|book| {
+                if let Some(readings) = book_readings.get(&book.id) {
+                    // Sort readings by created_on in descending order
+                    let mut sorted_readings = readings.clone();
+                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+                    // Check if the most recent reading is Bought
+                    if let Some(most_recent) = sorted_readings.first() {
+                        most_recent.event == ReadingEvent::Bought
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_want_to_read_books(&self) -> Vec<&Book> {
+        // Group readings by book_id
+        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
+        for reading in self.readings.values() {
+            book_readings.entry(reading.book_id.clone())
+                .or_default()
+                .push(reading);
+        }
+
+        // Filter books to only those that are in the want to read list
+        self.books.values()
+            .filter(|book| {
+                if let Some(readings) = book_readings.get(&book.id) {
+                    // Sort readings by created_on in descending order
+                    let mut sorted_readings = readings.clone();
+                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+                    // Check if the most recent reading is WantToRead
+                    if let Some(most_recent) = sorted_readings.first() {
+                        most_recent.event == ReadingEvent::WantToRead
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .collect()
+    }
 }
 
 pub fn sort_json_value(value: Value) -> Value {
