@@ -841,4 +841,76 @@ fn test_sort_books() {
 
     // Not started book should be sorted by author then title
     assert_eq!(sorted_books[2].title, "Third Book");
+}
+
+#[test]
+fn test_reading_event_bought() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a Bought reading event
+    let bought_reading = Reading::new(book_id.clone(), ReadingEvent::Bought);
+    storage.add_reading(bought_reading);
+
+    // Test getting bought readings
+    let bought_readings = storage.get_readings_by_event(ReadingEvent::Bought);
+    assert_eq!(bought_readings.len(), 1, "Should have 1 bought reading");
+    assert!(bought_readings.iter().all(|r| matches!(r.event, ReadingEvent::Bought)));
+}
+
+#[test]
+fn test_reading_event_want_to_read() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.books.insert(book.id.clone(), book);
+
+    // Create a WantToRead reading event
+    let want_to_read_reading = Reading::new(book_id.clone(), ReadingEvent::WantToRead);
+    storage.add_reading(want_to_read_reading);
+
+    // Test getting want to read readings
+    let want_to_read_readings = storage.get_readings_by_event(ReadingEvent::WantToRead);
+    assert_eq!(want_to_read_readings.len(), 1, "Should have 1 want to read reading");
+    assert!(want_to_read_readings.iter().all(|r| matches!(r.event, ReadingEvent::WantToRead)));
 } 
