@@ -4,10 +4,10 @@ use uuid::Uuid;
 use chrono::Utc;
 use inquire::{Select, Text};
 use indicatif::{ProgressBar, ProgressStyle};
-use crate::storage::{Book, Storage, Category, Author};
+use crate::storage::{Book, Storage, Category, Author, ReadingEvent};
 use crate::http_client::{HttpClient, OpenLibraryBook};
 
-pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
+pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Option<ReadingEvent>)> {
     // First get ISBN
     let isbn = Text::new("Enter ISBN:")
         .prompt()
@@ -232,7 +232,19 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         }
     };
 
-    Ok(Book {
+    // Ask about book status
+    let options = vec!["Already bought", "Want to read", "Neither"];
+    let selection = Select::new("What is the status of this book?", options)
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    let event = match selection {
+        "Already bought" => Some(ReadingEvent::Bought),
+        "Want to read" => Some(ReadingEvent::WantToRead),
+        _ => None,
+    };
+
+    let book = Book {
         id: Uuid::new_v4().to_string(),
         title: title.trim().to_string(),
         added_on: Utc::now(),
@@ -240,7 +252,9 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<Book> {
         category_id,
         author_id,
         total_pages,
-    })
+    };
+
+    Ok((book, event))
 }
 
 pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
