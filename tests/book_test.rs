@@ -1,9 +1,7 @@
-use std::io;
 use bookmon::storage::{Storage, Book, Author, Category, Reading, ReadingEvent};
 use bookmon::book::store_book;
 use chrono::{Utc, DateTime};
 use serde_json;
-use std::collections::HashMap;
 
 #[test]
 fn test_get_book_input() {
