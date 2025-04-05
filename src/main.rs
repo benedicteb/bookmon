@@ -2,6 +2,7 @@ mod config;
 use clap::{Parser, Subcommand};
 use bookmon::{storage::{self, Book}, book, category, author, reading, http_client};
 use inquire::{Select, Text};
+use pretty_table::prelude::*;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -28,6 +29,10 @@ enum Commands {
     PrintBacklog,
     /// Show all books in the library
     PrintAll,
+    /// Show books that have been bought
+    PrintBought,
+    /// Show books that are in the want to read list
+    PrintWantToRead,
     /// Change the storage file path
     ChangeStoragePath {
         /// The new path for the storage file
@@ -163,6 +168,92 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match reading::show_all_books(&storage) {
                         Ok(_) => {}
                         Err(e) => eprintln!("Failed to show all books: {}", e),
+                    }
+                }
+                Commands::PrintBought => {
+                    let bought_books = storage.get_bought_books();
+                    if bought_books.is_empty() {
+                        println!("No bought books found.");
+                    } else {
+                        // Create table data
+                        let mut table_data = vec![
+                            vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
+                        ];
+
+                        // Sort the bought books by author and title
+                        let mut sorted_books = bought_books;
+                        sorted_books.sort_by(|a, b| {
+                            let a_author = storage.authors.get(&a.author_id).unwrap();
+                            let b_author = storage.authors.get(&b.author_id).unwrap();
+                            
+                            if a_author.name != b_author.name {
+                                a_author.name.cmp(&b_author.name)
+                            } else {
+                                a.title.cmp(&b.title)
+                            }
+                        });
+
+                        // For each bought book, find the corresponding author and category
+                        for book in sorted_books {
+                            let author = storage.authors.get(&book.author_id)
+                                .expect("Author not found");
+                            
+                            let category = storage.categories.get(&book.category_id)
+                                .expect("Category not found");
+
+                            // Add row to table data
+                            table_data.push(vec![
+                                book.title.clone(),
+                                author.name.clone(),
+                                category.name.clone()
+                            ]);
+                        }
+
+                        // Print the table
+                        print_table!(table_data);
+                    }
+                }
+                Commands::PrintWantToRead => {
+                    let want_to_read_books = storage.get_want_to_read_books();
+                    if want_to_read_books.is_empty() {
+                        println!("No books in want to read list.");
+                    } else {
+                        // Create table data
+                        let mut table_data = vec![
+                            vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
+                        ];
+
+                        // Sort the want to read books by author and title
+                        let mut sorted_books = want_to_read_books;
+                        sorted_books.sort_by(|a, b| {
+                            let a_author = storage.authors.get(&a.author_id).unwrap();
+                            let b_author = storage.authors.get(&b.author_id).unwrap();
+                            
+                            if a_author.name != b_author.name {
+                                a_author.name.cmp(&b_author.name)
+                            } else {
+                                a.title.cmp(&b.title)
+                            }
+                        });
+
+                        // For each want to read book, find the corresponding author and category
+                        for book in sorted_books {
+                            let author = storage.authors.get(&book.author_id)
+                                .expect("Author not found");
+                            
+                            let category = storage.categories.get(&book.category_id)
+                                .expect("Category not found");
+
+                            // Add row to table data
+                            table_data.push(vec![
+                                book.title.clone(),
+                                author.name.clone(),
+                                category.name.clone()
+                            ]);
+                        }
+
+                        // Print the table
+                        print_table!(table_data);
                     }
                 }
                 Commands::GetConfigPath => {
