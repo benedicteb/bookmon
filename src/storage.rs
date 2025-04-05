@@ -41,6 +41,8 @@ pub enum ReadingEvent {
     Finished,
     Started,
     Update,
+    Bought,
+    WantToRead,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -232,6 +234,8 @@ impl Storage {
                             ReadingEvent::Started => return true,
                             ReadingEvent::Finished => return false,
                             ReadingEvent::Update => continue,
+                            ReadingEvent::Bought => continue,
+                            ReadingEvent::WantToRead => continue,
                         }
                     }
                     false
@@ -287,6 +291,8 @@ impl Storage {
                     ReadingEvent::Started => return true,
                     ReadingEvent::Finished => return false,
                     ReadingEvent::Update => continue,
+                    ReadingEvent::Bought => continue,
+                    ReadingEvent::WantToRead => continue,
                 }
             }
             false
