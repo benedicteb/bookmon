@@ -353,6 +353,14 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         actions.push("Update progress");
         actions.push("Mark as finished");
     }
+    
+    // Check if book is not already bought
+    let is_bought = storage.get_readings_by_event(storage::ReadingEvent::Bought)
+        .iter()
+        .any(|r| r.book_id == selected_book.id);
+    if !is_bought {
+        actions.push("Mark as bought");
+    }
 
     if actions.is_empty() {
         println!("No available actions for this book.");
@@ -373,6 +381,7 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         "Start reading" => storage::ReadingEvent::Started,
         "Mark as finished" => storage::ReadingEvent::Finished,
         "Update progress" => storage::ReadingEvent::Update,
+        "Mark as bought" => storage::ReadingEvent::Bought,
         _ => unreachable!(),
     };
 
