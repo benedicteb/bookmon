@@ -183,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Commands>) -> Result<(), Box<dyn std::error::Error>> {
     // Get the appropriate books based on the command
     let filtered_books: Vec<&Book> = match command {
-        None => storage.get_started_books(), // Default case - currently reading
+        None => storage.get_currently_reading_and_want_to_read_books(), // Default case - currently reading + want to read
         Some(cmd) => match cmd {
             Commands::PrintFinished => storage.get_finished_books(),
             Commands::PrintBacklog => storage.get_unstarted_books(),
@@ -255,28 +255,36 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
 
     // Determine available actions based on book status
     let mut actions = Vec::new();
-    if !storage.is_book_started(&selected_book.id) {
+    
+    // Check if book is currently being read
+    let is_started = storage.is_book_started(&selected_book.id);
+    let is_finished = storage.is_book_finished(&selected_book.id);
+    
+    // Check if book is marked as want to read
+    let is_want_to_read = storage.get_readings_by_event(storage::ReadingEvent::WantToRead)
+        .iter()
+        .any(|r| r.book_id == selected_book.id);
+    
+    // Check if book is already bought
+    let is_bought = storage.get_readings_by_event(storage::ReadingEvent::Bought)
+        .iter()
+        .any(|r| r.book_id == selected_book.id);
+    
+    // Add appropriate actions based on book status
+    if !is_started && !is_want_to_read {
+        actions.push("Start reading");
+        actions.push("Mark as want to read");
+    } else if is_want_to_read {
         actions.push("Start reading");
     }
-    if storage.is_book_started(&selected_book.id) && !storage.is_book_finished(&selected_book.id) {
+    
+    if is_started && !is_finished {
         actions.push("Update progress");
         actions.push("Mark as finished");
     }
     
-    // Check if book is not already bought
-    let is_bought = storage.get_readings_by_event(storage::ReadingEvent::Bought)
-        .iter()
-        .any(|r| r.book_id == selected_book.id);
     if !is_bought {
         actions.push("Mark as bought");
-    }
-
-    // Check if book is not currently being read and doesn't have want-to-read as most recent event
-    let is_want_to_read = storage.get_readings_by_event(storage::ReadingEvent::WantToRead)
-        .iter()
-        .any(|r| r.book_id == selected_book.id);
-    if !storage.is_book_started(&selected_book.id) && !is_want_to_read {
-        actions.push("Mark as want to read");
     }
 
     if actions.is_empty() {
