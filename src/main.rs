@@ -362,6 +362,14 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         actions.push("Mark as bought");
     }
 
+    // Check if book is not currently being read and doesn't have want-to-read as most recent event
+    let is_want_to_read = storage.get_readings_by_event(storage::ReadingEvent::WantToRead)
+        .iter()
+        .any(|r| r.book_id == selected_book.id);
+    if !storage.is_book_started(&selected_book.id) && !is_want_to_read {
+        actions.push("Mark as want to read");
+    }
+
     if actions.is_empty() {
         println!("No available actions for this book.");
         return Ok(());
@@ -382,6 +390,7 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         "Mark as finished" => storage::ReadingEvent::Finished,
         "Update progress" => storage::ReadingEvent::Update,
         "Mark as bought" => storage::ReadingEvent::Bought,
+        "Mark as want to read" => storage::ReadingEvent::WantToRead,
         _ => unreachable!(),
     };
 
