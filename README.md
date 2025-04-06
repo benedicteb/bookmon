@@ -106,16 +106,45 @@ bookmon <command>
 
 Available commands:
 - `add-book` - Add a new book to your collection
-- `add-category` - Add a new category for organizing books
-- `add-author` - Add a new author
-- `add-reading` - Add a reading event for a book
-- `currently-reading` - Show books that have been started but not finished
 - `print-finished` - Show books that have been finished
 - `print-backlog` - Show books that have not been started yet
-- `print-all` - Show all books in your library
+- `print-want-to-read` - Show books that are in the want to read list
 - `change-storage-path` - Change the storage file path
 - `get-config-path` - Print the path to the config file
 - `get-isbn <isbn>` - Fetch detailed book information using an ISBN
+
+### Interactive Mode
+
+You can run any print command in interactive mode by adding the `-i` or `--interactive` flag:
+
+```bash
+bookmon print-finished -i
+bookmon print-backlog -i
+bookmon print-want-to-read -i
+```
+
+When you run the application without any commands, it defaults to showing currently-reading books:
+
+```bash
+bookmon
+```
+
+You can also make this interactive by adding the `-i` flag:
+
+```bash
+bookmon -i
+```
+
+In interactive mode, you can:
+1. View a list of your books with their current status
+2. Select a book to perform actions on it
+3. Available actions include:
+   - Start reading a book
+   - Update reading progress (with page number)
+   - Mark a book as finished
+   - Mark a book as want to read
+   - Unmark a book from want to read
+   - Mark a book as bought
 
 ### ISBN Lookup
 
@@ -132,21 +161,6 @@ bookmon get-isbn 0451524934
 ```
 
 This feature is particularly useful when adding new books to your collection, as it can automatically populate many details for you.
-
-### Interactive Mode
-
-When run without any commands, the application enters interactive mode:
-```bash
-bookmon
-```
-
-In interactive mode, you can:
-1. View a list of your books with their current status
-2. Select a book to perform actions on it
-3. Available actions include:
-   - Start reading a book
-   - Update reading progress (with page number)
-   - Mark a book as finished
 
 ## Development
 
