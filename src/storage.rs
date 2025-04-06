@@ -246,7 +246,8 @@ impl Storage {
             .collect()
     }
 
-    pub fn get_finished_books(&self) -> Vec<&Book> {
+    /// Helper method to get books with a specific event as their most recent reading
+    pub fn get_books_by_most_recent_event(&self, target_event: ReadingEvent) -> Vec<&Book> {
         // Group readings by book_id
         let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
         for reading in self.readings.values() {
@@ -255,7 +256,7 @@ impl Storage {
                 .push(reading);
         }
 
-        // Filter books to only those that have been finished
+        // Filter books to only those that have the target event as their most recent reading
         self.books.values()
             .filter(|book| {
                 if let Some(readings) = book_readings.get(&book.id) {
@@ -263,9 +264,9 @@ impl Storage {
                     let mut sorted_readings = readings.clone();
                     sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
 
-                    // Check if the most recent reading is Finished
+                    // Check if the most recent reading matches the target event
                     if let Some(most_recent) = sorted_readings.first() {
-                        most_recent.event == ReadingEvent::Finished
+                        most_recent.event == target_event
                     } else {
                         false
                     }
@@ -274,6 +275,18 @@ impl Storage {
                 }
             })
             .collect()
+    }
+
+    pub fn get_finished_books(&self) -> Vec<&Book> {
+        self.get_books_by_most_recent_event(ReadingEvent::Finished)
+    }
+
+    pub fn get_bought_books(&self) -> Vec<&Book> {
+        self.get_books_by_most_recent_event(ReadingEvent::Bought)
+    }
+
+    pub fn get_want_to_read_books(&self) -> Vec<&Book> {
+        self.get_books_by_most_recent_event(ReadingEvent::WantToRead)
     }
 
     pub fn is_book_started(&self, book_id: &str) -> bool {
@@ -355,66 +368,6 @@ impl Storage {
             }
         });
         books
-    }
-
-    pub fn get_bought_books(&self) -> Vec<&Book> {
-        // Group readings by book_id
-        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
-        for reading in self.readings.values() {
-            book_readings.entry(reading.book_id.clone())
-                .or_default()
-                .push(reading);
-        }
-
-        // Filter books to only those that have been bought
-        self.books.values()
-            .filter(|book| {
-                if let Some(readings) = book_readings.get(&book.id) {
-                    // Sort readings by created_on in descending order
-                    let mut sorted_readings = readings.clone();
-                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-
-                    // Check if the most recent reading is Bought
-                    if let Some(most_recent) = sorted_readings.first() {
-                        most_recent.event == ReadingEvent::Bought
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-            .collect()
-    }
-
-    pub fn get_want_to_read_books(&self) -> Vec<&Book> {
-        // Group readings by book_id
-        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
-        for reading in self.readings.values() {
-            book_readings.entry(reading.book_id.clone())
-                .or_default()
-                .push(reading);
-        }
-
-        // Filter books to only those that are in the want to read list
-        self.books.values()
-            .filter(|book| {
-                if let Some(readings) = book_readings.get(&book.id) {
-                    // Sort readings by created_on in descending order
-                    let mut sorted_readings = readings.clone();
-                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-
-                    // Check if the most recent reading is WantToRead
-                    if let Some(most_recent) = sorted_readings.first() {
-                        most_recent.event == ReadingEvent::WantToRead
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-            .collect()
     }
 }
 
