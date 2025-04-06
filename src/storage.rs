@@ -290,6 +290,33 @@ impl Storage {
         self.get_books_by_most_recent_event(ReadingEvent::WantToRead)
     }
 
+    /// Returns books that are currently being read or marked as want to read
+    pub fn get_currently_reading_and_want_to_read_books(&self) -> Vec<&Book> {
+        // Get books that are currently being read
+        let started_books = self.get_started_books();
+        
+        // Get books that are marked as want to read
+        let want_to_read_books = self.get_want_to_read_books();
+        
+        // Combine the two lists, ensuring no duplicates
+        let mut result = Vec::new();
+        let mut book_ids = std::collections::HashSet::new();
+        
+        for book in started_books {
+            book_ids.insert(book.id.clone());
+            result.push(book);
+        }
+        
+        for book in want_to_read_books {
+            if !book_ids.contains(&book.id) {
+                book_ids.insert(book.id.clone());
+                result.push(book);
+            }
+        }
+        
+        result
+    }
+
     pub fn is_book_started(&self, book_id: &str) -> bool {
         let readings: Vec<_> = self.readings.values()
             .filter(|r| r.book_id == book_id)
