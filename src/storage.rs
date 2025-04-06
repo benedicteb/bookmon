@@ -136,7 +136,7 @@ impl Category {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Storage {
     pub books: HashMap<String, Book>,
     pub readings: HashMap<String, Reading>,
