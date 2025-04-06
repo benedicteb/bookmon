@@ -1227,4 +1227,93 @@ fn test_get_books_by_most_recent_event() {
     // Test getting books with WantToRead as most recent event (should be none)
     let want_to_read_books = storage.get_books_by_most_recent_event(ReadingEvent::WantToRead);
     assert_eq!(want_to_read_books.len(), 0, "Should have 0 books with WantToRead as most recent event");
+}
+
+#[test]
+fn test_unmarked_as_want_to_read() {
+    let mut storage = Storage::new();
+    
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+
+    // Store book
+    storage.add_book(book.clone());
+
+    // Add WantToRead event first
+    let reading1 = Reading::new(book.id.clone(), ReadingEvent::WantToRead);
+    storage.add_reading(reading1);
+
+    // Add UnmarkedAsWantToRead event later
+    let reading2 = Reading::new(book.id.clone(), ReadingEvent::UnmarkedAsWantToRead);
+    storage.add_reading(reading2);
+
+    // Get want to read books
+    let want_to_read_books = storage.get_want_to_read_books();
+
+    // Verify results
+    assert_eq!(want_to_read_books.len(), 0); // Should not be in want to read list since UnmarkedAsWantToRead is more recent
+}
+
+#[test]
+fn test_remarked_as_want_to_read() {
+    let mut storage = Storage::new();
+    
+    // Create test data
+    let category = Category::new(
+        "Fiction".to_string(),
+        Some("Fictional books and novels".to_string()),
+    );
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+
+    // Store book
+    storage.add_book(book.clone());
+
+    // Add WantToRead event first
+    let reading1 = Reading::new(book.id.clone(), ReadingEvent::WantToRead);
+    storage.add_reading(reading1);
+
+    // Add UnmarkedAsWantToRead event later
+    let reading2 = Reading::new(book.id.clone(), ReadingEvent::UnmarkedAsWantToRead);
+    storage.add_reading(reading2);
+
+    // Add another WantToRead event after the UnmarkedAsWantToRead event
+    let reading3 = Reading::new(book.id.clone(), ReadingEvent::WantToRead);
+    storage.add_reading(reading3);
+
+    // Get want to read books
+    let want_to_read_books = storage.get_want_to_read_books();
+
+    // Verify results
+    assert_eq!(want_to_read_books.len(), 1); // Should be in want to read list since the most recent event is WantToRead
+    assert_eq!(want_to_read_books[0].title, "Test Book");
 } 

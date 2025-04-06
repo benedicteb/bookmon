@@ -43,6 +43,7 @@ pub enum ReadingEvent {
     Update,
     Bought,
     WantToRead,
+    UnmarkedAsWantToRead,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -237,6 +238,7 @@ impl Storage {
                             ReadingEvent::Update => continue,
                             ReadingEvent::Bought => continue,
                             ReadingEvent::WantToRead => continue,
+                            ReadingEvent::UnmarkedAsWantToRead => continue,
                         }
                     }
                     false
@@ -287,7 +289,38 @@ impl Storage {
     }
 
     pub fn get_want_to_read_books(&self) -> Vec<&Book> {
-        self.get_books_by_most_recent_event(ReadingEvent::WantToRead)
+        // Group readings by book_id
+        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
+        for reading in self.readings.values() {
+            book_readings.entry(reading.book_id.clone())
+                .or_default()
+                .push(reading);
+        }
+
+        // Filter books to only those that have WantToRead as their most recent reading
+        // and don't have a more recent UnmarkedAsWantToRead event
+        self.books.values()
+            .filter(|book| {
+                if let Some(readings) = book_readings.get(&book.id) {
+                    // Sort readings by created_on in descending order
+                    let mut sorted_readings = readings.clone();
+                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+                    // Check the most recent event
+                    if let Some(most_recent) = sorted_readings.first() {
+                        match most_recent.event {
+                            ReadingEvent::WantToRead => true,
+                            ReadingEvent::UnmarkedAsWantToRead => false,
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .collect()
     }
 
     /// Returns books that are currently being read or marked as want to read
@@ -334,6 +367,7 @@ impl Storage {
                     ReadingEvent::Update => continue,
                     ReadingEvent::Bought => continue,
                     ReadingEvent::WantToRead => continue,
+                    ReadingEvent::UnmarkedAsWantToRead => continue,
                 }
             }
             false
