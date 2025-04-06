@@ -18,12 +18,6 @@ struct Cli {
 enum Commands {
     /// Add a new book to the collection
     AddBook,
-    /// Add a new category
-    AddCategory,
-    /// Add a new author
-    AddAuthor,
-    /// Add a reading event for a book
-    AddReading,
     /// Show books that have been finished
     PrintFinished,
     /// Show books that have not been started yet
@@ -114,51 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Err(e) => eprintln!("Failed to get book input: {}", e),
-            }
-        }
-        Commands::AddCategory => {
-            match category::get_category_input() {
-                Ok(category) => {
-                    match category::store_category(&mut storage, category) {
-                        Ok(_) => {
-                            storage::write_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Category added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add category: {}", e),
-                    }
-                }
-                Err(e) => eprintln!("Failed to get category input: {}", e),
-            }
-        }
-        Commands::AddAuthor => {
-            match author::get_author_input() {
-                Ok(author) => {
-                    match author::store_author(&mut storage, author) {
-                        Ok(_) => {
-                            storage::write_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Author added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add author: {}", e),
-                    }
-                }
-                Err(e) => eprintln!("Failed to get author input: {}", e),
-            }
-        }
-        Commands::AddReading => {
-            match reading::get_reading_input(&storage) {
-                Ok(reading) => {
-                    match reading::store_reading(&mut storage, reading) {
-                        Ok(_) => {
-                            storage::write_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
-                            println!("Reading event added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add reading event: {}", e),
-                    }
-                }
-                Err(e) => eprintln!("Failed to get reading input: {}", e),
             }
         }
         cmd @ (Commands::PrintFinished | Commands::PrintBacklog | Commands::PrintAll | Commands::PrintBought | Commands::PrintWantToRead) => {
