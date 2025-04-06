@@ -260,10 +260,10 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
     let is_started = storage.is_book_started(&selected_book.id);
     let is_finished = storage.is_book_finished(&selected_book.id);
     
-    // Check if book is marked as want to read
-    let is_want_to_read = storage.get_readings_by_event(storage::ReadingEvent::WantToRead)
+    // Check if book is marked as want to read using the proper method
+    let is_want_to_read = storage.get_want_to_read_books()
         .iter()
-        .any(|r| r.book_id == selected_book.id);
+        .any(|b| b.id == selected_book.id);
     
     // Check if book is already bought
     let is_bought = storage.get_readings_by_event(storage::ReadingEvent::Bought)
