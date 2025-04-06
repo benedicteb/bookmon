@@ -1144,4 +1144,87 @@ fn test_want_to_read_event_precedence() {
 
     // Verify results
     assert_eq!(want_to_read_books.len(), 0); // Should not be in want to read list since Started is more recent
+}
+
+#[test]
+fn test_get_books_by_most_recent_event() {
+    let mut storage = Storage::new();
+    
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+    
+    let category = Category::new("Test Category".to_string(), Some("Test Description".to_string()));
+    let category_id = category.id.clone();
+    storage.add_category(category);
+    
+    // Create three books
+    let book1 = Book::new(
+        "Book 1".to_string(),
+        "1234567890".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+    
+    let book2 = Book::new(
+        "Book 2".to_string(),
+        "2345678901".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book2_id = book2.id.clone();
+    storage.add_book(book2);
+    
+    let book3 = Book::new(
+        "Book 3".to_string(),
+        "3456789012".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    let book3_id = book3.id.clone();
+    storage.add_book(book3);
+    
+    // Add readings for each book with different events
+    // Book 1: Started -> Finished
+    storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Started));
+    storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Finished));
+    
+    // Book 2: Started -> Update -> Bought
+    storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Started));
+    storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Update));
+    storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Bought));
+    
+    // Book 3: WantToRead -> Started -> Update
+    storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::WantToRead));
+    storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::Started));
+    storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::Update));
+    
+    // Test getting books with Finished as most recent event
+    let finished_books = storage.get_books_by_most_recent_event(ReadingEvent::Finished);
+    assert_eq!(finished_books.len(), 1, "Should have 1 book with Finished as most recent event");
+    assert_eq!(finished_books[0].id, book1_id, "Book 1 should have Finished as most recent event");
+    
+    // Test getting books with Bought as most recent event
+    let bought_books = storage.get_books_by_most_recent_event(ReadingEvent::Bought);
+    assert_eq!(bought_books.len(), 1, "Should have 1 book with Bought as most recent event");
+    assert_eq!(bought_books[0].id, book2_id, "Book 2 should have Bought as most recent event");
+    
+    // Test getting books with Update as most recent event
+    let update_books = storage.get_books_by_most_recent_event(ReadingEvent::Update);
+    assert_eq!(update_books.len(), 1, "Should have 1 book with Update as most recent event");
+    assert_eq!(update_books[0].id, book3_id, "Book 3 should have Update as most recent event");
+    
+    // Test getting books with Started as most recent event (should be none)
+    let started_books = storage.get_books_by_most_recent_event(ReadingEvent::Started);
+    assert_eq!(started_books.len(), 0, "Should have 0 books with Started as most recent event");
+    
+    // Test getting books with WantToRead as most recent event (should be none)
+    let want_to_read_books = storage.get_books_by_most_recent_event(ReadingEvent::WantToRead);
+    assert_eq!(want_to_read_books.len(), 0, "Should have 0 books with WantToRead as most recent event");
 } 
