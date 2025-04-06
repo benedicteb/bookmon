@@ -276,6 +276,7 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         actions.push("Mark as want to read");
     } else if is_want_to_read {
         actions.push("Start reading");
+        actions.push("Unmark as want to read");
     }
     
     if is_started && !is_finished {
@@ -308,6 +309,7 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         "Update progress" => storage::ReadingEvent::Update,
         "Mark as bought" => storage::ReadingEvent::Bought,
         "Mark as want to read" => storage::ReadingEvent::WantToRead,
+        "Unmark as want to read" => storage::ReadingEvent::UnmarkedAsWantToRead,
         _ => unreachable!(),
     };
 

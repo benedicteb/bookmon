@@ -308,9 +308,10 @@ pub fn print_book_list_table(storage: &Storage, books: Vec<&Book>, empty_message
         let has_bought_event = storage.readings.values()
             .any(|r| r.book_id == book.id && r.event == ReadingEvent::Bought);
             
-        // Check if the book has a want to read event
-        let has_want_to_read_event = storage.readings.values()
-            .any(|r| r.book_id == book.id && r.event == ReadingEvent::WantToRead);
+        // Check if the book is marked as want to read using the common logic
+        let is_want_to_read = storage.get_want_to_read_books()
+            .iter()
+            .any(|b| b.id == book.id);
 
         // Format the added date
         let added_date = book.added_on.format("%Y-%m-%d").to_string();
@@ -322,7 +323,7 @@ pub fn print_book_list_table(storage: &Storage, books: Vec<&Book>, empty_message
             category.name.clone(),
             added_date,
             if has_bought_event { "x".to_string() } else { "".to_string() },
-            if has_want_to_read_event { "x".to_string() } else { "".to_string() }
+            if is_want_to_read { "x".to_string() } else { "".to_string() }
         ]);
     }
 
