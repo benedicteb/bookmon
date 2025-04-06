@@ -22,10 +22,6 @@ enum Commands {
     PrintFinished,
     /// Show books that have not been started yet
     PrintBacklog,
-    /// Show all books in the library
-    PrintAll,
-    /// Show books that have been bought
-    PrintBought,
     /// Show books that are in the want to read list
     PrintWantToRead,
     /// Change the storage file path
@@ -110,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => eprintln!("Failed to get book input: {}", e),
             }
         }
-        cmd @ (Commands::PrintFinished | Commands::PrintBacklog | Commands::PrintAll | Commands::PrintBought | Commands::PrintWantToRead) => {
+        cmd @ (Commands::PrintFinished | Commands::PrintBacklog | Commands::PrintWantToRead) => {
             if cli.interactive {
                 interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
             } else {
@@ -125,55 +121,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match reading::show_unstarted_books(&storage) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show unstarted books: {}", e),
-                        }
-                    }
-                    Commands::PrintAll => {
-                        match reading::show_all_books(&storage) {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Failed to show all books: {}", e),
-                        }
-                    }
-                    Commands::PrintBought => {
-                        let bought_books = storage.get_bought_books();
-                        if bought_books.is_empty() {
-                            println!("No bought books found.");
-                        } else {
-                            // Create table data
-                            let mut table_data = vec![
-                                vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
-                            ];
-
-                            // Sort the bought books by author and title
-                            let mut sorted_books = bought_books;
-                            sorted_books.sort_by(|a, b| {
-                                let a_author = storage.authors.get(&a.author_id).unwrap();
-                                let b_author = storage.authors.get(&b.author_id).unwrap();
-                                
-                                if a_author.name != b_author.name {
-                                    a_author.name.cmp(&b_author.name)
-                                } else {
-                                    a.title.cmp(&b.title)
-                                }
-                            });
-
-                            // For each bought book, find the corresponding author and category
-                            for book in sorted_books {
-                                let author = storage.authors.get(&book.author_id)
-                                    .expect("Author not found");
-                                
-                                let category = storage.categories.get(&book.category_id)
-                                    .expect("Category not found");
-
-                                // Add row to table data
-                                table_data.push(vec![
-                                    book.title.clone(),
-                                    author.name.clone(),
-                                    category.name.clone()
-                                ]);
-                            }
-
-                            // Print the table
-                            print_table!(table_data);
                         }
                     }
                     Commands::PrintWantToRead => {
@@ -240,8 +187,6 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         Some(cmd) => match cmd {
             Commands::PrintFinished => storage.get_finished_books(),
             Commands::PrintBacklog => storage.get_unstarted_books(),
-            Commands::PrintAll => storage.books.values().collect(),
-            Commands::PrintBought => storage.get_bought_books(),
             Commands::PrintWantToRead => storage.get_want_to_read_books(),
             _ => storage.get_started_books(), // Fallback to currently reading
         },
