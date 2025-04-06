@@ -205,7 +205,7 @@ pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
 
     // Create table data
     let mut table_data = vec![
-        vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
+        vec!["Title".to_string(), "Author".to_string(), "Category".to_string(), "Added on".to_string(), "Bought".to_string()], // header
     ];
 
     // Sort the unstarted books by author and title
@@ -229,11 +229,20 @@ pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
         let category = storage.categories.get(&book.category_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Category not found"))?;
 
+        // Check if the book has a bought event
+        let has_bought_event = storage.readings.values()
+            .any(|r| r.book_id == book.id && r.event == ReadingEvent::Bought);
+
+        // Format the added date
+        let added_date = book.added_on.format("%Y-%m-%d").to_string();
+
         // Add row to table data
         table_data.push(vec![
             book.title.clone(),
             author.name.clone(),
-            category.name.clone()
+            category.name.clone(),
+            added_date,
+            if has_bought_event { "x".to_string() } else { "".to_string() }
         ]);
     }
 
