@@ -178,45 +178,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Commands::PrintWantToRead => {
                         let want_to_read_books = storage.get_want_to_read_books();
-                        if want_to_read_books.is_empty() {
-                            println!("No books in want to read list.");
-                        } else {
-                            // Create table data
-                            let mut table_data = vec![
-                                vec!["Title".to_string(), "Author".to_string(), "Category".to_string()], // header
-                            ];
-
-                            // Sort the want to read books by author and title
-                            let mut sorted_books = want_to_read_books;
-                            sorted_books.sort_by(|a, b| {
-                                let a_author = storage.authors.get(&a.author_id).unwrap();
-                                let b_author = storage.authors.get(&b.author_id).unwrap();
-                                
-                                if a_author.name != b_author.name {
-                                    a_author.name.cmp(&b_author.name)
-                                } else {
-                                    a.title.cmp(&b.title)
-                                }
-                            });
-
-                            // For each want to read book, find the corresponding author and category
-                            for book in sorted_books {
-                                let author = storage.authors.get(&book.author_id)
-                                    .expect("Author not found");
-                                
-                                let category = storage.categories.get(&book.category_id)
-                                    .expect("Category not found");
-
-                                // Add row to table data
-                                table_data.push(vec![
-                                    book.title.clone(),
-                                    author.name.clone(),
-                                    category.name.clone()
-                                ]);
-                            }
-
-                            // Print the table
-                            print_table!(table_data);
+                        match reading::print_book_list_table(&storage, want_to_read_books, "No books in want to read list.") {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show want to read books: {}", e),
                         }
                     }
                     _ => unreachable!(),
