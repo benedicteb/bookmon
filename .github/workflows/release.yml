@@ -103,13 +103,13 @@ jobs:
           ref: main
 
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v3.1.11
+        uses: gittools/actions/gitversion/setup@v3.2.0
         with:
           versionSpec: '6.0.x'
 
       - name: Determine Version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@v3.1.11
+        uses: gittools/actions/gitversion/execute@v3.2.0
         with:
           overrideConfig: |
             mode=ContinuousDeployment
