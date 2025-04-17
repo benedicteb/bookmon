@@ -1,6 +1,6 @@
 mod config;
 use clap::{Parser, Subcommand};
-use bookmon::{storage::{self, Book, Storage}, book, category, author, reading, http_client};
+use bookmon::{storage::{self, Book, Storage}, book, category, author, reading, lookup::http_client};
 use inquire::{Select, Text};
 use pretty_table::prelude::*;
 
@@ -139,38 +139,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::GetIsbn { isbn } => {
             let client = http_client::HttpClient::new();
-            match tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(&isbn)) {
-                Ok(book) => {
-                    println!("Book Information:");
-                    println!("Title: {}", book.title);
-                    println!("Authors:");
-                    for author in book.authors {
-                        println!("  - {}", author.name.unwrap_or_else(|| "Unknown".to_string()));
-                        if let Some(personal_name) = author.personal_name {
-                            println!("    Personal Name: {}", personal_name);
-                        }
-                        if let Some(birth_date) = author.birth_date {
-                            println!("    Born: {}", birth_date);
-                        }
-                        if let Some(death_date) = author.death_date {
-                            println!("    Died: {}", death_date);
-                        }
-                        if let Some(bio) = author.bio {
-                            println!("    Bio: {}", bio);
-                        }
-                    }
-                    if let Some(publish_date) = book.first_publish_date {
-                        println!("First Published: {}", publish_date);
-                    }
-                    if let Some(description) = book.description {
-                        println!("Description: {}", description);
-                    }
-                    if let Some(covers) = book.covers {
-                        let cover_strings: Vec<String> = covers.iter().map(|id| id.to_string()).collect();
-                        println!("Cover IDs: {}", cover_strings.join(", "));
-                    }
+            let book = tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(&isbn))?;
+            if let Some(book) = book {
+                println!("Title: {}", book.title);
+                println!("Authors:");
+                for author in book.authors {
+                    println!("  - {}", author.name);
                 }
-                Err(e) => eprintln!("Failed to fetch book information: {}", e),
+                if let Some(publish_date) = book.publish_date {
+                    println!("Published: {}", publish_date);
+                }
+                if let Some(description) = book.description {
+                    println!("Description: {}", description);
+                }
+                if let Some(cover_url) = book.cover_url {
+                    println!("Cover URL: {}", cover_url);
+                }
+            } else {
+                println!("No book found for ISBN {}", isbn);
             }
         }
         Commands::ChangeStoragePath { .. } => unreachable!(),

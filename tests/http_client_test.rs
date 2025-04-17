@@ -1,4 +1,4 @@
-use bookmon::http_client::HttpClient;
+use bookmon::lookup::http_client::HttpClient;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -31,11 +31,13 @@ async fn test_get_book_by_isbn() {
         assert!(result.is_ok(), "Failed to fetch book with ISBN {}", isbn);
         
         let book = result.unwrap();
+        assert!(book.is_some(), "No book found for ISBN {}", isbn);
+        let book = book.unwrap();
         assert_eq!(book.title, expected_title);
         assert!(!book.authors.is_empty(), "No authors found for ISBN {}", isbn);
         
         let author = &book.authors[0];
-        assert!(author.name.as_ref().unwrap().contains(expected_author));
+        assert!(author.name.contains(expected_author));
 
         // Check detailed author information if provided
         if let Some(details) = author_details {

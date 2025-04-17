@@ -5,7 +5,8 @@ use chrono::Utc;
 use inquire::{Select, Text};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::storage::{Book, Storage, Category, Author, ReadingEvent};
-use crate::http_client::{HttpClient, OpenLibraryBook};
+use crate::lookup::http_client::HttpClient;
+use crate::lookup::book_lookup_dto::BookLookupDTO;
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEvent>)> {
     // First get ISBN
@@ -29,18 +30,19 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         .block_on(client.get_book_by_isbn(&isbn))
     {
-        Ok(info) => {
+        Ok(Some(info)) => {
             spinner.finish_and_clear();
             info
         }
-        Err(_) => {
+        Ok(None) | Err(_) => {
             spinner.finish_and_clear();
-            OpenLibraryBook {
+            BookLookupDTO {
                 title: String::new(),
                 authors: vec![],
                 description: None,
-                first_publish_date: None,
-                covers: None,
+                isbn: String::new(),
+                publish_date: None,
+                cover_url: None,
             }
         }
     };
@@ -137,7 +139,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
     let author_id = if authors.is_empty() {
         // If no authors exist, suggest the first author from lookup or prompt for new one
         let suggested_author = book_info.authors.first()
-            .and_then(|a| a.name.clone())
+            .and_then(|a| Some(a.name.clone()))
             .unwrap_or_default();
 
         let author_name = if !suggested_author.is_empty() {
@@ -170,7 +172,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
 
         // Get suggested author from lookup
         let suggested_author = book_info.authors.first()
-            .and_then(|a| a.name.clone())
+            .and_then(|a| Some(a.name.clone()))
             .unwrap_or_default();
 
         // Track if we added the suggested author to options
@@ -188,7 +190,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         if selection == "+ Create new author" {
             // Suggest the first author from lookup or prompt for new one
             let suggested_author = book_info.authors.first()
-                .and_then(|a| a.name.clone())
+                .and_then(|a| Some(a.name.clone()))
                 .unwrap_or_default();
 
             let author_name = if !suggested_author.is_empty() {
