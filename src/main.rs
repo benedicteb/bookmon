@@ -88,8 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok((book, event)) => {
                     match book::store_book(&mut storage, book.clone()) {
                         Ok(_) => {
-                            // If there's an event, store it
-                            if let Some(event_type) = event {
+                            // Store all reading events
+                            for event_type in event {
                                 let reading = storage::Reading::new(book.id.clone(), event_type);
                                 if let Err(e) = reading::store_reading(&mut storage, reading) {
                                     eprintln!("Failed to store reading event: {}", e);

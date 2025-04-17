@@ -7,7 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::storage::{Book, Storage, Category, Author, ReadingEvent};
 use crate::http_client::{HttpClient, OpenLibraryBook};
 
-pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Option<ReadingEvent>)> {
+pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEvent>)> {
     // First get ISBN
     let isbn = Text::new("Enter ISBN:")
         .prompt()
@@ -233,15 +233,16 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Option<Reading
     };
 
     // Ask about book status
-    let options = vec!["Already bought", "Want to read", "Neither"];
+    let options = vec!["Already bought", "Want to read", "Both", "Neither"];
     let selection = Select::new("What is the status of this book?", options)
         .prompt()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     let event = match selection {
-        "Already bought" => Some(ReadingEvent::Bought),
-        "Want to read" => Some(ReadingEvent::WantToRead),
-        _ => None,
+        "Already bought" => vec![ReadingEvent::Bought],
+        "Want to read" => vec![ReadingEvent::WantToRead],
+        "Both" => vec![ReadingEvent::Bought, ReadingEvent::WantToRead],
+        _ => vec![],
     };
 
     let book = Book {
