@@ -20,7 +20,7 @@ reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1.44", features = ["full"] }
 indicatif = "0.17.11"
 async-trait = "0.1.88"
-scraper = "0.18.1"
+scraper = "0.23.1"
 regex = "1.10.2"
 
 [dev-dependencies]
