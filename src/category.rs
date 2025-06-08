@@ -1,6 +1,6 @@
-use std::io;
 use crate::storage::{Category, Storage};
 use inquire::Text;
+use std::io;
 
 pub fn get_category_input() -> io::Result<Category> {
     let name = Text::new("Enter category name:")
@@ -24,4 +24,4 @@ pub fn get_category_input() -> io::Result<Category> {
 pub fn store_category(storage: &mut Storage, category: Category) -> Result<(), String> {
     storage.categories.insert(category.id.clone(), category);
     Ok(())
-} 
+}

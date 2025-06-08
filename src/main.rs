@@ -1,8 +1,12 @@
 mod config;
+use bookmon::{
+    book,
+    lookup::http_client,
+    reading,
+    storage::{self, Book, Storage},
+};
 use clap::{Parser, Subcommand};
-use bookmon::{storage::{self, Book, Storage}, book, category, author, reading, lookup::http_client};
 use inquire::{Select, Text};
-use pretty_table::prelude::*;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -56,15 +60,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     // Initialize storage file if it doesn't exist
     if let Err(e) = storage::initialize_storage_file(&settings.storage_file) {
         eprintln!("Failed to initialize storage file: {}", e);
         std::process::exit(1);
     }
 
-    let mut storage = storage::load_storage(&settings.storage_file)
-        .expect("Failed to load storage");
+    let mut storage =
+        storage::load_storage(&settings.storage_file).expect("Failed to load storage");
 
     // Handle the default case (no command) - show currently-reading
     if cli.command.is_none() {
@@ -95,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     eprintln!("Failed to store reading event: {}", e);
                                 }
                             }
-                            
+
                             storage::write_storage(&settings.storage_file, &storage)
                                 .expect("Failed to save storage");
                             println!("Book added successfully!");
@@ -111,21 +115,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
             } else {
                 match cmd {
-                    Commands::PrintFinished => {
-                        match reading::show_finished_books(&storage) {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Failed to show finished books: {}", e),
-                        }
-                    }
-                    Commands::PrintBacklog => {
-                        match reading::show_unstarted_books(&storage) {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Failed to show unstarted books: {}", e),
-                        }
-                    }
+                    Commands::PrintFinished => match reading::show_finished_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show finished books: {}", e),
+                    },
+                    Commands::PrintBacklog => match reading::show_unstarted_books(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+                    },
                     Commands::PrintWantToRead => {
                         let want_to_read_books = storage.get_want_to_read_books();
-                        match reading::print_book_list_table(&storage, want_to_read_books, "No books in want to read list.") {
+                        match reading::print_book_list_table(
+                            &storage,
+                            want_to_read_books,
+                            "No books in want to read list.",
+                        ) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show want to read books: {}", e),
                         }
@@ -166,7 +170,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // Helper function for interactive mode
-fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Commands>) -> Result<(), Box<dyn std::error::Error>> {
+fn interactive_mode(
+    storage: &Storage,
+    storage_file: &str,
+    command: Option<&Commands>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Get the appropriate books based on the command
     let filtered_books: Vec<&Book> = match command {
         None => storage.get_currently_reading_and_want_to_read_books(), // Default case - currently reading + want to read
@@ -184,7 +192,8 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
     }
 
     // Create options for book selection with status
-    let mut options: Vec<(String, String)> = filtered_books.into_iter()
+    let mut options: Vec<(String, String)> = filtered_books
+        .into_iter()
         .map(|b| {
             let status = if storage.is_book_started(&b.id) {
                 "Started"
@@ -203,13 +212,13 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
     options.sort_by(|a, b| {
         let a_started = a.0.starts_with("[Started]");
         let b_started = b.0.starts_with("[Started]");
-        
+
         if a_started != b_started {
             b_started.cmp(&a_started)
         } else {
             let a_author = a.0.split(" by ").nth(1).unwrap();
             let b_author = b.0.split(" by ").nth(1).unwrap();
-            
+
             if a_author != b_author {
                 a_author.cmp(b_author)
             } else {
@@ -235,27 +244,31 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
     let title = Book::title_from_display_string(&book_selection);
 
     // Find the selected book
-    let selected_book = storage.books.values()
+    let selected_book = storage
+        .books
+        .values()
         .find(|b| b.title == title)
         .expect("Selected book not found");
 
     // Determine available actions based on book status
     let mut actions = Vec::new();
-    
+
     // Check if book is currently being read
     let is_started = storage.is_book_started(&selected_book.id);
     let is_finished = storage.is_book_finished(&selected_book.id);
-    
+
     // Check if book is marked as want to read using the proper method
-    let is_want_to_read = storage.get_want_to_read_books()
+    let is_want_to_read = storage
+        .get_want_to_read_books()
         .iter()
         .any(|b| b.id == selected_book.id);
-    
+
     // Check if book is already bought
-    let is_bought = storage.get_readings_by_event(storage::ReadingEvent::Bought)
+    let is_bought = storage
+        .get_readings_by_event(storage::ReadingEvent::Bought)
         .iter()
         .any(|r| r.book_id == selected_book.id);
-    
+
     // Add appropriate actions based on book status
     if !is_started && !is_want_to_read {
         actions.push("Start reading");
@@ -264,12 +277,12 @@ fn interactive_mode(storage: &Storage, storage_file: &str, command: Option<&Comm
         actions.push("Start reading");
         actions.push("Unmark as want to read");
     }
-    
+
     if is_started && !is_finished {
         actions.push("Update progress");
         actions.push("Mark as finished");
     }
-    
+
     if !is_bought {
         actions.push("Mark as bought");
     }

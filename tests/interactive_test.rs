@@ -1,9 +1,9 @@
-use bookmon::storage::{Storage, Reading, ReadingEvent, Book, Author, Category};
+use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Storage};
 
 #[test]
 fn test_interactive_mode_book_selection() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
@@ -33,7 +33,7 @@ fn test_interactive_mode_book_selection() {
     );
     let started_id = started_book.id.clone();
     storage.books.insert(started_id.clone(), started_book);
-    
+
     let finished_book = Book::new(
         "Finished Book".to_string(),
         "978-0-000000-02-0".to_string(),
@@ -50,7 +50,9 @@ fn test_interactive_mode_book_selection() {
     storage.add_reading(Reading::new(finished_id.clone(), ReadingEvent::Finished));
 
     // Verify that only unstarted and started books are included in the selection
-    let options: Vec<String> = storage.books.iter()
+    let options: Vec<String> = storage
+        .books
+        .iter()
         .filter(|(id, _)| !storage.is_book_finished(id))
         .map(|(_, b)| {
             let status = if storage.is_book_started(&b.id) {
@@ -62,7 +64,11 @@ fn test_interactive_mode_book_selection() {
         })
         .collect();
 
-    assert_eq!(options.len(), 2, "Should only include unstarted and started books");
+    assert_eq!(
+        options.len(),
+        2,
+        "Should only include unstarted and started books"
+    );
     assert!(options.iter().any(|opt| opt.contains("Unstarted Book")));
     assert!(options.iter().any(|opt| opt.contains("Started Book")));
     assert!(!options.iter().any(|opt| opt.contains("Finished Book")));
@@ -71,7 +77,7 @@ fn test_interactive_mode_book_selection() {
 #[test]
 fn test_book_selection_from_display_string() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let author = Author::new("Rebecca Yarros".to_string());
     let author_id = author.id.clone();
@@ -96,23 +102,32 @@ fn test_book_selection_from_display_string() {
     storage.add_reading(Reading::new(book_id.clone(), ReadingEvent::Started));
 
     // Create the display string using the new method
-    let display = storage.books.get(&book_id).unwrap().to_display_string(&storage, "Started");
+    let display = storage
+        .books
+        .get(&book_id)
+        .unwrap()
+        .to_display_string(&storage, "Started");
 
     // Extract the title using the new method
     let title = Book::title_from_display_string(&display);
 
     // Find the book by title
-    let selected_book = storage.books.values()
+    let selected_book = storage
+        .books
+        .values()
         .find(|b| b.title == title)
         .expect("Selected book not found");
 
-    assert_eq!(selected_book.id, book_id, "Should find the correct book by title");
+    assert_eq!(
+        selected_book.id, book_id,
+        "Should find the correct book by title"
+    );
 }
 
 #[test]
 fn test_book_selection_with_quoted_titles() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
@@ -134,15 +149,24 @@ fn test_book_selection_with_quoted_titles() {
     storage.books.insert(book_id.clone(), book);
 
     // Create the display string using the new method
-    let display = storage.books.get(&book_id).unwrap().to_display_string(&storage, "Not Started");
+    let display = storage
+        .books
+        .get(&book_id)
+        .unwrap()
+        .to_display_string(&storage, "Not Started");
 
     // Extract the title using the new method
     let title = Book::title_from_display_string(&display);
 
     // Find the book by title
-    let selected_book = storage.books.values()
+    let selected_book = storage
+        .books
+        .values()
         .find(|b| b.title == title)
         .expect("Selected book not found");
 
-    assert_eq!(selected_book.id, book_id, "Should find the correct book by title");
-} 
+    assert_eq!(
+        selected_book.id, book_id,
+        "Should find the correct book by title"
+    );
+}

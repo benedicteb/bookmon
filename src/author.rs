@@ -1,4 +1,4 @@
-use crate::storage::{Storage, Author};
+use crate::storage::{Author, Storage};
 use inquire::Text;
 
 pub fn get_author_input() -> Result<Author, String> {
@@ -16,4 +16,4 @@ pub fn store_author(storage: &mut Storage, author: Author) -> Result<(), String>
 
 pub fn get_author_by_id(storage: &Storage, author_id: &str) -> Result<Option<Author>, String> {
     Ok(storage.get_author(author_id).cloned())
-} 
+}

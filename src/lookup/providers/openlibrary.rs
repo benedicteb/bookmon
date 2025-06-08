@@ -1,8 +1,8 @@
+use crate::lookup::book_lookup_dto::{AuthorDTO, BookLookupDTO};
 use crate::lookup::providers::BookProvider;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use crate::lookup::book_lookup_dto::{BookLookupDTO, AuthorDTO};
 
 const HOSTNAME: &str = "https://openlibrary.org";
 
@@ -32,7 +32,7 @@ where
     D: serde::Deserializer<'de>,
 {
     use serde::de::Error;
-    
+
     let value = serde_json::Value::deserialize(deserializer)?;
     match value {
         serde_json::Value::String(s) => Ok(Some(s)),
@@ -217,19 +217,23 @@ impl OpenLibraryProvider {
     ) -> BookLookupDTO {
         BookLookupDTO {
             title: book.title,
-            authors: authors.into_iter().map(|a| AuthorDTO {
-                name: a.name.unwrap_or_default(),
-                personal_name: a.personal_name,
-                birth_date: a.birth_date,
-                death_date: a.death_date,
-                bio: a.bio,
-            }).collect(),
+            authors: authors
+                .into_iter()
+                .map(|a| AuthorDTO {
+                    name: a.name.unwrap_or_default(),
+                    personal_name: a.personal_name,
+                    birth_date: a.birth_date,
+                    death_date: a.death_date,
+                    bio: a.bio,
+                })
+                .collect(),
             description: book.description,
             isbn: isbn.to_string(),
             publish_date: book.first_publish_date,
-            cover_url: book.covers.and_then(|c| c.first().map(|id| 
-                format!("https://covers.openlibrary.org/b/id/{}-L.jpg", id)
-            )),
+            cover_url: book.covers.and_then(|c| {
+                c.first()
+                    .map(|id| format!("https://covers.openlibrary.org/b/id/{}-L.jpg", id))
+            }),
         }
     }
 }
@@ -244,25 +248,26 @@ impl BookProvider for OpenLibraryProvider {
         // Search for the book to get its work key
         let search_result = self.search_for_book(isbn).await?;
         let work_key = search_result.key;
-        
+
         // Fetch and process work data
         let mut work_response = self.fetch_work_data(&work_key).await?;
-        
+
         // Process authors
         let authors = if let Some(work_authors) = work_response.get("authors") {
             let work_authors: Vec<WorkAuthor> = serde_json::from_value(work_authors.clone())?;
-            self.process_author_data(&work_authors, &search_result.author_name).await?
+            self.process_author_data(&work_authors, &search_result.author_name)
+                .await?
         } else {
             Vec::new()
         };
-        
+
         // Remove authors from work response to avoid conflicts
         if let Some(obj) = work_response.as_object_mut() {
             obj.remove("authors");
         }
-        
+
         // Parse book data and convert to DTO
         let book: OpenLibraryBook = serde_json::from_value(work_response)?;
         Ok(Some(self.convert_to_dto(book, authors, isbn)))
     }
-} 
+}

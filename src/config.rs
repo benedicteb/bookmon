@@ -1,8 +1,8 @@
-use serde::Deserialize;
 use config::{Config, ConfigError, File, FileFormat};
-use std::fs;
 use dirs::config_dir;
+use serde::Deserialize;
 use serde_yaml;
+use std::fs;
 use std::path::PathBuf;
 
 // Embed the default configuration directly in the binary
@@ -12,7 +12,7 @@ const DEFAULT_CONFIG: &str = include_str!("../config/default.yml");
 fn get_config_dir() -> Result<PathBuf, ConfigError> {
     let config_dir = config_dir()
         .ok_or_else(|| ConfigError::Message("Could not find config directory".into()))?;
-    
+
     Ok(config_dir.join("bookmon"))
 }
 
@@ -26,13 +26,13 @@ fn create_config() -> Result<(), ConfigError> {
     let bookmon_dir = get_config_dir()?;
     fs::create_dir_all(&bookmon_dir)
         .map_err(|e| ConfigError::Message(format!("Failed to create config directory: {}", e)))?;
-    
+
     let config_path = bookmon_dir.join("config.yml");
     if !config_path.exists() {
         fs::write(&config_path, "")
             .map_err(|e| ConfigError::Message(format!("Failed to create config file: {}", e)))?;
     }
-    
+
     Ok(())
 }
 
@@ -48,7 +48,7 @@ impl Settings {
     pub fn load() -> Result<Self, ConfigError> {
         // Create config directory and file if they don't exist
         create_config()?;
-        
+
         // Get config path
         let config_path = get_config_path()?;
 
@@ -65,18 +65,20 @@ impl Settings {
 
         // Build and deserialize config
         let mut settings: Settings = builder.build()?.try_deserialize()?;
-        
+
         // Load storage file path from user config if it exists
         if config_path.exists() {
             if let Ok(contents) = fs::read_to_string(&config_path) {
                 if let Ok(user_config) = serde_yaml::from_str::<serde_yaml::Value>(&contents) {
-                    if let Some(storage_file) = user_config.get("storage_file").and_then(|v| v.as_str()) {
+                    if let Some(storage_file) =
+                        user_config.get("storage_file").and_then(|v| v.as_str())
+                    {
                         settings.storage_file = storage_file.to_string();
                     }
                 }
             }
         }
-        
+
         Ok(settings)
     }
 
@@ -88,10 +90,13 @@ impl Settings {
         config_map.insert("storage_file".into(), self.storage_file.clone().into());
 
         // Write to file
-        fs::write(&config_path, serde_yaml::to_string(&config_map)
-            .map_err(|e| ConfigError::Message(format!("Failed to serialize config: {}", e)))?)
-            .map_err(|e| ConfigError::Message(format!("Failed to save config file: {}", e)))?;
+        fs::write(
+            &config_path,
+            serde_yaml::to_string(&config_map)
+                .map_err(|e| ConfigError::Message(format!("Failed to serialize config: {}", e)))?,
+        )
+        .map_err(|e| ConfigError::Message(format!("Failed to save config file: {}", e)))?;
 
         Ok(())
     }
-} 
+}

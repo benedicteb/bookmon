@@ -15,4 +15,4 @@ pub struct BookLookupDTO {
     pub isbn: String,
     pub publish_date: Option<String>,
     pub cover_url: Option<String>,
-} 
+}

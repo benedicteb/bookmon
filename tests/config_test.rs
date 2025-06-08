@@ -10,7 +10,7 @@ debug: false
 
     fn create_test_settings(user_config: Option<&str>) -> Settings {
         let mut builder = Config::builder();
-        
+
         // Add default config
         builder = builder.add_source(File::from_str(TEST_DEFAULT_CONFIG, FileFormat::Yaml));
 
@@ -20,7 +20,8 @@ debug: false
         }
 
         // Build settings
-        let mut settings: Settings = builder.build()
+        let mut settings: Settings = builder
+            .build()
             .expect("Failed to build config")
             .try_deserialize()
             .expect("Failed to deserialize config");
@@ -40,7 +41,7 @@ debug: false
     #[test]
     fn test_load_default_config() {
         let settings = create_test_settings(None);
-        
+
         assert_eq!(settings.app_name, "BookMon");
         assert_eq!(settings.debug, false);
         assert_eq!(settings.storage_file, "");
@@ -53,9 +54,9 @@ app_name: CustomBookMon
 debug: true
 storage_file: /custom/path/storage.json
 "#;
-        
+
         let settings = create_test_settings(Some(user_config));
-        
+
         assert_eq!(settings.app_name, "CustomBookMon");
         assert_eq!(settings.debug, true);
         assert_eq!(settings.storage_file, "/custom/path/storage.json");
@@ -67,13 +68,13 @@ storage_file: /custom/path/storage.json
 debug: true
 storage_file: /custom/path/storage.json
 "#;
-        
+
         let settings = create_test_settings(Some(user_config));
-        
+
         // app_name should remain default
         assert_eq!(settings.app_name, "BookMon");
         // other fields should be overridden
         assert_eq!(settings.debug, true);
         assert_eq!(settings.storage_file, "/custom/path/storage.json");
     }
-} 
+}

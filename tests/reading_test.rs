@@ -1,12 +1,12 @@
-use bookmon::storage::{Storage, Reading, ReadingEvent, Book, Category, Author};
-use bookmon::reading::{store_reading, show_started_books};
-use chrono::{Utc, DateTime};
+use bookmon::reading::{show_started_books, store_reading};
+use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Storage};
+use chrono::{DateTime, Utc};
 use serde_json;
 
 #[test]
 fn test_store_reading_with_valid_book() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category first
     let category = Category::new(
         "Fiction".to_string(),
@@ -19,7 +19,7 @@ fn test_store_reading_with_valid_book() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -42,21 +42,23 @@ fn test_store_reading_with_valid_book() {
 #[test]
 fn test_store_reading_with_invalid_book() {
     let mut storage = Storage::new();
-    
+
     // Create a reading event with an invalid book ID
     let reading = Reading::new("invalid-book-id".to_string(), ReadingEvent::Started);
 
     // Attempting to store the reading should fail
     let result = store_reading(&mut storage, reading);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Book with ID invalid-book-id does not exist"));
+    assert!(result
+        .unwrap_err()
+        .contains("Book with ID invalid-book-id does not exist"));
     assert_eq!(storage.readings.len(), 0);
 }
 
 #[test]
 fn test_reading_id_matches_storage_key() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category first
     let category = Category::new(
         "Fiction".to_string(),
@@ -69,7 +71,7 @@ fn test_reading_id_matches_storage_key() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -87,14 +89,20 @@ fn test_reading_id_matches_storage_key() {
     storage.add_reading(reading);
 
     // Verify that the reading's ID matches its key in storage
-    let stored_reading = storage.readings.get(&reading_id).expect("Reading should exist in storage");
-    assert_eq!(stored_reading.id, reading_id, "Reading ID should match its storage key");
+    let stored_reading = storage
+        .readings
+        .get(&reading_id)
+        .expect("Reading should exist in storage");
+    assert_eq!(
+        stored_reading.id, reading_id,
+        "Reading ID should match its storage key"
+    );
 }
 
 #[test]
 fn test_reading_timestamp_format() {
     let mut storage = Storage::new();
-    
+
     // Create required category and author
     let category = Category::new(
         "Fiction".to_string(),
@@ -106,7 +114,7 @@ fn test_reading_timestamp_format() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -120,22 +128,24 @@ fn test_reading_timestamp_format() {
 
     // Create a reading event
     let reading = Reading::new(book_id, ReadingEvent::Started);
-    
+
     // Serialize to JSON
     let json = serde_json::to_string(&reading).expect("Failed to serialize reading");
-    
+
     // Parse the JSON to a Value to extract the timestamp string
     let value: serde_json::Value = serde_json::from_str(&json).expect("Failed to parse JSON");
-    let timestamp_str = value["created_on"].as_str().expect("created_on should be a string");
-    
+    let timestamp_str = value["created_on"]
+        .as_str()
+        .expect("created_on should be a string");
+
     // Parse the timestamp string - this will fail if it's not a valid ISO 8601 format
     let parsed_date: DateTime<Utc> = DateTime::parse_from_rfc3339(timestamp_str)
         .expect("Timestamp should be in RFC 3339/ISO 8601 format")
         .into();
-    
+
     // Verify timezone is UTC
     assert_eq!(parsed_date.timezone(), Utc, "Timestamp should be in UTC");
-    
+
     // Make sure it can be deserialized back to the original reading
     let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize reading");
     assert_eq!(deserialized.created_on, reading.created_on);
@@ -150,7 +160,7 @@ fn test_show_started_books_empty() {
 #[test]
 fn test_show_started_books_with_data() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category
     let category = Category::new(
         "Fiction".to_string(),
@@ -163,7 +173,7 @@ fn test_show_started_books_with_data() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -186,7 +196,7 @@ fn test_show_started_books_with_data() {
 #[test]
 fn test_show_started_books_with_multiple_books() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category
     let category = Category::new(
         "Fiction".to_string(),
@@ -202,7 +212,7 @@ fn test_show_started_books_with_multiple_books() {
     let author2_id = author2.id.clone();
     storage.authors.insert(author1.id.clone(), author1);
     storage.authors.insert(author2.id.clone(), author2);
-    
+
     // Create and store books
     let book1 = Book::new(
         "First Book".to_string(),
@@ -236,7 +246,7 @@ fn test_show_started_books_with_multiple_books() {
 #[test]
 fn test_show_started_books_with_mixed_events() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category
     let category = Category::new(
         "Fiction".to_string(),
@@ -249,7 +259,7 @@ fn test_show_started_books_with_mixed_events() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -274,7 +284,7 @@ fn test_show_started_books_with_mixed_events() {
 #[test]
 fn test_show_started_books_table_format() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category
     let category = Category::new(
         "Fiction".to_string(),
@@ -287,7 +297,7 @@ fn test_show_started_books_table_format() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     // Create and store a book
     let book = Book::new(
         "Test Book".to_string(),
@@ -309,4 +319,4 @@ fn test_show_started_books_table_format() {
 
     // Verify table formatting
     assert!(true, "Table formatting looks good!");
-} 
+}

@@ -1,9 +1,9 @@
-mod openlibrary;
 pub mod bibsok;
+mod openlibrary;
 
-use std::error::Error;
-use async_trait::async_trait;
 use crate::lookup::book_lookup_dto::BookLookupDTO;
+use async_trait::async_trait;
+use std::error::Error;
 
 const USER_AGENT: &str = concat!("bookmon/", env!("CARGO_PKG_VERSION"));
 
@@ -20,8 +20,8 @@ pub trait BookProvider {
     async fn get_book_by_isbn(&self, isbn: &str) -> Result<Option<BookLookupDTO>, Box<dyn Error>>;
 }
 
-pub use openlibrary::OpenLibraryProvider;
 pub use bibsok::BibsokProvider;
+pub use openlibrary::OpenLibraryProvider;
 
 pub struct ProviderManager {
     providers: Vec<Box<dyn BookProvider>>,
@@ -30,14 +30,21 @@ pub struct ProviderManager {
 impl ProviderManager {
     pub fn new() -> Self {
         let mut providers: Vec<Box<dyn BookProvider>> = Vec::new();
-        providers.push(Box::new(OpenLibraryProvider { client: create_http_client() }));
-        providers.push(Box::new(BibsokProvider { client: create_http_client() }));
+        providers.push(Box::new(OpenLibraryProvider {
+            client: create_http_client(),
+        }));
+        providers.push(Box::new(BibsokProvider {
+            client: create_http_client(),
+        }));
         Self { providers }
     }
 
-    pub async fn get_book_by_isbn(&self, isbn: &str) -> Result<Option<BookLookupDTO>, Box<dyn Error>> {
+    pub async fn get_book_by_isbn(
+        &self,
+        isbn: &str,
+    ) -> Result<Option<BookLookupDTO>, Box<dyn Error>> {
         let mut errors = Vec::new();
-        
+
         for provider in &self.providers {
             match provider.get_book_by_isbn(isbn).await {
                 Ok(Some(book)) => return Ok(Some(book)),
@@ -51,7 +58,7 @@ impl ProviderManager {
                 eprintln!("Error from provider {}: {}", provider_name, error);
             }
         }
-        
+
         Ok(None)
     }
 }

@@ -1,12 +1,12 @@
+use crate::lookup::book_lookup_dto::BookLookupDTO;
+use crate::lookup::http_client::HttpClient;
+use crate::storage::{Author, Book, Category, ReadingEvent, Storage};
+use chrono::Utc;
+use indicatif::{ProgressBar, ProgressStyle};
+use inquire::{Select, Text};
 use std::io;
 use std::time::Duration;
 use uuid::Uuid;
-use chrono::Utc;
-use inquire::{Select, Text};
-use indicatif::{ProgressBar, ProgressStyle};
-use crate::storage::{Book, Storage, Category, Author, ReadingEvent};
-use crate::lookup::http_client::HttpClient;
-use crate::lookup::book_lookup_dto::BookLookupDTO;
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEvent>)> {
     // First get ISBN
@@ -20,7 +20,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         ProgressStyle::default_spinner()
             .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
             .template("{spinner} Looking up book details...")
-            .unwrap()
+            .unwrap(),
     );
     spinner.enable_steady_tick(Duration::from_millis(100));
 
@@ -67,7 +67,9 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
     // Get list of categories with their IDs
-    let categories: Vec<(String, String)> = storage.categories.iter()
+    let categories: Vec<(String, String)> = storage
+        .categories
+        .iter()
         .map(|(id, c)| (c.name.clone(), id.clone()))
         .collect();
 
@@ -76,25 +78,27 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         let category_name = Text::new("Enter new category:")
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        
+
         // Create a new category
-        let category = Category::new(
-            category_name.trim().to_string(),
-            None,
-        );
-        
+        let category = Category::new(category_name.trim().to_string(), None);
+
         // Store the category and get its ID
         crate::category::store_category(storage, category)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        
+
         // Get the ID of the newly created category
-        storage.categories.iter()
+        storage
+            .categories
+            .iter()
             .find(|(_, c)| c.name == category_name.trim())
             .map(|(id, _)| id.clone())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get category ID"))?
     } else {
         // Show category selection dialog with option to create new
-        let mut options = categories.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        let mut options = categories
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<&str>>();
         options.push("+ Create new category");
 
         let selection = Select::new("Select category:", options)
@@ -106,39 +110,45 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
             let category_name = Text::new("Enter new category name:")
                 .prompt()
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            
+
             // Create a new category
-            let category = Category::new(
-                category_name.trim().to_string(),
-                None,
-            );
-            
+            let category = Category::new(category_name.trim().to_string(), None);
+
             // Store the category and get its ID
             crate::category::store_category(storage, category)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            
+
             // Get the ID of the newly created category
-            storage.categories.iter()
+            storage
+                .categories
+                .iter()
                 .find(|(_, c)| c.name == category_name.trim())
                 .map(|(id, _)| id.clone())
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get category ID"))?
         } else {
             // Find the selected category's ID
-            categories.iter()
+            categories
+                .iter()
                 .find(|(name, _)| name.as_str() == selection)
                 .map(|(_, id)| id.clone())
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected category not found"))?
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::Other, "Selected category not found")
+                })?
         }
     };
 
     // Get list of authors with their IDs
-    let authors: Vec<(String, String)> = storage.authors.iter()
+    let authors: Vec<(String, String)> = storage
+        .authors
+        .iter()
         .map(|(id, a)| (a.name.clone(), id.clone()))
         .collect();
 
     let author_id = if authors.is_empty() {
         // If no authors exist, suggest the first author from lookup or prompt for new one
-        let suggested_author = book_info.authors.first()
+        let suggested_author = book_info
+            .authors
+            .first()
             .and_then(|a| Some(a.name.clone()))
             .unwrap_or_default();
 
@@ -152,36 +162,44 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
                 .prompt()
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         };
-        
+
         // Create a new author
         let author = Author::new(author_name.trim().to_string());
-        
+
         // Store the author and get its ID
         storage.add_author(author);
-        
+
         // Get the ID of the newly created author
-        storage.authors.iter()
+        storage
+            .authors
+            .iter()
             .find(|(_, a)| a.name == author_name.trim())
             .map(|(id, _)| id.clone())
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
     } else {
         // Show author selection dialog with option to create new
-        let mut options = authors.iter().map(|(name, _)| name.as_str()).collect::<Vec<&str>>();
+        let mut options = authors
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<&str>>();
         options.sort(); // Sort alphabetically
         options.push("+ Create new author");
 
         // Get suggested author from lookup
-        let suggested_author = book_info.authors.first()
+        let suggested_author = book_info
+            .authors
+            .first()
             .and_then(|a| Some(a.name.clone()))
             .unwrap_or_default();
 
         // Track if we added the suggested author to options
-        let suggested_author_added = if !suggested_author.is_empty() && !options.contains(&suggested_author.as_str()) {
-            options.insert(0, &suggested_author);
-            true
-        } else {
-            false
-        };
+        let suggested_author_added =
+            if !suggested_author.is_empty() && !options.contains(&suggested_author.as_str()) {
+                options.insert(0, &suggested_author);
+                true
+            } else {
+                false
+            };
 
         let selection = Select::new("Select author:", options)
             .prompt()
@@ -189,7 +207,9 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
 
         if selection == "+ Create new author" {
             // Suggest the first author from lookup or prompt for new one
-            let suggested_author = book_info.authors.first()
+            let suggested_author = book_info
+                .authors
+                .first()
                 .and_then(|a| Some(a.name.clone()))
                 .unwrap_or_default();
 
@@ -203,15 +223,17 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
                     .prompt()
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
             };
-            
+
             // Create a new author
             let author = Author::new(author_name.trim().to_string());
-            
+
             // Store the author and get its ID
             storage.add_author(author);
-            
+
             // Get the ID of the newly created author
-            storage.authors.iter()
+            storage
+                .authors
+                .iter()
                 .find(|(_, a)| a.name == author_name.trim())
                 .map(|(id, _)| id.clone())
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
@@ -219,15 +241,18 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
             // User selected the suggested author, add it to storage
             let author = Author::new(suggested_author.trim().to_string());
             storage.add_author(author);
-            
+
             // Get the ID of the newly created author
-            storage.authors.iter()
+            storage
+                .authors
+                .iter()
                 .find(|(_, a)| a.name == suggested_author.trim())
                 .map(|(id, _)| id.clone())
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get author ID"))?
         } else {
             // Find the selected author's ID from existing authors
-            authors.iter()
+            authors
+                .iter()
                 .find(|(name, _)| name.as_str() == selection)
                 .map(|(_, id)| id.clone())
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected author not found"))?
@@ -263,14 +288,17 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
 pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
     // Validate that the category exists
     if !storage.categories.contains_key(&book.category_id) {
-        return Err(format!("Category with ID {} does not exist", book.category_id));
+        return Err(format!(
+            "Category with ID {} does not exist",
+            book.category_id
+        ));
     }
-    
+
     // Validate that the author exists
     if !storage.authors.contains_key(&book.author_id) {
         return Err(format!("Author with ID {} does not exist", book.author_id));
     }
-    
+
     storage.books.insert(book.id.clone(), book);
     Ok(())
-} 
+}

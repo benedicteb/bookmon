@@ -1,8 +1,7 @@
 use bookmon::storage::{
-    Storage, Book, Author, Reading, Category, ReadingEvent,
-    ReadingMetadata, sort_json_value
+    sort_json_value, Author, Book, Category, Reading, ReadingEvent, ReadingMetadata, Storage,
 };
-use chrono::{TimeZone, Duration, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
 use uuid::Uuid;
 
@@ -10,7 +9,7 @@ use uuid::Uuid;
 fn test_storage_initialization() {
     // Create a new empty storage
     let storage = Storage::new();
-    
+
     // Verify the storage is empty
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
@@ -22,16 +21,19 @@ fn test_storage_initialization() {
 fn test_storage_serialization() {
     // Create a storage with test data
     let mut storage = Storage::new();
-    
+
     // Add some test data in a specific order
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.add_author(author);
-    
-    let category = Category::new("Test Category".to_string(), Some("Test Description".to_string()));
+
+    let category = Category::new(
+        "Test Category".to_string(),
+        Some("Test Description".to_string()),
+    );
     let category_id = category.id.clone();
     storage.add_category(category);
-    
+
     let book = Book::new(
         "Test Book".to_string(),
         "1234567890".to_string(),
@@ -41,7 +43,7 @@ fn test_storage_serialization() {
     );
     let book_id = book.id.clone();
     storage.add_book(book);
-    
+
     let reading = Reading::new(book_id.clone(), ReadingEvent::Started);
     storage.add_reading(reading);
 
@@ -49,14 +51,17 @@ fn test_storage_serialization() {
     let json_value = serde_json::to_value(&storage).unwrap();
     let sorted_value = sort_json_value(json_value);
     let first_json = serde_json::to_string_pretty(&sorted_value).unwrap();
-    
+
     // Serialize again to verify deterministic output
     let json_value = serde_json::to_value(&storage).unwrap();
     let sorted_value = sort_json_value(json_value);
     let second_json = serde_json::to_string_pretty(&sorted_value).unwrap();
-    
+
     // Verify that both serializations produce identical output
-    assert_eq!(first_json, second_json, "Multiple serializations should produce identical output");
+    assert_eq!(
+        first_json, second_json,
+        "Multiple serializations should produce identical output"
+    );
 
     // Verify that the JSON structure is valid and keys are sorted
     let parsed_value: Value = serde_json::from_str(&first_json).unwrap();
@@ -81,7 +86,7 @@ fn test_storage_serialization() {
 fn test_storage_load() {
     // Create a new empty storage
     let storage = Storage::new();
-    
+
     // Verify the storage is empty
     assert!(storage.books.is_empty(), "books should be empty");
     assert!(storage.readings.is_empty(), "readings should be empty");
@@ -93,7 +98,7 @@ fn test_storage_load() {
 fn test_storage_save_and_load() {
     // Create a storage with a book
     let mut storage = Storage::new();
-    
+
     // Create a category first
     let category = Category::new(
         "Fiction".to_string(),
@@ -106,7 +111,7 @@ fn test_storage_save_and_load() {
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.authors.insert(author.id.clone(), author);
-    
+
     let book = Book {
         id: "test-id".to_string(),
         title: "Test Book".to_string(),
@@ -128,17 +133,26 @@ fn test_storage_save_and_load() {
 
     // Verify the loaded storage matches the original
     assert_eq!(loaded_storage.books.len(), 1, "Should have one book");
-    let loaded_book = loaded_storage.books.get("1234567890").expect("Book should exist");
+    let loaded_book = loaded_storage
+        .books
+        .get("1234567890")
+        .expect("Book should exist");
     assert_eq!(loaded_book.id, "test-id");
     assert_eq!(loaded_book.category_id, category_id);
     assert_eq!(loaded_book.author_id, author_id);
     assert_eq!(loaded_book.total_pages, 300);
 
     // Verify category and author were properly loaded with created_on
-    let loaded_category = loaded_storage.categories.get(&category_id).expect("Category should exist");
+    let loaded_category = loaded_storage
+        .categories
+        .get(&category_id)
+        .expect("Category should exist");
     assert!(loaded_category.created_on <= Utc::now());
 
-    let loaded_author = loaded_storage.authors.get(&author_id).expect("Author should exist");
+    let loaded_author = loaded_storage
+        .authors
+        .get(&author_id)
+        .expect("Author should exist");
     assert!(loaded_author.created_on <= Utc::now());
 }
 
@@ -154,7 +168,7 @@ fn test_id_matches_hashmap_keys() {
     );
     let category_id = category.id.clone();
     storage.categories.insert(category.id.clone(), category);
-    
+
     let book = Book {
         id: "book1".to_string(),
         title: "Test Book".to_string(),
@@ -187,17 +201,32 @@ fn test_id_matches_hashmap_keys() {
     }
 
     for (key, author) in &storage.authors {
-        assert_eq!(key, &author.id, "Author HashMap key does not match author id");
-        assert!(author.created_on <= Utc::now(), "Author created_on should be set");
+        assert_eq!(
+            key, &author.id,
+            "Author HashMap key does not match author id"
+        );
+        assert!(
+            author.created_on <= Utc::now(),
+            "Author created_on should be set"
+        );
     }
 
     for (key, reading) in &storage.readings {
-        assert_eq!(key, &reading.id, "Reading HashMap key does not match reading id");
+        assert_eq!(
+            key, &reading.id,
+            "Reading HashMap key does not match reading id"
+        );
     }
 
     for (key, category) in &storage.categories {
-        assert_eq!(key, &category.id, "Category HashMap key does not match category id");
-        assert!(category.created_on <= Utc::now(), "Category created_on should be set");
+        assert_eq!(
+            key, &category.id,
+            "Category HashMap key does not match category id"
+        );
+        assert!(
+            category.created_on <= Utc::now(),
+            "Category created_on should be set"
+        );
     }
 }
 
@@ -216,10 +245,7 @@ fn test_automatic_uuid_generation() {
 
     let author = Author::new("Test Author".to_string());
 
-    let reading = Reading::new(
-        "book1".to_string(),
-        ReadingEvent::Started,
-    );
+    let reading = Reading::new("book1".to_string(), ReadingEvent::Started);
 
     // Add items to storage
     storage.add_book(book);
@@ -236,7 +262,10 @@ fn test_automatic_uuid_generation() {
     for (key, author) in &storage.authors {
         assert!(!key.is_empty(), "Author ID should not be empty");
         assert!(key.len() > 0, "Author ID should have length");
-        assert!(author.created_on <= Utc::now(), "Author created_on should be set");
+        assert!(
+            author.created_on <= Utc::now(),
+            "Author created_on should be set"
+        );
     }
 
     for (key, _reading) in &storage.readings {
@@ -283,12 +312,16 @@ fn test_get_readings_by_event() {
     // Test getting started readings
     let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
     assert_eq!(started_readings.len(), 2, "Should have 2 started readings");
-    assert!(started_readings.iter().all(|r| matches!(r.event, ReadingEvent::Started)));
+    assert!(started_readings
+        .iter()
+        .all(|r| matches!(r.event, ReadingEvent::Started)));
 
     // Test getting finished readings
     let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
     assert_eq!(finished_readings.len(), 1, "Should have 1 finished reading");
-    assert!(finished_readings.iter().all(|r| matches!(r.event, ReadingEvent::Finished)));
+    assert!(finished_readings
+        .iter()
+        .all(|r| matches!(r.event, ReadingEvent::Finished)));
 }
 
 #[test]
@@ -297,10 +330,16 @@ fn test_get_readings_by_event_empty() {
 
     // Test getting readings when storage is empty
     let started_readings = storage.get_readings_by_event(ReadingEvent::Started);
-    assert!(started_readings.is_empty(), "Should have no started readings");
+    assert!(
+        started_readings.is_empty(),
+        "Should have no started readings"
+    );
 
     let finished_readings = storage.get_readings_by_event(ReadingEvent::Finished);
-    assert!(finished_readings.is_empty(), "Should have no finished readings");
+    assert!(
+        finished_readings.is_empty(),
+        "Should have no finished readings"
+    );
 }
 
 #[test]
@@ -476,7 +515,9 @@ fn test_get_finished_books() {
     let finished_books = storage.get_finished_books();
     assert_eq!(finished_books.len(), 2, "Should have 2 finished books");
     assert!(finished_books.iter().any(|b| b.title == "Finished Book"));
-    assert!(finished_books.iter().any(|b| b.title == "Started Then Finished Book"));
+    assert!(finished_books
+        .iter()
+        .any(|b| b.title == "Started Then Finished Book"));
 
     // Test a book that was finished then started (should not be returned)
     let book4 = Book::new(
@@ -502,7 +543,12 @@ fn test_get_finished_books() {
     // Test getting finished books again - should still only have 2 books
     let finished_books = storage.get_finished_books();
     assert_eq!(finished_books.len(), 2, "Should still have 2 finished books (not including the book that was finished then started)");
-    assert!(!finished_books.iter().any(|b| b.title == "Finished Then Started Book"), "Book that was finished then started should not be included");
+    assert!(
+        !finished_books
+            .iter()
+            .any(|b| b.title == "Finished Then Started Book"),
+        "Book that was finished then started should not be included"
+    );
 }
 
 #[test]
@@ -569,13 +615,13 @@ fn test_reading_event_metadata_serialization() {
 
     // Create a reading event with Update type and metadata
     let reading = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 50);
-    
+
     // Serialize to JSON
     let json = serde_json::to_string(&reading).expect("Failed to serialize reading");
-    
+
     // Deserialize back
     let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize reading");
-    
+
     // Verify the metadata was preserved
     assert_eq!(deserialized.metadata.current_page, Some(50));
 }
@@ -650,7 +696,10 @@ fn test_is_book_started_with_update_event() {
     storage.add_reading(update_reading);
 
     // The book should be considered started even though the most recent event is Update
-    assert!(storage.is_book_started(&book_id), "Book should be considered started even with Update as most recent event");
+    assert!(
+        storage.is_book_started(&book_id),
+        "Book should be considered started even with Update as most recent event"
+    );
 }
 
 #[test]
@@ -672,18 +721,18 @@ fn test_sort_json_value() {
     });
 
     let sorted = sort_json_value(input);
-    
+
     // Verify the structure is maintained but keys are sorted
     if let Value::Object(map) = sorted {
         let keys: Vec<_> = map.keys().collect();
         assert_eq!(keys, vec!["a", "b", "c"]);
-        
+
         // Check nested object
         if let Some(Value::Object(nested)) = map.get("c") {
             let nested_keys: Vec<_> = nested.keys().collect();
             assert_eq!(nested_keys, vec!["a", "b"]);
         }
-        
+
         // Check array contents
         if let Some(Value::Array(arr)) = map.get("b") {
             if let Some(Value::Object(arr_obj)) = arr.first() {
@@ -697,7 +746,7 @@ fn test_sort_json_value() {
 #[test]
 fn test_json_sorting() {
     let mut storage = Storage::new();
-    
+
     // Add some test data
     let author = Author::new("Test Author".to_string());
     let category = Category::new("Test Category".to_string(), None);
@@ -708,17 +757,17 @@ fn test_json_sorting() {
         author.id.clone(),
         100,
     );
-    
+
     storage.add_author(author);
     storage.add_category(category);
     storage.add_book(book);
-    
+
     // Convert to JSON string
     let json_string = storage.to_sorted_json_string().unwrap();
-    
+
     // Parse back to Value to verify sorting
     let value: Value = serde_json::from_str(&json_string).unwrap();
-    
+
     // Helper function to check if keys are sorted
     fn check_keys_sorted(value: &Value) -> bool {
         match value {
@@ -735,14 +784,17 @@ fn test_json_sorting() {
             _ => true,
         }
     }
-    
-    assert!(check_keys_sorted(&value), "JSON keys are not properly sorted");
+
+    assert!(
+        check_keys_sorted(&value),
+        "JSON keys are not properly sorted"
+    );
 }
 
 #[test]
 fn test_sort_books() {
     let mut storage = Storage::new();
-    
+
     // Create and store a category
     let category = Category::new(
         "Fiction".to_string(),
@@ -758,7 +810,7 @@ fn test_sort_books() {
     let author2_id = author2.id.clone();
     storage.authors.insert(author1.id.clone(), author1);
     storage.authors.insert(author2.id.clone(), author2);
-    
+
     // Create and store books with different statuses
     let book1 = Book::new(
         "First Book".to_string(),
@@ -798,13 +850,13 @@ fn test_sort_books() {
     // Add reading events to set different statuses
     // Book1: Currently reading
     storage.add_reading(Reading::new(book1.id.clone(), ReadingEvent::Started));
-    
+
     // Book2: Finished
     storage.add_reading(Reading::new(book2.id.clone(), ReadingEvent::Started));
     storage.add_reading(Reading::new(book2.id.clone(), ReadingEvent::Finished));
-    
+
     // Book3: Not started (no reading events)
-    
+
     // Book4: Currently reading
     storage.add_reading(Reading::new(book4.id.clone(), ReadingEvent::Started));
 
@@ -813,17 +865,17 @@ fn test_sort_books() {
 
     // Verify sorting order
     assert_eq!(sorted_books.len(), 4);
-    
+
     // First two should be currently reading (sorted by author then title)
     assert!(storage.is_book_started(&sorted_books[0].id));
     assert!(storage.is_book_started(&sorted_books[1].id));
     assert!(!storage.is_book_finished(&sorted_books[0].id));
     assert!(!storage.is_book_finished(&sorted_books[1].id));
-    
+
     // Third should be not started
     assert!(!storage.is_book_started(&sorted_books[2].id));
     assert!(!storage.is_book_finished(&sorted_books[2].id));
-    
+
     // Fourth should be finished
     assert!(storage.is_book_finished(&sorted_books[3].id));
 
@@ -831,7 +883,7 @@ fn test_sort_books() {
     // Currently reading books should be sorted by author then title
     let author1_name = storage.authors.get(&author1_id).unwrap().name.clone();
     let author2_name = storage.authors.get(&author2_id).unwrap().name.clone();
-    
+
     if author1_name < author2_name {
         assert_eq!(sorted_books[0].title, "First Book"); // Author1's book
         assert_eq!(sorted_books[1].title, "Fourth Book"); // Author2's book
@@ -877,7 +929,9 @@ fn test_reading_event_bought() {
     // Test getting bought readings
     let bought_readings = storage.get_readings_by_event(ReadingEvent::Bought);
     assert_eq!(bought_readings.len(), 1, "Should have 1 bought reading");
-    assert!(bought_readings.iter().all(|r| matches!(r.event, ReadingEvent::Bought)));
+    assert!(bought_readings
+        .iter()
+        .all(|r| matches!(r.event, ReadingEvent::Bought)));
 }
 
 #[test]
@@ -912,14 +966,20 @@ fn test_reading_event_want_to_read() {
 
     // Test getting want to read readings
     let want_to_read_readings = storage.get_readings_by_event(ReadingEvent::WantToRead);
-    assert_eq!(want_to_read_readings.len(), 1, "Should have 1 want to read reading");
-    assert!(want_to_read_readings.iter().all(|r| matches!(r.event, ReadingEvent::WantToRead)));
+    assert_eq!(
+        want_to_read_readings.len(),
+        1,
+        "Should have 1 want to read reading"
+    );
+    assert!(want_to_read_readings
+        .iter()
+        .all(|r| matches!(r.event, ReadingEvent::WantToRead)));
 }
 
 #[test]
 fn test_get_bought_books() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -970,7 +1030,7 @@ fn test_get_bought_books() {
 #[test]
 fn test_get_want_to_read_books() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1021,7 +1081,7 @@ fn test_get_want_to_read_books() {
 #[test]
 fn test_most_recent_event_takes_precedence() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1066,7 +1126,7 @@ fn test_most_recent_event_takes_precedence() {
 #[test]
 fn test_bought_event_precedence() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1108,7 +1168,7 @@ fn test_bought_event_precedence() {
 #[test]
 fn test_want_to_read_event_precedence() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1150,16 +1210,19 @@ fn test_want_to_read_event_precedence() {
 #[test]
 fn test_get_books_by_most_recent_event() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let author = Author::new("Test Author".to_string());
     let author_id = author.id.clone();
     storage.add_author(author);
-    
-    let category = Category::new("Test Category".to_string(), Some("Test Description".to_string()));
+
+    let category = Category::new(
+        "Test Category".to_string(),
+        Some("Test Description".to_string()),
+    );
     let category_id = category.id.clone();
     storage.add_category(category);
-    
+
     // Create three books
     let book1 = Book::new(
         "Book 1".to_string(),
@@ -1170,7 +1233,7 @@ fn test_get_books_by_most_recent_event() {
     );
     let book1_id = book1.id.clone();
     storage.add_book(book1);
-    
+
     let book2 = Book::new(
         "Book 2".to_string(),
         "2345678901".to_string(),
@@ -1180,7 +1243,7 @@ fn test_get_books_by_most_recent_event() {
     );
     let book2_id = book2.id.clone();
     storage.add_book(book2);
-    
+
     let book3 = Book::new(
         "Book 3".to_string(),
         "3456789012".to_string(),
@@ -1190,50 +1253,79 @@ fn test_get_books_by_most_recent_event() {
     );
     let book3_id = book3.id.clone();
     storage.add_book(book3);
-    
+
     // Add readings for each book with different events
     // Book 1: Started -> Finished
     storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Started));
     storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Finished));
-    
+
     // Book 2: Started -> Update -> Bought
     storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Started));
     storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Update));
     storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Bought));
-    
+
     // Book 3: WantToRead -> Started -> Update
     storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::WantToRead));
     storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::Started));
     storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::Update));
-    
+
     // Test getting books with Finished as most recent event
     let finished_books = storage.get_books_by_most_recent_event(ReadingEvent::Finished);
-    assert_eq!(finished_books.len(), 1, "Should have 1 book with Finished as most recent event");
-    assert_eq!(finished_books[0].id, book1_id, "Book 1 should have Finished as most recent event");
-    
+    assert_eq!(
+        finished_books.len(),
+        1,
+        "Should have 1 book with Finished as most recent event"
+    );
+    assert_eq!(
+        finished_books[0].id, book1_id,
+        "Book 1 should have Finished as most recent event"
+    );
+
     // Test getting books with Bought as most recent event
     let bought_books = storage.get_books_by_most_recent_event(ReadingEvent::Bought);
-    assert_eq!(bought_books.len(), 1, "Should have 1 book with Bought as most recent event");
-    assert_eq!(bought_books[0].id, book2_id, "Book 2 should have Bought as most recent event");
-    
+    assert_eq!(
+        bought_books.len(),
+        1,
+        "Should have 1 book with Bought as most recent event"
+    );
+    assert_eq!(
+        bought_books[0].id, book2_id,
+        "Book 2 should have Bought as most recent event"
+    );
+
     // Test getting books with Update as most recent event
     let update_books = storage.get_books_by_most_recent_event(ReadingEvent::Update);
-    assert_eq!(update_books.len(), 1, "Should have 1 book with Update as most recent event");
-    assert_eq!(update_books[0].id, book3_id, "Book 3 should have Update as most recent event");
-    
+    assert_eq!(
+        update_books.len(),
+        1,
+        "Should have 1 book with Update as most recent event"
+    );
+    assert_eq!(
+        update_books[0].id, book3_id,
+        "Book 3 should have Update as most recent event"
+    );
+
     // Test getting books with Started as most recent event (should be none)
     let started_books = storage.get_books_by_most_recent_event(ReadingEvent::Started);
-    assert_eq!(started_books.len(), 0, "Should have 0 books with Started as most recent event");
-    
+    assert_eq!(
+        started_books.len(),
+        0,
+        "Should have 0 books with Started as most recent event"
+    );
+
     // Test getting books with WantToRead as most recent event (should be none)
     let want_to_read_books = storage.get_books_by_most_recent_event(ReadingEvent::WantToRead);
-    assert_eq!(want_to_read_books.len(), 0, "Should have 0 books with WantToRead as most recent event");
+    assert_eq!(
+        want_to_read_books.len(),
+        0,
+        "Should have 0 books with WantToRead as most recent event"
+    );
 }
 
 #[test]
 fn test_unmarked_as_want_to_read() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1275,7 +1367,7 @@ fn test_unmarked_as_want_to_read() {
 #[test]
 fn test_remarked_as_want_to_read() {
     let mut storage = Storage::new();
-    
+
     // Create test data
     let category = Category::new(
         "Fiction".to_string(),
@@ -1333,9 +1425,27 @@ fn test_get_read_books_by_time_period() {
     storage.add_category(category);
 
     // Create three books
-    let book1 = Book::new("Book 1".to_string(), "123".to_string(), category_id.clone(), author_id.clone(), 100);
-    let book2 = Book::new("Book 2".to_string(), "456".to_string(), category_id.clone(), author_id.clone(), 200);
-    let book3 = Book::new("Book 3".to_string(), "789".to_string(), category_id.clone(), author_id.clone(), 300);
+    let book1 = Book::new(
+        "Book 1".to_string(),
+        "123".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book2 = Book::new(
+        "Book 2".to_string(),
+        "456".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book3 = Book::new(
+        "Book 3".to_string(),
+        "789".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
 
     let book1_id = book1.id.clone();
     let book2_id = book2.id.clone();
@@ -1347,7 +1457,7 @@ fn test_get_read_books_by_time_period() {
 
     // Create readings at different times
     let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
-    
+
     // Book 1: Finished before the period
     let reading1 = Reading::new(book1_id.clone(), ReadingEvent::Finished);
     storage.add_reading(reading1);
@@ -1391,4 +1501,4 @@ fn test_get_read_books_by_time_period_empty() {
 
     let result = storage.get_read_books_by_time_period(from, to);
     assert!(result.is_empty());
-} 
+}
