@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, TimeZone, Utc};
 use inquire::Text;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
@@ -475,6 +475,22 @@ impl Storage {
             .iter()
             .filter_map(|reading| self.books.get(&reading.book_id))
             .collect()
+    }
+
+    /// Returns the earliest year in which a book was finished
+    pub fn get_earliest_finished_year(&self) -> Option<i32> {
+        self.readings
+            .values()
+            .filter(|r| r.event == ReadingEvent::Finished)
+            .map(|r| r.created_on.year())
+            .min()
+    }
+
+    /// Returns all books that were finished in a specific year
+    pub fn get_books_finished_in_year(&self, year: i32) -> Vec<&Book> {
+        let from = Utc.with_ymd_and_hms(year, 1, 1, 0, 0, 0).unwrap();
+        let to = Utc.with_ymd_and_hms(year, 12, 31, 23, 59, 59).unwrap();
+        self.get_read_books_by_time_period(from, to)
     }
 }
 

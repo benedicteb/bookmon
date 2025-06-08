@@ -5,6 +5,7 @@ use bookmon::{
     reading,
     storage::{self, Book, Storage},
 };
+use chrono::Datelike;
 use clap::{Parser, Subcommand};
 use inquire::{Select, Text};
 
@@ -28,6 +29,8 @@ enum Commands {
     PrintBacklog,
     /// Show books that are in the want to read list
     PrintWantToRead,
+    /// Show reading statistics by year
+    PrintStatistics,
     /// Change the storage file path
     ChangeStoragePath {
         /// The new path for the storage file
@@ -110,7 +113,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => eprintln!("Failed to get book input: {}", e),
             }
         }
-        cmd @ (Commands::PrintFinished | Commands::PrintBacklog | Commands::PrintWantToRead) => {
+        cmd @ (Commands::PrintFinished
+        | Commands::PrintBacklog
+        | Commands::PrintWantToRead
+        | Commands::PrintStatistics) => {
             if cli.interactive {
                 interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
             } else {
@@ -132,6 +138,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show want to read books: {}", e),
+                        }
+                    }
+                    Commands::PrintStatistics => {
+                        if let Some(earliest_year) = storage.get_earliest_finished_year() {
+                            let current_year = chrono::Utc::now().year();
+                            println!("\nReading Statistics by Year:");
+                            println!("------------------------");
+
+                            for year in earliest_year..=current_year {
+                                let books = storage.get_books_finished_in_year(year);
+                                if !books.is_empty() {
+                                    println!("\n{}: {} books", year, books.len());
+                                    for book in books {
+                                        let author = storage.authors.get(&book.author_id).unwrap();
+                                        println!("  - \"{}\" by {}", book.title, author.name);
+                                    }
+                                }
+                            }
+                        } else {
+                            println!("No finished books found in your reading history.");
                         }
                     }
                     _ => unreachable!(),
@@ -182,6 +208,7 @@ fn interactive_mode(
             Commands::PrintFinished => storage.get_finished_books(),
             Commands::PrintBacklog => storage.get_unstarted_books(),
             Commands::PrintWantToRead => storage.get_want_to_read_books(),
+            Commands::PrintStatistics => storage.get_finished_books(),
             _ => storage.get_started_books(), // Fallback to currently reading
         },
     };

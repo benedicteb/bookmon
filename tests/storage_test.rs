@@ -1502,3 +1502,138 @@ fn test_get_read_books_by_time_period_empty() {
     let result = storage.get_read_books_by_time_period(from, to);
     assert!(result.is_empty());
 }
+
+#[test]
+fn test_get_earliest_finished_year() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Test Category".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // Create a book
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    // Add readings in different years
+    let reading1 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc.with_ymd_and_hms(2022, 1, 1, 0, 0, 0).unwrap(),
+        book_id: book_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading1);
+
+    let reading2 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+        book_id: book_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading2);
+
+    // Test getting earliest year
+    assert_eq!(storage.get_earliest_finished_year(), Some(2022));
+}
+
+#[test]
+fn test_get_books_finished_in_year() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Test Category".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // Create books
+    let book1 = Book::new(
+        "Book 1".to_string(),
+        "123".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book2 = Book::new(
+        "Book 2".to_string(),
+        "456".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book3 = Book::new(
+        "Book 3".to_string(),
+        "789".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+
+    let book1_id = book1.id.clone();
+    let book2_id = book2.id.clone();
+    let book3_id = book3.id.clone();
+
+    storage.add_book(book1);
+    storage.add_book(book2);
+    storage.add_book(book3);
+
+    // Add readings in different years
+    let reading1 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc.with_ymd_and_hms(2022, 1, 1, 0, 0, 0).unwrap(),
+        book_id: book1_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading1);
+
+    let reading2 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc.with_ymd_and_hms(2022, 6, 1, 0, 0, 0).unwrap(),
+        book_id: book2_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading2);
+
+    let reading3 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+        book_id: book3_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading3);
+
+    // Test getting books finished in 2022
+    let books_2022 = storage.get_books_finished_in_year(2022);
+    assert_eq!(books_2022.len(), 2);
+    assert!(books_2022.iter().any(|b| b.id == book1_id));
+    assert!(books_2022.iter().any(|b| b.id == book2_id));
+
+    // Test getting books finished in 2023
+    let books_2023 = storage.get_books_finished_in_year(2023);
+    assert_eq!(books_2023.len(), 1);
+    assert!(books_2023.iter().any(|b| b.id == book3_id));
+
+    // Test getting books finished in 2024 (should be empty)
+    let books_2024 = storage.get_books_finished_in_year(2024);
+    assert!(books_2024.is_empty());
+}
