@@ -2,8 +2,9 @@ use bookmon::storage::{
     Storage, Book, Author, Reading, Category, ReadingEvent,
     ReadingMetadata, sort_json_value
 };
-use chrono::Utc;
+use chrono::{TimeZone, Duration, Utc};
 use serde_json::value::Value;
+use uuid::Uuid;
 
 #[test]
 fn test_storage_initialization() {
@@ -1316,4 +1317,78 @@ fn test_remarked_as_want_to_read() {
     // Verify results
     assert_eq!(want_to_read_books.len(), 1); // Should be in want to read list since the most recent event is WantToRead
     assert_eq!(want_to_read_books[0].title, "Test Book");
+}
+
+#[test]
+fn test_get_read_books_by_time_period() {
+    let mut storage = Storage::new();
+
+    // Create test data
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Test Category".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // Create three books
+    let book1 = Book::new("Book 1".to_string(), "123".to_string(), category_id.clone(), author_id.clone(), 100);
+    let book2 = Book::new("Book 2".to_string(), "456".to_string(), category_id.clone(), author_id.clone(), 200);
+    let book3 = Book::new("Book 3".to_string(), "789".to_string(), category_id.clone(), author_id.clone(), 300);
+
+    let book1_id = book1.id.clone();
+    let book2_id = book2.id.clone();
+    let book3_id = book3.id.clone();
+
+    storage.add_book(book1);
+    storage.add_book(book2);
+    storage.add_book(book3);
+
+    // Create readings at different times
+    let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    
+    // Book 1: Finished before the period
+    let reading1 = Reading::new(book1_id.clone(), ReadingEvent::Finished);
+    storage.add_reading(reading1);
+
+    // Book 2: Finished during the period
+    let reading2 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: base_time + Duration::days(5),
+        book_id: book2_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading2);
+
+    // Book 3: Finished after the period
+    let reading3 = Reading {
+        id: Uuid::new_v4().to_string(),
+        created_on: base_time + Duration::days(15),
+        book_id: book3_id.clone(),
+        event: ReadingEvent::Finished,
+        metadata: ReadingMetadata { current_page: None },
+    };
+    storage.add_reading(reading3);
+
+    // Test period: 2024-01-03 to 2024-01-10
+    let from = base_time + Duration::days(3);
+    let to = base_time + Duration::days(10);
+
+    let result = storage.get_read_books_by_time_period(from, to);
+
+    // Should only find Book 2
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].id, book2_id);
+}
+
+#[test]
+fn test_get_read_books_by_time_period_empty() {
+    let storage = Storage::new();
+    let from = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let to = Utc.with_ymd_and_hms(2024, 1, 31, 0, 0, 0).unwrap();
+
+    let result = storage.get_read_books_by_time_period(from, to);
+    assert!(result.is_empty());
 } 

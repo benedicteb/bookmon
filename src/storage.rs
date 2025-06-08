@@ -431,6 +431,19 @@ impl Storage {
         });
         books
     }
+
+    /// Returns all books that were finished reading within the given time period
+    pub fn get_read_books_by_time_period(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Vec<&Book> {
+        // Get all finished readings within the time period
+        let finished_readings: Vec<&Reading> = self.readings.values()
+            .filter(|r| r.event == ReadingEvent::Finished && r.created_on >= from && r.created_on <= to)
+            .collect();
+
+        // Get the corresponding books
+        finished_readings.iter()
+            .filter_map(|reading| self.books.get(&reading.book_id))
+            .collect()
+    }
 }
 
 pub fn sort_json_value(value: Value) -> Value {
