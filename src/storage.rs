@@ -633,7 +633,8 @@ pub fn handle_missing_fields(
         write_storage(storage_path, storage)?;
     }
 
-    // Handle missing books — create book with new author and category
+    // Handle missing books — create book with new author and category,
+    // then update the orphaned reading's book_id to point to the new book
     for (reading_id, _book_id) in missing_books {
         let input = prompter.prompt_book_details(&reading_id)?;
 
@@ -655,7 +656,13 @@ pub fn handle_missing_fields(
             author_id,
             input.total_pages,
         );
+        let new_book_id = book.id.clone();
         storage.add_book(book);
+
+        // Update the reading's book_id to point to the newly created book
+        if let Some(reading) = storage.readings.get_mut(&reading_id) {
+            reading.book_id = new_book_id;
+        }
 
         // Save after book is added
         write_storage(storage_path, storage)?;
