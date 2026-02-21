@@ -1,5 +1,17 @@
 use unicode_width::UnicodeWidthStr;
 
+/// Column alignment for table cells.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum Alignment {
+    /// Left-aligned text (1-space left gutter, remaining padding on right).
+    #[default]
+    Left,
+    /// Center-aligned text (equal padding on both sides).
+    Center,
+    /// Right-aligned text (remaining padding on left, 1-space right gutter).
+    Right,
+}
+
 /// A row in a structured table that supports series grouping.
 ///
 /// - `Header`: Column headers (rendered with thick `=` separators).
@@ -21,16 +33,19 @@ pub enum TableRow {
     GroupHeader(String, usize),
 }
 
-/// Formats a structured table with support for group headers.
+/// Formats a structured table with support for group headers and column alignment.
 ///
-/// Group headers span the full table width as a centered label.
+/// Group headers span the full table width as a left-aligned, indented label.
 /// The `usize` in `GroupHeader(label, count)` specifies exactly how many
 /// subsequent `Data` rows belong to the group. Only those rows have their
 /// inter-row separators suppressed. Data rows outside any group get normal
 /// separators.
 ///
+/// `alignments` specifies per-column alignment. If shorter than the column
+/// count, missing columns default to `Alignment::Left`.
+///
 /// The first row must be a `Header` variant.
-pub fn format_structured_table(rows: &[TableRow]) -> String {
+pub fn format_structured_table(rows: &[TableRow], alignments: &[Alignment]) -> String {
     if rows.is_empty() {
         return String::new();
     }
@@ -71,8 +86,8 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
     output.push_str(&draw_line(&col_widths, '='));
     output.push('\n');
 
-    // Header row
-    output.push_str(&format_row(header, &col_widths));
+    // Header row (uses same alignment as data)
+    output.push_str(&format_row(header, &col_widths, alignments));
     output.push('\n');
 
     // Header separator (thick)
@@ -95,7 +110,7 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
                 output.push('\n');
             }
             TableRow::Data(cells) => {
-                output.push_str(&format_row(cells, &col_widths));
+                output.push_str(&format_row(cells, &col_widths, alignments));
                 output.push('\n');
 
                 if group_rows_remaining > 0 {
@@ -117,8 +132,8 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
 }
 
 /// Prints a structured table with group support to stdout.
-pub fn print_structured_table(rows: &[TableRow]) {
-    print!("{}", format_structured_table(rows));
+pub fn print_structured_table(rows: &[TableRow], alignments: &[Alignment]) {
+    print!("{}", format_structured_table(rows, alignments));
 }
 
 /// Formats a 2-D vector of strings as a pretty-printed table string.
@@ -127,7 +142,10 @@ pub fn print_structured_table(rows: &[TableRow]) {
 /// Subsequent rows are separated by `-` lines.
 /// Column widths are computed using Unicode display width so that
 /// multi-byte characters (e.g. æ, ø, å, emoji) align correctly.
-pub fn format_table(rows: &[Vec<String>]) -> String {
+///
+/// `alignments` specifies per-column alignment. If shorter than the column
+/// count, missing columns default to `Alignment::Left`.
+pub fn format_table(rows: &[Vec<String>], alignments: &[Alignment]) -> String {
     if rows.is_empty() {
         return String::new();
     }
@@ -158,7 +176,7 @@ pub fn format_table(rows: &[Vec<String>]) -> String {
     output.push('\n');
 
     // Header row
-    output.push_str(&format_row(&rows[0], &col_widths));
+    output.push_str(&format_row(&rows[0], &col_widths, alignments));
     output.push('\n');
 
     // Header separator (thick)
@@ -167,7 +185,7 @@ pub fn format_table(rows: &[Vec<String>]) -> String {
 
     // Data rows
     for row in &rows[1..] {
-        output.push_str(&format_row(row, &col_widths));
+        output.push_str(&format_row(row, &col_widths, alignments));
         output.push('\n');
         output.push_str(&draw_line(&col_widths, '-'));
         output.push('\n');
@@ -177,14 +195,15 @@ pub fn format_table(rows: &[Vec<String>]) -> String {
 }
 
 /// Prints a 2-D vector of strings as a pretty-printed table to stdout.
-pub fn print_table(rows: &[Vec<String>]) {
-    print!("{}", format_table(rows));
+pub fn print_table(rows: &[Vec<String>], alignments: &[Alignment]) {
+    print!("{}", format_table(rows, alignments));
 }
 
-/// Formats a group header label centered across the full table width.
+/// Formats a group header label left-aligned with a 2-space indent.
 ///
-/// Rendered as `| ── Label ── |` with `──` decorations flanking the label
-/// to visually distinguish it from data rows.
+/// Rendered as `|   ── Label ── ...padding... |` with `──` decorations
+/// flanking the label. The 2-space indent (plus 1-space gutter = 3 spaces)
+/// aligns the group header with indented series book titles below it.
 fn format_group_header(label: &str, total_width: usize) -> String {
     // Inner width is total_width minus the outer `|` characters (2)
     let inner_width = total_width.saturating_sub(2);
@@ -192,9 +211,10 @@ fn format_group_header(label: &str, total_width: usize) -> String {
     // Build decorated label: "── Label ──"
     let decorated = format!("\u{2500}\u{2500} {} \u{2500}\u{2500}", label);
     let display_width = UnicodeWidthStr::width(decorated.as_str());
-    let total_padding = inner_width.saturating_sub(display_width);
-    let left_pad = total_padding / 2;
-    let right_pad = total_padding - left_pad;
+
+    // Left-aligned with 2-space indent (plus 1-space gutter = 3 leading spaces)
+    let left_pad = 3; // 1 space gutter + 2 space indent
+    let right_pad = inner_width.saturating_sub(left_pad + display_width);
     format!(
         "|{}{}{}|",
         " ".repeat(left_pad),
@@ -214,13 +234,20 @@ fn draw_line(col_widths: &[usize], ch: char) -> String {
     line
 }
 
-fn format_row(row: &[String], col_widths: &[usize]) -> String {
+fn format_row(row: &[String], col_widths: &[usize], alignments: &[Alignment]) -> String {
     let mut result = String::from("|");
-    for (cell, &col_width) in row.iter().zip(col_widths.iter()) {
+    for (i, (cell, &col_width)) in row.iter().zip(col_widths.iter()).enumerate() {
+        let alignment = alignments.get(i).copied().unwrap_or_default();
         let display_width = UnicodeWidthStr::width(cell.as_str());
-        let total_padding = col_width - display_width;
-        let left_pad = total_padding / 2;
-        let right_pad = total_padding - left_pad;
+        let total_padding = col_width.saturating_sub(display_width);
+        let (left_pad, right_pad) = match alignment {
+            Alignment::Left => (1, total_padding.saturating_sub(1)),
+            Alignment::Right => (total_padding.saturating_sub(1), 1),
+            Alignment::Center => {
+                let left = total_padding / 2;
+                (left, total_padding - left)
+            }
+        };
         result.push_str(&" ".repeat(left_pad));
         result.push_str(cell);
         result.push_str(&" ".repeat(right_pad));

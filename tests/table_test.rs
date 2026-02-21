@@ -7,7 +7,7 @@ fn test_table_ascii_rows_are_aligned() {
         vec!["Alice".to_string(), "Oslo".to_string()],
         vec!["Bob".to_string(), "Bergen".to_string()],
     ];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
     // All lines between '+' markers should have the same total width
     let lines: Vec<&str> = output.lines().collect();
     let expected_width = lines[0].len();
@@ -28,7 +28,7 @@ fn test_table_with_norwegian_characters_rows_are_aligned() {
         vec!["Bøker og sånt".to_string(), "Ås".to_string()],
         vec!["Første bok".to_string(), "Ørjan Håland".to_string()],
     ];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
 
     // All lines should have the same display width
     let lines: Vec<&str> = output.lines().collect();
@@ -65,7 +65,7 @@ fn test_table_with_mixed_ascii_and_unicode() {
             "Økonomi".to_string(),
         ],
     ];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
 
     let lines: Vec<&str> = output.lines().collect();
     let expected_display_width = unicode_width::UnicodeWidthStr::width(lines[0]);
@@ -82,14 +82,14 @@ fn test_table_with_mixed_ascii_and_unicode() {
 #[test]
 fn test_table_empty_input() {
     let rows: Vec<Vec<String>> = vec![];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
     assert_eq!(output, "");
 }
 
 #[test]
 fn test_table_header_only() {
     let rows = vec![vec!["Name".to_string(), "Age".to_string()]];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
     assert!(!output.is_empty());
     // Should have header separator, header row, header separator (3 lines)
     let lines: Vec<&str> = output.lines().collect();
@@ -102,7 +102,7 @@ fn test_table_structure_and_content() {
         vec!["Name".to_string(), "Age".to_string()],
         vec!["Alice".to_string(), "30".to_string()],
     ];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // 5 lines: header separator, header, header separator, data row, data separator
@@ -138,7 +138,7 @@ fn test_table_with_emoji() {
         vec!["Icon".to_string(), "Name".to_string()],
         vec!["\u{1f4da}".to_string(), "Books".to_string()],
     ];
-    let output = format_table(&rows);
+    let output = format_table(&rows, &[]);
 
     let lines: Vec<&str> = output.lines().collect();
     let expected_display_width = unicode_width::UnicodeWidthStr::width(lines[0]);
@@ -157,7 +157,7 @@ fn test_table_with_emoji() {
 #[test]
 fn test_structured_table_empty_input() {
     let rows: Vec<TableRow> = vec![];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     assert_eq!(output, "");
 }
 
@@ -169,7 +169,7 @@ fn test_structured_table_data_only_no_groups() {
         TableRow::Data(vec!["Alice".to_string(), "30".to_string()]),
         TableRow::Data(vec!["Bob".to_string(), "25".to_string()]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure: =header= header =header= data -sep- data -sep-
@@ -195,7 +195,7 @@ fn test_structured_table_with_group_header() {
             "James S.A. Corey".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure:
@@ -249,7 +249,7 @@ fn test_structured_table_mixed_groups_and_standalone() {
             "Terry Pratchett".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure:
@@ -310,7 +310,7 @@ fn test_structured_table_standalone_after_group_has_separator() {
             "Terry Pratchett".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure:
@@ -368,7 +368,7 @@ fn test_structured_table_all_lines_same_display_width() {
             "Some Author".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     let expected_display_width = unicode_width::UnicodeWidthStr::width(lines[0]);
@@ -392,7 +392,7 @@ fn test_structured_table_group_header_with_unicode() {
             "J.R.R. Tolkien".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     let expected_display_width = unicode_width::UnicodeWidthStr::width(lines[0]);
@@ -419,7 +419,7 @@ fn test_structured_table_group_header_with_zero_count() {
             "Some Author".to_string(),
         ]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure:
@@ -450,7 +450,7 @@ fn test_structured_table_consecutive_group_headers() {
         TableRow::Data(vec!["#1 Book A".to_string(), "Author A".to_string()]),
         TableRow::Data(vec!["#2 Book B".to_string(), "Author A".to_string()]),
     ];
-    let output = format_structured_table(&rows);
+    let output = format_structured_table(&rows, &[]);
     let lines: Vec<&str> = output.lines().collect();
 
     // Structure:

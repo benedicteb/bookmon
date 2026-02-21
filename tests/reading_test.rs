@@ -423,7 +423,7 @@ fn test_group_header_present_when_books_have_series() {
             _ => None,
         })
         .collect();
-    assert_eq!(data_titles, vec!["#1 Series Book"]);
+    assert_eq!(data_titles, vec!["  #1 Series Book"]);
 
     // Header should NOT contain a Series column (replaced by GroupHeader)
     if let TableRow::Header(header) = &table[0] {

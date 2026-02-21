@@ -1,6 +1,6 @@
 use crate::series::format_position_prefix;
 use crate::storage::{compare_positions, Book, Reading, ReadingEvent, Storage};
-use crate::table::{print_structured_table, print_table, TableRow};
+use crate::table::{print_structured_table, print_table, Alignment, TableRow};
 use chrono::Utc;
 use std::io;
 
@@ -133,7 +133,7 @@ pub fn build_started_books_table(storage: &Storage) -> io::Result<Vec<TableRow>>
                     table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
-                            "{}{}",
+                            "  {}{}",
                             format_position_prefix(book.position_in_series.as_deref()),
                             book.title
                         );
@@ -218,7 +218,13 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     if table_rows.is_empty() {
         println!("No books currently being read.");
     } else {
-        print_structured_table(&table_rows);
+        let alignments = [
+            Alignment::Left,  // Title
+            Alignment::Left,  // Author
+            Alignment::Right, // Days since started
+            Alignment::Right, // Progress
+        ];
+        print_structured_table(&table_rows, &alignments);
     }
     Ok(())
 }
@@ -264,7 +270,7 @@ pub fn show_finished_books_list(
                     table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
-                            "{}{}",
+                            "  {}{}",
                             format_position_prefix(book.position_in_series.as_deref()),
                             book.title
                         );
@@ -289,7 +295,12 @@ pub fn show_finished_books_list(
             }
         }
 
-        print_structured_table(&table_rows);
+        let alignments = [
+            Alignment::Left,  // Title
+            Alignment::Left,  // Author
+            Alignment::Right, // Finished on
+        ];
+        print_structured_table(&table_rows, &alignments);
     } else {
         // No series — use the flat table
         let mut sorted_books = finished_books;
@@ -316,7 +327,12 @@ pub fn show_finished_books_list(
             ]);
         }
 
-        print_table(&table_data);
+        let alignments = [
+            Alignment::Left,  // Title
+            Alignment::Left,  // Author
+            Alignment::Right, // Finished on
+        ];
+        print_table(&table_data, &alignments);
     }
     Ok(())
 }
@@ -376,7 +392,7 @@ pub fn print_book_list_table(
                     table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
-                            "{}{}",
+                            "  {}{}",
                             format_position_prefix(book.position_in_series.as_deref()),
                             book.title
                         );
@@ -392,7 +408,15 @@ pub fn print_book_list_table(
             }
         }
 
-        print_structured_table(&table_rows);
+        let alignments = [
+            Alignment::Left,   // Title
+            Alignment::Left,   // Author
+            Alignment::Left,   // Category
+            Alignment::Right,  // Added on
+            Alignment::Center, // Bought
+            Alignment::Center, // Want to read
+        ];
+        print_structured_table(&table_rows, &alignments);
     } else {
         let mut sorted_books = books;
         sorted_books.sort_by(|a, b| {
@@ -408,7 +432,15 @@ pub fn print_book_list_table(
             table_data.push(row);
         }
 
-        print_table(&table_data);
+        let alignments = [
+            Alignment::Left,   // Title
+            Alignment::Left,   // Author
+            Alignment::Left,   // Category
+            Alignment::Right,  // Added on
+            Alignment::Center, // Bought
+            Alignment::Center, // Want to read
+        ];
+        print_table(&table_data, &alignments);
     }
     Ok(())
 }

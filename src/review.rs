@@ -78,7 +78,7 @@ pub fn get_review_text_from_editor(
 
 /// Displays a table of all reviews with book title, author, date, and a text preview.
 pub fn show_reviews(storage: &Storage) -> io::Result<()> {
-    use crate::table::print_table;
+    use crate::table::{print_table, Alignment};
 
     let mut reviews: Vec<&Review> = storage.reviews.values().collect();
 
@@ -114,7 +114,13 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
         ]);
     }
 
-    print_table(&table_data);
+    let alignments = [
+        Alignment::Left,  // Title
+        Alignment::Left,  // Author
+        Alignment::Right, // Date
+        Alignment::Left,  // Preview
+    ];
+    print_table(&table_data, &alignments);
     Ok(())
 }
 
