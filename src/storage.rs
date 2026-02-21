@@ -320,6 +320,15 @@ impl Storage {
         books
     }
 
+    /// Returns the series name for a given book, or an empty string if the book has no series
+    pub fn series_name_for_book(&self, book: &Book) -> &str {
+        book.series_id
+            .as_ref()
+            .and_then(|id| self.series.get(id))
+            .map(|s| s.name.as_str())
+            .unwrap_or("")
+    }
+
     /// Returns the author name for a given book, or an empty string if the author is not found
     pub fn author_name_for_book(&self, book: &Book) -> &str {
         self.authors

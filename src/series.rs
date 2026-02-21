@@ -6,6 +6,14 @@ pub fn store_series(storage: &mut Storage, series: Series) -> Result<(), String>
     Ok(())
 }
 
+/// Formats a series label for display, e.g. "Harry Potter #3" or "Harry Potter" (if no position).
+pub fn format_series_label(series: &Series, position: Option<i32>) -> String {
+    match position {
+        Some(pos) => format!("{} #{}", series.name, pos),
+        None => series.name.clone(),
+    }
+}
+
 /// Finds an existing series by name (case-insensitive) or creates a new one.
 /// Returns the series ID.
 pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
