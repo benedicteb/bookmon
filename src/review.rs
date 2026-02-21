@@ -100,7 +100,9 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
     for review in reviews {
         let book = storage.books.get(&review.book_id);
         let title = book.map(|b| b.title.as_str()).unwrap_or("Unknown Book");
-        let author_name = book.map(|b| storage.author_name_for_book(b)).unwrap_or("");
+        let author_name = book
+            .map(|b| storage.author_name_for_book(b))
+            .unwrap_or("Unknown Author");
         let date = review.created_on.format("%Y-%m-%d").to_string();
         let preview = truncate_text(&review.text, 60);
 
