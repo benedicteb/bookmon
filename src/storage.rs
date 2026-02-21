@@ -31,6 +31,9 @@ pub struct Book {
     pub isbn: String,
     pub category_id: String,
     pub author_id: String,
+    /// Total number of pages in the book.
+    /// NOTE: Uses i32 (not u32) for serde compatibility with existing JSON data.
+    /// Values <= 0 are treated as "unknown" and trigger repair prompts on load.
     #[serde(default)]
     pub total_pages: i32,
 }
