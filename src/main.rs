@@ -1,6 +1,5 @@
-mod config;
 use bookmon::{
-    book,
+    book, config,
     lookup::http_client,
     reading,
     storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
@@ -151,127 +150,126 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut storage = storage::load_and_repair_storage(&settings.storage_file, &InquirePrompter)?;
 
-    // Handle the default case (no command) - show currently-reading
-    if cli.command.is_none() {
+    // Handle commands (or default to showing currently-reading)
+    if let Some(ref command) = cli.command {
+        match command {
+            Commands::AddBook => {
+                match book::get_book_input(&mut storage) {
+                    Ok((book, event)) => {
+                        match book::store_book(&mut storage, book.clone()) {
+                            Ok(_) => {
+                                // Store all reading events
+                                for event_type in event {
+                                    let reading =
+                                        storage::Reading::new(book.id.clone(), event_type);
+                                    if let Err(e) = reading::store_reading(&mut storage, reading) {
+                                        eprintln!("Failed to store reading event: {}", e);
+                                    }
+                                }
+
+                                storage::write_storage(&settings.storage_file, &storage)?;
+                                println!("Book added successfully!");
+                            }
+                            Err(e) => eprintln!("Failed to add book: {}", e),
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to get book input: {}", e),
+                }
+            }
+            cmd @ (Commands::PrintFinished
+            | Commands::PrintBacklog
+            | Commands::PrintWantToRead
+            | Commands::PrintStatistics) => {
+                if cli.interactive {
+                    interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
+                } else {
+                    match cmd {
+                        Commands::PrintFinished => match reading::show_finished_books(&storage) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show finished books: {}", e),
+                        },
+                        Commands::PrintBacklog => match reading::show_unstarted_books(&storage) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+                        },
+                        Commands::PrintWantToRead => {
+                            let want_to_read_books = storage.get_want_to_read_books();
+                            match reading::print_book_list_table(
+                                &storage,
+                                want_to_read_books,
+                                "No books in want to read list.",
+                            ) {
+                                Ok(_) => {}
+                                Err(e) => eprintln!("Failed to show want to read books: {}", e),
+                            }
+                        }
+                        Commands::PrintStatistics => {
+                            if let Some(earliest_year) = storage.get_earliest_finished_year() {
+                                let current_year = chrono::Utc::now().year();
+                                println!("\nReading Statistics by Year:");
+                                println!("------------------------");
+
+                                for year in earliest_year..=current_year {
+                                    let books = storage.get_books_finished_in_year(year);
+                                    if !books.is_empty() {
+                                        println!("\n{}: {} books", year, books.len());
+                                        for book in books {
+                                            let author_name = storage.author_name_for_book(book);
+                                            let author_name = if author_name.is_empty() {
+                                                "Unknown Author"
+                                            } else {
+                                                author_name
+                                            };
+                                            println!("  - \"{}\" by {}", book.title, author_name);
+                                        }
+                                    }
+                                }
+                            } else {
+                                println!("No finished books found in your reading history.");
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            Commands::GetConfigPath => {
+                println!("Config file path: {}", config::get_config_path()?.display());
+            }
+            Commands::GetIsbn { isbn } => {
+                let client = http_client::HttpClient::new();
+                let book =
+                    tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(isbn))?;
+                if let Some(book) = book {
+                    println!("Title: {}", book.title);
+                    println!("Authors:");
+                    for author in book.authors {
+                        println!("  - {}", author.name);
+                    }
+                    if let Some(publish_date) = book.publish_date {
+                        println!("Published: {}", publish_date);
+                    }
+                    if let Some(description) = book.description {
+                        println!("Description: {}", description);
+                    }
+                    if let Some(cover_url) = book.cover_url {
+                        println!("Cover URL: {}", cover_url);
+                    }
+                } else {
+                    println!("No book found for ISBN {}", isbn);
+                }
+            }
+            Commands::ChangeStoragePath { .. } => unreachable!(),
+        }
+    } else {
+        // Default case (no command) - show currently-reading
         if cli.interactive {
-            // Interactive mode for currently-reading
             interactive_mode(&storage, &settings.storage_file, None)?;
         } else {
-            // Just show currently-reading
             match reading::show_started_books(&storage) {
                 Ok(_) => {}
                 Err(e) => eprintln!("Failed to show started books: {}", e),
             }
         }
-        return Ok(());
-    }
-
-    // Handle commands with interactive flag
-    match cli.command.as_ref().unwrap() {
-        Commands::AddBook => {
-            match book::get_book_input(&mut storage) {
-                Ok((book, event)) => {
-                    match book::store_book(&mut storage, book.clone()) {
-                        Ok(_) => {
-                            // Store all reading events
-                            for event_type in event {
-                                let reading = storage::Reading::new(book.id.clone(), event_type);
-                                if let Err(e) = reading::store_reading(&mut storage, reading) {
-                                    eprintln!("Failed to store reading event: {}", e);
-                                }
-                            }
-
-                            storage::write_storage(&settings.storage_file, &storage)?;
-                            println!("Book added successfully!");
-                        }
-                        Err(e) => eprintln!("Failed to add book: {}", e),
-                    }
-                }
-                Err(e) => eprintln!("Failed to get book input: {}", e),
-            }
-        }
-        cmd @ (Commands::PrintFinished
-        | Commands::PrintBacklog
-        | Commands::PrintWantToRead
-        | Commands::PrintStatistics) => {
-            if cli.interactive {
-                interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
-            } else {
-                match cmd {
-                    Commands::PrintFinished => match reading::show_finished_books(&storage) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Failed to show finished books: {}", e),
-                    },
-                    Commands::PrintBacklog => match reading::show_unstarted_books(&storage) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Failed to show unstarted books: {}", e),
-                    },
-                    Commands::PrintWantToRead => {
-                        let want_to_read_books = storage.get_want_to_read_books();
-                        match reading::print_book_list_table(
-                            &storage,
-                            want_to_read_books,
-                            "No books in want to read list.",
-                        ) {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Failed to show want to read books: {}", e),
-                        }
-                    }
-                    Commands::PrintStatistics => {
-                        if let Some(earliest_year) = storage.get_earliest_finished_year() {
-                            let current_year = chrono::Utc::now().year();
-                            println!("\nReading Statistics by Year:");
-                            println!("------------------------");
-
-                            for year in earliest_year..=current_year {
-                                let books = storage.get_books_finished_in_year(year);
-                                if !books.is_empty() {
-                                    println!("\n{}: {} books", year, books.len());
-                                    for book in books {
-                                        let author_name = storage.author_name_for_book(book);
-                                        let author_name = if author_name.is_empty() {
-                                            "Unknown Author"
-                                        } else {
-                                            author_name
-                                        };
-                                        println!("  - \"{}\" by {}", book.title, author_name);
-                                    }
-                                }
-                            }
-                        } else {
-                            println!("No finished books found in your reading history.");
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        }
-        Commands::GetConfigPath => {
-            println!("Config file path: {}", config::get_config_path()?.display());
-        }
-        Commands::GetIsbn { isbn } => {
-            let client = http_client::HttpClient::new();
-            let book = tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(isbn))?;
-            if let Some(book) = book {
-                println!("Title: {}", book.title);
-                println!("Authors:");
-                for author in book.authors {
-                    println!("  - {}", author.name);
-                }
-                if let Some(publish_date) = book.publish_date {
-                    println!("Published: {}", publish_date);
-                }
-                if let Some(description) = book.description {
-                    println!("Description: {}", description);
-                }
-                if let Some(cover_url) = book.cover_url {
-                    println!("Cover URL: {}", cover_url);
-                }
-            } else {
-                println!("No book found for ISBN {}", isbn);
-            }
-        }
-        Commands::ChangeStoragePath { .. } => unreachable!(),
     }
 
     Ok(())
