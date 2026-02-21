@@ -1,6 +1,6 @@
 use bookmon::storage::{
     handle_missing_fields, sort_json_value, write_storage, Author, Book, BookRepairInput, Category,
-    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Series, Storage,
+    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
