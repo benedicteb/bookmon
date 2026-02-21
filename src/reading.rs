@@ -205,6 +205,13 @@ pub fn print_book_list_table(
         }
     });
 
+    // Pre-compute want-to-read book IDs to avoid O(n*m) repeated calls
+    let want_to_read_ids: std::collections::HashSet<&str> = storage
+        .get_want_to_read_books()
+        .iter()
+        .map(|b| b.id.as_str())
+        .collect();
+
     // For each book, find the corresponding author and category
     for book in sorted_books {
         let author_name = storage.author_name_for_book(book);
@@ -220,11 +227,8 @@ pub fn print_book_list_table(
             .values()
             .any(|r| r.book_id == book.id && r.event == ReadingEvent::Bought);
 
-        // Check if the book is marked as want to read using the common logic
-        let is_want_to_read = storage
-            .get_want_to_read_books()
-            .iter()
-            .any(|b| b.id == book.id);
+        // Check if the book is marked as want to read (using pre-computed set)
+        let is_want_to_read = want_to_read_ids.contains(book.id.as_str());
 
         // Format the added date
         let added_date = book.added_on.format("%Y-%m-%d").to_string();
