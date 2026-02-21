@@ -3,6 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[tokio::test]
+#[ignore] // Live API test — run with `cargo test -- --ignored`
 async fn test_get_book_by_isbn() {
     let client = HttpClient::new();
 

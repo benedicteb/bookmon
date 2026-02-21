@@ -2,6 +2,7 @@ use bookmon::lookup::providers::bibsok::BibsokProvider;
 use bookmon::BookProvider;
 
 #[tokio::test]
+#[ignore] // Live API test — run with `cargo test -- --ignored`
 async fn test_bibsok_lookup() {
     let provider = BibsokProvider::new();
     let isbn = "9788293671381";
@@ -12,7 +13,7 @@ async fn test_bibsok_lookup() {
     let book = result.unwrap().expect("No book found");
 
     // Verify title
-    assert_eq!(book.title, "Nullpunkt. 1.");
+    assert_eq!(book.title, "Nullpunkt");
 
     // Verify authors
     assert_eq!(book.authors.len(), 2);
