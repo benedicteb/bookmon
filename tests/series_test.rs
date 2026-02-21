@@ -348,6 +348,66 @@ fn test_get_books_in_series_with_fractional_positions() {
     assert_eq!(books[3].id, book_half_id); // 2.5
 }
 
+// --- Series status and total_books tests ---
+
+#[test]
+fn test_series_with_status_and_total_books() {
+    let mut series = Series::new("Harry Potter".to_string());
+    series.status = Some(bookmon::storage::SeriesStatus::Completed);
+    series.total_books = Some(7);
+
+    assert_eq!(
+        series.status,
+        Some(bookmon::storage::SeriesStatus::Completed)
+    );
+    assert_eq!(series.total_books, Some(7));
+}
+
+#[test]
+fn test_series_default_status_and_total_books() {
+    let series = Series::new("New Series".to_string());
+    assert_eq!(series.status, None);
+    assert_eq!(series.total_books, None);
+}
+
+#[test]
+fn test_series_status_backward_compatibility() {
+    // Old JSON without status/total_books fields should load fine
+    let json = r#"{
+        "id": "test-id",
+        "name": "Old Series",
+        "created_on": "2024-01-01T00:00:00Z"
+    }"#;
+
+    let series: Series = serde_json::from_str(json).unwrap();
+    assert_eq!(series.name, "Old Series");
+    assert_eq!(series.status, None);
+    assert_eq!(series.total_books, None);
+}
+
+#[test]
+fn test_series_status_round_trip() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    let mut storage = Storage::new();
+    let mut series = Series::new("Stormlight".to_string());
+    series.status = Some(bookmon::storage::SeriesStatus::Ongoing);
+    series.total_books = Some(10);
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    bookmon::storage::write_storage(&path, &storage).unwrap();
+    let loaded = bookmon::storage::load_storage(&path).unwrap();
+
+    let loaded_series = loaded.get_series(&series_id).unwrap();
+    assert_eq!(
+        loaded_series.status,
+        Some(bookmon::storage::SeriesStatus::Ongoing)
+    );
+    assert_eq!(loaded_series.total_books, Some(10));
+}
+
 #[test]
 fn test_store_series() {
     let mut storage = Storage::new();
