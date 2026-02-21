@@ -115,10 +115,21 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 
 /// Displays a table of finished books with author and finish date.
 pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
-    let finished_books = storage.get_finished_books();
+    show_finished_books_list(
+        storage,
+        storage.get_finished_books(),
+        "No finished books found.",
+    )
+}
 
+/// Displays a table of the given finished books with author and finish date.
+pub fn show_finished_books_list(
+    storage: &Storage,
+    finished_books: Vec<&Book>,
+    empty_message: &str,
+) -> io::Result<()> {
     if finished_books.is_empty() {
-        println!("No finished books found.");
+        println!("{}", empty_message);
         return Ok(());
     }
 

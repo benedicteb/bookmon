@@ -103,11 +103,23 @@ enum Commands {
     /// Add a new book to the collection
     AddBook,
     /// Show books that have been finished
-    PrintFinished,
+    PrintFinished {
+        /// Filter by series name (case-insensitive substring match)
+        #[arg(short, long)]
+        series: Option<String>,
+    },
     /// Show books that have not been started yet
-    PrintBacklog,
+    PrintBacklog {
+        /// Filter by series name (case-insensitive substring match)
+        #[arg(short, long)]
+        series: Option<String>,
+    },
     /// Show books that are in the want to read list
-    PrintWantToRead,
+    PrintWantToRead {
+        /// Filter by series name (case-insensitive substring match)
+        #[arg(short, long)]
+        series: Option<String>,
+    },
     /// Show reading statistics by year
     PrintStatistics,
     /// Change the storage file path
@@ -223,85 +235,134 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            cmd @ (Commands::PrintFinished
-            | Commands::PrintBacklog
-            | Commands::PrintWantToRead
-            | Commands::PrintStatistics) => {
+            Commands::PrintFinished { ref series } => {
                 if cli.interactive {
-                    interactive_mode(&storage, &settings.storage_file, Some(cmd))?;
+                    interactive_mode(&storage, &settings.storage_file, Some(command))?;
                 } else {
-                    match cmd {
-                        Commands::PrintFinished => match reading::show_finished_books(&storage) {
+                    let books = storage.get_finished_books();
+                    if let Some(filter) = series {
+                        let filtered =
+                            bookmon::series::filter_books_by_series(&storage, &books, filter);
+                        let empty_msg =
+                            bookmon::series::format_series_filter_empty_message(&storage, filter);
+                        match reading::show_finished_books_list(&storage, filtered, &empty_msg) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show finished books: {}", e),
-                        },
-                        Commands::PrintBacklog => match reading::show_unstarted_books(&storage) {
+                        }
+                    } else {
+                        match reading::show_finished_books_list(
+                            &storage,
+                            books,
+                            "No finished books found.",
+                        ) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show finished books: {}", e),
+                        }
+                    }
+                }
+            }
+            Commands::PrintBacklog { ref series } => {
+                if cli.interactive {
+                    interactive_mode(&storage, &settings.storage_file, Some(command))?;
+                } else {
+                    let books = storage.get_unstarted_books();
+                    if let Some(filter) = series {
+                        let filtered =
+                            bookmon::series::filter_books_by_series(&storage, &books, filter);
+                        let empty_msg =
+                            bookmon::series::format_series_filter_empty_message(&storage, filter);
+                        match reading::print_book_list_table(&storage, filtered, &empty_msg) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show unstarted books: {}", e),
-                        },
-                        Commands::PrintWantToRead => {
-                            let want_to_read_books = storage.get_want_to_read_books();
-                            match reading::print_book_list_table(
-                                &storage,
-                                want_to_read_books,
-                                "No books in want to read list.",
-                            ) {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("Failed to show want to read books: {}", e),
-                            }
                         }
-                        Commands::PrintStatistics => {
-                            if let Some(earliest_year) = storage.get_earliest_finished_year() {
-                                let current_year = chrono::Utc::now().year();
-                                println!("\nReading Statistics by Year:");
-                                println!("------------------------");
+                    } else {
+                        match reading::print_book_list_table(
+                            &storage,
+                            books,
+                            "No unstarted books found.",
+                        ) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show unstarted books: {}", e),
+                        }
+                    }
+                }
+            }
+            Commands::PrintWantToRead { ref series } => {
+                if cli.interactive {
+                    interactive_mode(&storage, &settings.storage_file, Some(command))?;
+                } else {
+                    let books = storage.get_want_to_read_books();
+                    if let Some(filter) = series {
+                        let filtered =
+                            bookmon::series::filter_books_by_series(&storage, &books, filter);
+                        let empty_msg =
+                            bookmon::series::format_series_filter_empty_message(&storage, filter);
+                        match reading::print_book_list_table(&storage, filtered, &empty_msg) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show want to read books: {}", e),
+                        }
+                    } else {
+                        match reading::print_book_list_table(
+                            &storage,
+                            books,
+                            "No books in want to read list.",
+                        ) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show want to read books: {}", e),
+                        }
+                    }
+                }
+            }
+            Commands::PrintStatistics => {
+                if cli.interactive {
+                    interactive_mode(&storage, &settings.storage_file, Some(command))?;
+                } else if let Some(earliest_year) = storage.get_earliest_finished_year() {
+                    let current_year = chrono::Utc::now().year();
+                    println!("\nReading Statistics by Year:");
+                    println!("------------------------");
 
-                                for year in earliest_year..=current_year {
-                                    let books = storage.get_books_finished_in_year(year);
-                                    if !books.is_empty() {
-                                        // Show goal progress if a goal is set for this year
-                                        if let Some(target) = storage.get_goal(year) {
-                                            let finished = books.len() as u32;
-                                            let pct = goal_percentage(finished, target);
-                                            let remaining = target.saturating_sub(finished);
-                                            if year == current_year && remaining > 0 {
-                                                println!(
-                                                    "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete, {} remaining)",
-                                                    year,
-                                                    books.len(),
-                                                    target,
-                                                    pct,
-                                                    remaining
-                                                );
-                                            } else {
-                                                println!(
-                                                    "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete)",
-                                                    year,
-                                                    books.len(),
-                                                    target,
-                                                    pct
-                                                );
-                                            }
-                                        } else {
-                                            println!("\n{}: {} books", year, books.len());
-                                        }
-                                        for book in books {
-                                            let author_name = storage.author_name_for_book(book);
-                                            let author_name = if author_name.is_empty() {
-                                                "Unknown Author"
-                                            } else {
-                                                author_name
-                                            };
-                                            println!("  - \"{}\" by {}", book.title, author_name);
-                                        }
-                                    }
+                    for year in earliest_year..=current_year {
+                        let books = storage.get_books_finished_in_year(year);
+                        if !books.is_empty() {
+                            // Show goal progress if a goal is set for this year
+                            if let Some(target) = storage.get_goal(year) {
+                                let finished = books.len() as u32;
+                                let pct = goal_percentage(finished, target);
+                                let remaining = target.saturating_sub(finished);
+                                if year == current_year && remaining > 0 {
+                                    println!(
+                                            "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete, {} remaining)",
+                                            year,
+                                            books.len(),
+                                            target,
+                                            pct,
+                                            remaining
+                                        );
+                                } else {
+                                    println!(
+                                        "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete)",
+                                        year,
+                                        books.len(),
+                                        target,
+                                        pct
+                                    );
                                 }
                             } else {
-                                println!("No finished books found in your reading history.");
+                                println!("\n{}: {} books", year, books.len());
+                            }
+                            for book in books {
+                                let author_name = storage.author_name_for_book(book);
+                                let author_name = if author_name.is_empty() {
+                                    "Unknown Author"
+                                } else {
+                                    author_name
+                                };
+                                println!("  - \"{}\" by {}", book.title, author_name);
                             }
                         }
-                        _ => unreachable!(),
                     }
+                } else {
+                    println!("No finished books found in your reading history.");
                 }
             }
             Commands::GetConfigPath => {
@@ -600,9 +661,9 @@ fn interactive_mode(
     let filtered_books: Vec<&Book> = match command {
         None => storage.get_currently_reading_and_want_to_read_books(), // Default case - currently reading + want to read
         Some(cmd) => match cmd {
-            Commands::PrintFinished => storage.get_finished_books(),
-            Commands::PrintBacklog => storage.get_unstarted_books(),
-            Commands::PrintWantToRead => storage.get_want_to_read_books(),
+            Commands::PrintFinished { .. } => storage.get_finished_books(),
+            Commands::PrintBacklog { .. } => storage.get_unstarted_books(),
+            Commands::PrintWantToRead { .. } => storage.get_want_to_read_books(),
             Commands::PrintStatistics => storage.get_finished_books(),
             _ => storage.get_started_books(), // Fallback to currently reading
         },
