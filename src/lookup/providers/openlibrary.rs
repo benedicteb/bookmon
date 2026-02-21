@@ -4,8 +4,13 @@ use async_trait::async_trait;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::sync::LazyLock;
 
 const HOSTNAME: &str = "https://openlibrary.org";
+
+/// Compiled once on first use — matches series strings like "Harry Potter #1".
+static SERIES_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(.+?)\s*#(\d+)\s*$").expect("valid static regex"));
 
 /// Parses a series string from OpenLibrary's Edition API.
 ///
@@ -15,8 +20,7 @@ const HOSTNAME: &str = "https://openlibrary.org";
 ///   "" -> ("", None)
 pub fn parse_series_string(s: &str) -> (String, Option<i32>) {
     let s = s.trim();
-    let re = Regex::new(r"^(.+?)\s*#(\d+)\s*$").expect("valid static regex for series parsing");
-    if let Some(caps) = re.captures(s) {
+    if let Some(caps) = SERIES_REGEX.captures(s) {
         let name = caps[1].trim().to_string();
         let position = caps[2].parse::<i32>().ok();
         (name, position)
