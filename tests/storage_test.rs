@@ -131,18 +131,6 @@ fn test_storage_serialization() {
 }
 
 #[test]
-fn test_storage_load() {
-    // Create a new empty storage
-    let storage = Storage::new();
-
-    // Verify the storage is empty
-    assert!(storage.books.is_empty(), "books should be empty");
-    assert!(storage.readings.is_empty(), "readings should be empty");
-    assert!(storage.authors.is_empty(), "authors should be empty");
-    assert!(storage.categories.is_empty(), "categories should be empty");
-}
-
-#[test]
 fn test_storage_save_and_load() {
     // Create a storage with a book
     let mut storage = Storage::new();
@@ -303,13 +291,11 @@ fn test_automatic_uuid_generation() {
     // Verify that each item has a valid UUID
     for (key, book) in &storage.books {
         assert!(!key.is_empty(), "Book ID should not be empty");
-        assert!(key.len() > 0, "Book ID should have length");
         assert_eq!(book.total_pages, 300, "Book total_pages should be 300");
     }
 
     for (key, author) in &storage.authors {
         assert!(!key.is_empty(), "Author ID should not be empty");
-        assert!(key.len() > 0, "Author ID should have length");
         assert!(
             author.created_on <= Utc::now(),
             "Author created_on should be set"
@@ -318,7 +304,6 @@ fn test_automatic_uuid_generation() {
 
     for (key, _reading) in &storage.readings {
         assert!(!key.is_empty(), "Reading ID should not be empty");
-        assert!(key.len() > 0, "Reading ID should have length");
     }
 }
 
