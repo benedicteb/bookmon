@@ -659,6 +659,7 @@ pub fn handle_missing_fields(
     let mut missing_categories: Vec<(String, String)> = Vec::new(); // (book_id, book_title)
     let mut missing_books: Vec<(String, String)> = Vec::new(); // (reading_id, book_id)
     let mut books_missing_fields: Vec<String> = Vec::new(); // book_ids
+    let mut orphaned_series: Vec<String> = Vec::new(); // book_ids with invalid series_id
 
     // Check books for missing fields and references
     for (book_id, book) in storage.books.iter() {
@@ -670,6 +671,11 @@ pub fn handle_missing_fields(
         }
         if book.total_pages <= 0 {
             books_missing_fields.push(book_id.clone());
+        }
+        if let Some(ref sid) = book.series_id {
+            if !storage.series.contains_key(sid) {
+                orphaned_series.push(book_id.clone());
+            }
         }
     }
 
@@ -711,6 +717,17 @@ pub fn handle_missing_fields(
         }
 
         // Save after each fix
+        write_storage(storage_path, storage)?;
+    }
+
+    // Handle orphaned series_id — silently clear since series is optional
+    if !orphaned_series.is_empty() {
+        for book_id in &orphaned_series {
+            if let Some(book) = storage.books.get_mut(book_id) {
+                book.series_id = None;
+                book.position_in_series = None;
+            }
+        }
         write_storage(storage_path, storage)?;
     }
 
