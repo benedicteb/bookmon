@@ -1,5 +1,6 @@
 use crate::lookup::book_lookup_dto::BookLookupDTO;
 use crate::lookup::http_client::HttpClient;
+use crate::series::get_or_create_series;
 use crate::storage::{Author, Book, Category, ReadingEvent, Storage};
 use indicatif::{ProgressBar, ProgressStyle};
 use inquire::{Select, Text};
@@ -261,6 +262,9 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         }
     };
 
+    // Series selection (optional)
+    let (series_id, position_in_series) = select_series(storage, &book_info)?;
+
     // Ask about book status
     let options = vec!["Already bought", "Want to read", "Both", "Neither"];
     let selection = Select::new("What is the status of this book?", options)
@@ -274,15 +278,117 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         _ => vec![],
     };
 
-    let book = Book::new(
+    let mut book = Book::new(
         title.trim().to_string(),
         isbn.trim().to_string(),
         category_id,
         author_id,
         total_pages,
     );
+    book.series_id = series_id;
+    book.position_in_series = position_in_series;
 
     Ok((book, event))
+}
+
+/// Interactively prompts the user to select or create a series for a book.
+/// Returns (series_id, position_in_series) or (None, None) if the user skips.
+fn select_series(
+    storage: &mut Storage,
+    book_info: &BookLookupDTO,
+) -> io::Result<(Option<String>, Option<i32>)> {
+    // Build the options list
+    let existing_series: Vec<(String, String)> = storage
+        .series
+        .iter()
+        .map(|(id, s)| (s.name.clone(), id.clone()))
+        .collect();
+
+    let suggested_series = book_info.series_name.clone().unwrap_or_default();
+    let suggested_position = book_info.series_position;
+
+    let mut options = Vec::new();
+
+    // Add suggested series from lookup (if available and not already in storage)
+    if !suggested_series.is_empty() {
+        let already_exists = existing_series
+            .iter()
+            .any(|(name, _)| name.to_lowercase() == suggested_series.to_lowercase());
+        if already_exists {
+            // The suggested series matches an existing one — it will appear in the list
+        } else {
+            options.push(format!("Use suggested: {}", suggested_series));
+        }
+    }
+
+    // Add existing series, sorted alphabetically
+    let mut sorted_existing: Vec<&(String, String)> = existing_series.iter().collect();
+    sorted_existing.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    for (name, _) in &sorted_existing {
+        options.push(name.clone());
+    }
+
+    options.push("+ Create new series".to_string());
+    options.push("No series (standalone)".to_string());
+
+    let selection = Select::new("Series:", options.iter().map(|s| s.as_str()).collect())
+        .prompt()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    if selection == "No series (standalone)" {
+        return Ok((None, None));
+    }
+
+    let series_id = if selection == "+ Create new series" {
+        let name = if !suggested_series.is_empty() {
+            Text::new("Enter series name:")
+                .with_default(&suggested_series)
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        } else {
+            Text::new("Enter series name:")
+                .prompt()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        };
+        get_or_create_series(storage, name.trim())
+    } else if selection.starts_with("Use suggested: ") {
+        get_or_create_series(storage, &suggested_series)
+    } else {
+        // User selected an existing series
+        existing_series
+            .iter()
+            .find(|(name, _)| name.as_str() == selection)
+            .map(|(_, id)| id.clone())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Selected series not found"))?
+    };
+
+    // Ask for position in series
+    let default_position = if selection.starts_with("Use suggested: ") || {
+        // If user selected the existing series that matches the suggested one
+        !suggested_series.is_empty()
+            && existing_series.iter().any(|(name, id)| {
+                name.to_lowercase() == suggested_series.to_lowercase() && *id == series_id
+            })
+    } {
+        suggested_position
+    } else {
+        None
+    };
+
+    let position_str = if let Some(pos) = default_position {
+        Text::new("Position in series (or leave empty to skip):")
+            .with_default(&pos.to_string())
+            .prompt()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+    } else {
+        Text::new("Position in series (or leave empty to skip):")
+            .prompt()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+    };
+
+    let position = position_str.trim().parse::<i32>().ok();
+
+    Ok((Some(series_id), position))
 }
 
 /// Validates and stores a book. Returns an error if the referenced author, category, or series doesn't exist.
