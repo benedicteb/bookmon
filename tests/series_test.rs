@@ -872,7 +872,13 @@ fn test_delete_series_nonexistent_returns_error() {
     let mut storage = Storage::new();
     let result = delete_series(&mut storage, "nonexistent-id");
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("not found"));
+    let err_msg = result.unwrap_err();
+    assert!(err_msg.contains("not found"));
+    // Error message should not leak internal IDs
+    assert!(
+        !err_msg.contains("nonexistent-id"),
+        "Error message should not expose internal series ID"
+    );
 }
 
 // --- Rename series tests ---
@@ -896,7 +902,12 @@ fn test_rename_series_nonexistent_returns_error() {
     let mut storage = Storage::new();
     let result = rename_series(&mut storage, "nonexistent-id", "New Name");
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("not found"));
+    let err_msg = result.unwrap_err();
+    assert!(err_msg.contains("not found"));
+    assert!(
+        !err_msg.contains("nonexistent-id"),
+        "Error message should not expose internal series ID"
+    );
 }
 
 #[test]

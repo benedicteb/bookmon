@@ -376,12 +376,12 @@ fn select_series(
     };
 
     let position_str = if let Some(ref pos) = default_position {
-        Text::new("Position in series (or leave empty to skip):")
+        Text::new("Book number in series (e.g. 3), or Enter for none:")
             .with_default(pos)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
     } else {
-        Text::new("Position in series (or leave empty to skip):")
+        Text::new("Book number in series (e.g. 3), or Enter for none:")
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
     };

@@ -143,7 +143,7 @@ pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
 /// Returns an error if the series does not exist.
 pub fn delete_series(storage: &mut Storage, series_id: &str) -> Result<(), String> {
     if storage.series.remove(series_id).is_none() {
-        return Err(format!("Series with ID '{}' not found", series_id));
+        return Err("Series not found. It may have already been deleted.".to_string());
     }
 
     // Unlink all books from this series
@@ -167,7 +167,7 @@ pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> 
 
     // Check that the series exists
     if !storage.series.contains_key(series_id) {
-        return Err(format!("Series with ID '{}' not found", series_id));
+        return Err("Series not found. It may have already been deleted.".to_string());
     }
 
     // Check for duplicate name (case-insensitive), excluding the series being renamed

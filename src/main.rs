@@ -470,7 +470,13 @@ fn delete_series_flow(
         .iter()
         .map(|(_, s)| {
             let count = storage.get_books_in_series(&s.id).len();
-            format!("{} ({} books)", s.name, count)
+            if count == 0 {
+                format!("{} (empty)", s.name)
+            } else if count == 1 {
+                format!("{} (1 book)", s.name)
+            } else {
+                format!("{} ({} books)", s.name, count)
+            }
         })
         .collect();
 
@@ -519,7 +525,7 @@ fn delete_series_flow(
     match bookmon::series::delete_series(storage, &series_id) {
         Ok(_) => {
             storage::write_storage(storage_file, storage)?;
-            println!("Series '{}' deleted.", series_name);
+            println!("Deleted series '{}'.", series_name);
         }
         Err(e) => eprintln!("Failed to delete series: {}", e),
     }
@@ -576,7 +582,7 @@ fn rename_series_flow(
     match bookmon::series::rename_series(storage, &series_id, new_name) {
         Ok(_) => {
             storage::write_storage(storage_file, storage)?;
-            println!("Series renamed to '{}'.", new_name);
+            println!("Renamed series to '{}'.", new_name);
         }
         Err(e) => eprintln!("Failed to rename series: {}", e),
     }
@@ -749,11 +755,20 @@ fn interactive_mode(
             .map(|(id, s)| (s.name.clone(), id.clone()))
             .collect();
 
+        let current_series_id = storage
+            .books
+            .get(selected_book_id)
+            .and_then(|b| b.series_id.clone());
+
         let mut options: Vec<String> = Vec::new();
         let mut sorted_existing: Vec<&(String, String)> = existing_series.iter().collect();
         sorted_existing.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-        for (name, _) in &sorted_existing {
-            options.push(name.clone());
+        for (name, id) in &sorted_existing {
+            if current_series_id.as_deref() == Some(id.as_str()) {
+                options.push(format!("{} (current)", name));
+            } else {
+                options.push(name.clone());
+            }
         }
         options.push("+ Create new series".to_string());
         if action_selection == "Change series" {
@@ -773,15 +788,35 @@ fn interactive_mode(
             }
         };
 
+        let book_title = storage
+            .books
+            .get(selected_book_id)
+            .map(|b| b.title.clone())
+            .unwrap_or_default();
+
         if selection == "Remove from series" {
+            let old_series_name = storage
+                .books
+                .get(selected_book_id)
+                .and_then(|b| b.series_id.as_ref())
+                .and_then(|sid| storage.series.get(sid))
+                .map(|s| s.name.clone())
+                .unwrap_or_default();
+
             if let Some(book) = storage.books.get_mut(selected_book_id) {
                 book.series_id = None;
                 book.position_in_series = None;
             }
             storage::write_storage(storage_file, &storage)?;
-            println!("Removed from series.");
+            println!(
+                "Removed '{}' from series '{}'.",
+                book_title, old_series_name
+            );
         } else {
-            let series_id = if selection == "+ Create new series" {
+            // Strip "(current)" suffix if present for matching
+            let clean_selection = selection.strip_suffix(" (current)").unwrap_or(selection);
+
+            let series_id = if clean_selection == "+ Create new series" {
                 let name = match Text::new("Enter series name:").prompt() {
                     Ok(n) => n,
                     Err(_) => {
@@ -793,13 +828,13 @@ fn interactive_mode(
             } else {
                 existing_series
                     .iter()
-                    .find(|(name, _)| name.as_str() == selection)
+                    .find(|(name, _)| name.as_str() == clean_selection)
                     .map(|(_, id)| id.clone())
                     .ok_or("Selected series not found")?
             };
 
             let position_str =
-                match Text::new("Position in series (or leave empty to skip):").prompt() {
+                match Text::new("Book number in series (e.g. 3), or Enter for none:").prompt() {
                     Ok(s) => s,
                     Err(_) => {
                         println!("Operation cancelled");
@@ -808,12 +843,25 @@ fn interactive_mode(
                 };
             let position = bookmon::series::parse_position_input(&position_str);
 
+            let series_name = storage
+                .series
+                .get(&series_id)
+                .map(|s| s.name.clone())
+                .unwrap_or_default();
+            let pos_label = position
+                .as_deref()
+                .map(|p| format!(" #{}", p))
+                .unwrap_or_default();
+
             if let Some(book) = storage.books.get_mut(selected_book_id) {
                 book.series_id = Some(series_id);
                 book.position_in_series = position;
             }
             storage::write_storage(storage_file, &storage)?;
-            println!("Series assignment updated!");
+            println!(
+                "Assigned '{}' to series '{}'{}.",
+                book_title, series_name, pos_label
+            );
         }
 
         return Ok(());
