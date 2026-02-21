@@ -1,6 +1,33 @@
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Storage};
 
 #[test]
+fn test_to_display_string_with_missing_author_returns_error() {
+    let storage = Storage::new();
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        "cat-id".to_string(),
+        "nonexistent-author".to_string(),
+        100,
+    );
+
+    let result = book.to_display_string(&storage, "Started");
+    assert!(
+        result.is_err(),
+        "to_display_string should return Err for missing author"
+    );
+}
+
+#[test]
+fn test_title_from_display_string_with_title_containing_by() {
+    // A title containing " by " should be parsed correctly
+    let display = "[Started] \"Stand by Me\" by Stephen King";
+    let title = Book::title_from_display_string(display);
+    assert!(title.is_ok());
+    assert_eq!(title.unwrap(), "Stand by Me");
+}
+
+#[test]
 fn test_interactive_mode_book_selection() {
     let mut storage = Storage::new();
 
