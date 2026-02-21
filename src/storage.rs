@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
+/// A book author with a unique ID and creation timestamp.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Author {
     pub id: String,
@@ -15,6 +16,7 @@ pub struct Author {
     pub created_on: DateTime<Utc>,
 }
 
+/// A book category (e.g. "Fiction", "Science") with optional description.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Category {
     pub id: String,
@@ -23,6 +25,7 @@ pub struct Category {
     pub created_on: DateTime<Utc>,
 }
 
+/// A book in the collection, linked to an author and category by ID.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Book {
     pub id: String,
@@ -38,6 +41,10 @@ pub struct Book {
     pub total_pages: i32,
 }
 
+/// The type of reading event recorded for a book.
+///
+/// The most recent event determines the book's current status.
+/// `Update` and `Bought` are non-status events that don't affect started/finished determination.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum ReadingEvent {
     Finished,
@@ -48,12 +55,17 @@ pub enum ReadingEvent {
     UnmarkedAsWantToRead,
 }
 
+/// Optional metadata attached to a reading event (e.g. current page for Update events).
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadingMetadata {
     #[serde(default)]
     pub current_page: Option<i32>,
 }
 
+/// A timestamped reading event for a book (event-sourcing pattern).
+///
+/// Each reading records a single event (Started, Finished, Update, etc.)
+/// and is linked to a book by `book_id`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Reading {
     pub id: String,
@@ -65,6 +77,7 @@ pub struct Reading {
 }
 
 impl Author {
+    /// Creates a new author with a generated UUID and current timestamp.
     pub fn new(name: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -75,6 +88,7 @@ impl Author {
 }
 
 impl Book {
+    /// Creates a new book with a generated UUID and current timestamp.
     pub fn new(
         title: String,
         isbn: String,
@@ -127,6 +141,7 @@ impl Book {
 }
 
 impl Reading {
+    /// Creates a new reading event with a generated UUID and current timestamp.
     pub fn new(book_id: String, event: ReadingEvent) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -137,6 +152,7 @@ impl Reading {
         }
     }
 
+    /// Creates a new reading event with page progress metadata.
     pub fn with_metadata(book_id: String, event: ReadingEvent, current_page: i32) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -151,6 +167,7 @@ impl Reading {
 }
 
 impl Category {
+    /// Creates a new category with a generated UUID and current timestamp.
     pub fn new(name: String, description: Option<String>) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -161,6 +178,9 @@ impl Category {
     }
 }
 
+/// The central data store containing all books, readings, authors, and categories.
+///
+/// Persisted as a single JSON file. All collections are keyed by UUID string.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Storage {
     pub books: HashMap<String, Book>,

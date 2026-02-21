@@ -6,6 +6,8 @@ use inquire::{Select, Text};
 use std::io;
 use std::time::Duration;
 
+/// Interactively prompts the user for book details, performing ISBN lookup for auto-fill.
+/// Returns the constructed Book and any initial reading events (Bought, WantToRead).
 pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEvent>)> {
     // First get ISBN
     let isbn = Text::new("Enter ISBN:")
@@ -281,6 +283,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
     Ok((book, event))
 }
 
+/// Validates and stores a book. Returns an error if the referenced author or category doesn't exist.
 pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
     // Validate that the category exists
     if !storage.categories.contains_key(&book.category_id) {

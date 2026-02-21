@@ -3,6 +3,7 @@ use chrono::Utc;
 use pretty_table::prelude::*;
 use std::io;
 
+/// Validates and stores a reading event. Returns an error if the referenced book doesn't exist.
 pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), String> {
     // Validate that the book exists
     if !storage.books.contains_key(&reading.book_id) {
@@ -13,6 +14,7 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
     Ok(())
 }
 
+/// Displays a table of currently-reading books with author, days since started, and progress.
 pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     // Get all started books using the new method
     let started_books = storage.get_started_books();
@@ -100,6 +102,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     Ok(())
 }
 
+/// Displays a table of finished books with author and finish date.
 pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     // Get all finished books using the new method
     let finished_books = storage.get_finished_books();
@@ -163,6 +166,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     Ok(())
 }
 
+/// Displays a table of books that haven't been started yet.
 pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
     // Get all unstarted books
     let unstarted_books = storage.get_unstarted_books();
