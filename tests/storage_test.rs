@@ -2000,3 +2000,51 @@ fn test_get_earliest_finished_year_empty() {
     let storage = Storage::new();
     assert_eq!(storage.get_earliest_finished_year(), None);
 }
+
+#[test]
+fn test_handle_missing_fields_updates_reading_book_id() {
+    // Setup: a reading that references a non-existent book
+    let mut storage = Storage::new();
+
+    let orphaned_book_id = "non-existent-book-id".to_string();
+    let reading = Reading {
+        id: Uuid::new_v4().to_string(),
+        book_id: orphaned_book_id.clone(),
+        event: ReadingEvent::Started,
+        created_on: Utc::now(),
+        metadata: ReadingMetadata::default(),
+    };
+    let reading_id = reading.id.clone();
+    storage.readings.insert(reading.id.clone(), reading);
+
+    // Write storage to a temp file
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("storage.json")
+        .to_str()
+        .unwrap()
+        .to_string();
+    write_storage(&path, &storage).unwrap();
+
+    let prompter = TestPrompter::new("Repaired Author", "Repaired Category", 300);
+    handle_missing_fields(&mut storage, &path, &prompter).unwrap();
+
+    // The reading's book_id should now point to the newly created book, NOT the old orphaned ID
+    let repaired_reading = storage.readings.get(&reading_id).unwrap();
+    assert_ne!(
+        repaired_reading.book_id, orphaned_book_id,
+        "Reading should no longer reference the non-existent book ID"
+    );
+
+    // The new book_id should actually exist in storage
+    assert!(
+        storage.books.contains_key(&repaired_reading.book_id),
+        "Reading's book_id should point to a book that exists in storage"
+    );
+
+    // Verify the newly created book has the prompted details
+    let repaired_book = storage.books.get(&repaired_reading.book_id).unwrap();
+    assert_eq!(repaired_book.title, "Repaired Book");
+    assert_eq!(repaired_book.total_pages, 300);
+}
