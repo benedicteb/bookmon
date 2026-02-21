@@ -105,16 +105,7 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
                 if !next_is_grouped_data {
                     output.push_str(&draw_line(&col_widths, '-'));
                     output.push('\n');
-                    if in_group
-                        && (i + 1 >= rows.len()
-                            || matches!(
-                                &rows[i + 1],
-                                TableRow::GroupHeader(_) | TableRow::Header(_)
-                            ))
-                    {
-                        // Group is ending — next row will handle its own separator or it's the end
-                    }
-                    // If we hit a non-Data next row or end-of-rows, the group is closed
+                    // Close the group if next row is not a Data row (or we're at the end)
                     if i + 1 >= rows.len() || !matches!(&rows[i + 1], TableRow::Data(_)) {
                         in_group = false;
                     }

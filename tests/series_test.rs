@@ -1,6 +1,6 @@
 use bookmon::series::{
-    delete_series, format_series_display, format_series_label, get_or_create_series,
-    is_position_occupied, parse_position_input, rename_series, store_series,
+    delete_series, format_position_prefix, format_series_display, format_series_label,
+    get_or_create_series, is_position_occupied, parse_position_input, rename_series, store_series,
 };
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::Utc;
@@ -1182,4 +1182,26 @@ fn test_series_filter_empty_message() {
         msg.contains("No series exist yet"),
         "should indicate no series exist"
     );
+}
+
+// ── format_position_prefix tests ──────────────────────────────────
+
+#[test]
+fn test_format_position_prefix_with_integer() {
+    assert_eq!(format_position_prefix(Some("3")), "#3 ");
+}
+
+#[test]
+fn test_format_position_prefix_with_fractional() {
+    assert_eq!(format_position_prefix(Some("2.5")), "#2.5 ");
+}
+
+#[test]
+fn test_format_position_prefix_with_zero() {
+    assert_eq!(format_position_prefix(Some("0")), "#0 ");
+}
+
+#[test]
+fn test_format_position_prefix_none() {
+    assert_eq!(format_position_prefix(None), "");
 }

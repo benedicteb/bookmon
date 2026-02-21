@@ -620,3 +620,97 @@ fn test_group_books_by_series_multiple_authors() {
         _ => panic!("Second entry should be SeriesGroup (Author Z)"),
     }
 }
+
+#[test]
+fn test_group_books_by_series_orphaned_series_id_treated_as_standalone() {
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    // Book with a series_id that doesn't exist in storage
+    let mut book = Book::new(
+        "Orphan Book".to_string(),
+        "111".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    book.series_id = Some("nonexistent-series-id".to_string());
+    book.position_in_series = Some("1".to_string());
+    storage.add_book(book);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+    let entries = group_books_by_series(&storage, &all_books);
+
+    assert_eq!(entries.len(), 1, "Should have 1 entry");
+    match &entries[0] {
+        BookEntry::Standalone(book) => {
+            assert_eq!(book.title, "Orphan Book");
+        }
+        _ => panic!("Orphaned series_id should be treated as standalone"),
+    }
+}
+
+#[test]
+fn test_group_books_by_series_book_without_position_sorts_last_in_group() {
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let series = Series::new("My Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Book with position
+    let mut book1 = Book::new(
+        "Book One".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some("1".to_string());
+
+    // Book without position (should sort last)
+    let mut book2 = Book::new(
+        "Book Without Position".to_string(),
+        "222".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    book2.series_id = Some(series_id);
+    book2.position_in_series = None;
+
+    storage.add_book(book1);
+    storage.add_book(book2);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+    let entries = group_books_by_series(&storage, &all_books);
+
+    assert_eq!(entries.len(), 1);
+    match &entries[0] {
+        BookEntry::SeriesGroup { name, books } => {
+            assert_eq!(name, "My Series");
+            assert_eq!(books.len(), 2);
+            assert_eq!(books[0].title, "Book One"); // has position, sorts first
+            assert_eq!(books[1].title, "Book Without Position"); // no position, sorts last
+                                                                 // No position prefix should appear
+            assert!(books[1].position_in_series.is_none());
+        }
+        _ => panic!("Should be a SeriesGroup"),
+    }
+}
