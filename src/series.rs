@@ -14,6 +14,18 @@ pub fn format_series_label(series: &Series, position: Option<&str>) -> String {
     }
 }
 
+/// Formats a position prefix for a book title within a grouped series display.
+///
+/// Returns e.g. `"#3 "` for position "3", or `""` if no position is set.
+/// Used in table rows where the series name is shown in a group header,
+/// so only the position number is needed next to the title.
+pub fn format_position_prefix(position: Option<&str>) -> String {
+    match position {
+        Some(pos) => format!("#{} ", pos),
+        None => String::new(),
+    }
+}
+
 /// Parses a position-in-series input string. Returns `Some(position)` for valid
 /// non-negative numbers (integers like "1", "0" or decimals like "2.5").
 /// Returns `None` for empty/whitespace, negative numbers, or non-numeric input.

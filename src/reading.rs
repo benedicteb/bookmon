@@ -1,8 +1,93 @@
-use crate::series::format_series_label;
-use crate::storage::{Book, Reading, ReadingEvent, Storage};
-use crate::table::print_table;
+use crate::series::{format_position_prefix, format_series_label};
+use crate::storage::{compare_positions, Book, Reading, ReadingEvent, Storage};
+use crate::table::{print_structured_table, print_table, TableRow};
 use chrono::Utc;
 use std::io;
+
+/// A book entry in a sorted, grouped list — either a standalone book
+/// or a group of books belonging to the same series.
+#[derive(Debug)]
+pub enum BookEntry<'a> {
+    /// A book not belonging to any series.
+    Standalone(&'a Book),
+    /// A series group: series name + books sorted by position.
+    SeriesGroup { name: String, books: Vec<&'a Book> },
+}
+
+/// Groups books by series and sorts the result for table display.
+///
+/// - Series groups are sorted internally by position (using `compare_positions`).
+/// - Groups and standalone books are interleaved by the author name of the
+///   "sort author" (first book in the series group, or the standalone book itself),
+///   then by series name / book title.
+/// - Within the same author, series groups come before standalone books.
+pub fn group_books_by_series<'a>(storage: &'a Storage, books: &[&'a Book]) -> Vec<BookEntry<'a>> {
+    use std::collections::HashMap;
+
+    // Partition into series groups and standalone books
+    let mut series_map: HashMap<&str, Vec<&'a Book>> = HashMap::new();
+    let mut standalone: Vec<&'a Book> = Vec::new();
+
+    for &book in books {
+        if let Some(ref sid) = book.series_id {
+            if storage.get_series(sid).is_some() {
+                series_map.entry(sid.as_str()).or_default().push(book);
+            } else {
+                // Orphaned series_id — treat as standalone
+                standalone.push(book);
+            }
+        } else {
+            standalone.push(book);
+        }
+    }
+
+    // Sort books within each series group by position
+    for group_books in series_map.values_mut() {
+        group_books.sort_by(|a, b| {
+            compare_positions(
+                a.position_in_series.as_deref(),
+                b.position_in_series.as_deref(),
+            )
+        });
+    }
+
+    // Build entries with sort keys
+    // Sort key: (author_name_lowercase, is_standalone (0=series, 1=standalone), group_name/title_lowercase)
+    let mut entries: Vec<(String, u8, String, BookEntry<'a>)> = Vec::new();
+
+    for (sid, group_books) in series_map {
+        let series = storage.get_series(sid).unwrap(); // safe: checked above
+                                                       // Sort author = author of the first (lowest position) book
+        let sort_author = group_books
+            .first()
+            .map(|b| storage.author_name_for_book(b))
+            .unwrap_or("");
+        entries.push((
+            sort_author.to_lowercase(),
+            0, // series groups before standalone
+            series.name.to_lowercase(),
+            BookEntry::SeriesGroup {
+                name: series.name.clone(),
+                books: group_books,
+            },
+        ));
+    }
+
+    for book in standalone {
+        let author = storage.author_name_for_book(book);
+        entries.push((
+            author.to_lowercase(),
+            1, // standalone after series
+            book.title.to_lowercase(),
+            BookEntry::Standalone(book),
+        ));
+    }
+
+    // Sort by (author, is_standalone, name/title)
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+
+    entries.into_iter().map(|(_, _, _, entry)| entry).collect()
+}
 
 /// Validates and stores a reading event. Returns an error if the referenced book doesn't exist.
 pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), String> {

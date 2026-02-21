@@ -1,4 +1,4 @@
-use bookmon::reading::{show_started_books, store_reading};
+use bookmon::reading::{group_books_by_series, show_started_books, store_reading, BookEntry};
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::{DateTime, Utc};
 use serde_json;
@@ -397,4 +397,189 @@ fn test_series_column_shown_when_books_have_series() {
         header.contains(&"Series".to_string()),
         "Series column should be shown when books have series"
     );
+}
+
+// ── Series grouping tests ──────────────────────────────────────────
+
+#[test]
+fn test_group_books_by_series_standalone_only() {
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Author A".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let book1 = Book::new(
+        "Book One".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book2 = Book::new(
+        "Book Two".to_string(),
+        "222".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    storage.add_book(book1);
+    storage.add_book(book2);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+    let entries = group_books_by_series(&storage, &all_books);
+
+    assert_eq!(entries.len(), 2, "Should have 2 standalone entries");
+    for entry in &entries {
+        assert!(
+            matches!(entry, BookEntry::Standalone(_)),
+            "All entries should be standalone"
+        );
+    }
+}
+
+#[test]
+fn test_group_books_by_series_groups_and_standalone() {
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Brandon Sanderson".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let series = Series::new("Mistborn".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Series books
+    let mut book1 = Book::new(
+        "The Final Empire".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        650,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some("1".to_string());
+
+    let mut book2 = Book::new(
+        "The Well of Ascension".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        700,
+    );
+    book2.series_id = Some(series_id);
+    book2.position_in_series = Some("2".to_string());
+
+    // Standalone book by same author
+    let book3 = Book::new(
+        "Elantris".to_string(),
+        "333".to_string(),
+        category_id,
+        author_id,
+        500,
+    );
+
+    storage.add_book(book1);
+    storage.add_book(book2);
+    storage.add_book(book3);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+    let entries = group_books_by_series(&storage, &all_books);
+
+    // Should have: 1 SeriesGroup (Mistborn with 2 books) + 1 Standalone (Elantris)
+    assert_eq!(
+        entries.len(),
+        2,
+        "Should have 2 entries (1 group + 1 standalone)"
+    );
+
+    // Series group should come first (same author, series before standalone)
+    match &entries[0] {
+        BookEntry::SeriesGroup { name, books } => {
+            assert_eq!(name, "Mistborn");
+            assert_eq!(books.len(), 2);
+            assert_eq!(books[0].title, "The Final Empire"); // position 1
+            assert_eq!(books[1].title, "The Well of Ascension"); // position 2
+        }
+        _ => panic!("First entry should be a SeriesGroup"),
+    }
+
+    match &entries[1] {
+        BookEntry::Standalone(book) => {
+            assert_eq!(book.title, "Elantris");
+        }
+        _ => panic!("Second entry should be Standalone"),
+    }
+}
+
+#[test]
+fn test_group_books_by_series_multiple_authors() {
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author_a = Author::new("Author A".to_string());
+    let author_a_id = author_a.id.clone();
+    storage.add_author(author_a);
+
+    let author_z = Author::new("Author Z".to_string());
+    let author_z_id = author_z.id.clone();
+    storage.add_author(author_z);
+
+    let series = Series::new("Z Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Series book by Author Z
+    let mut series_book = Book::new(
+        "Z Book".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_z_id,
+        200,
+    );
+    series_book.series_id = Some(series_id);
+    series_book.position_in_series = Some("1".to_string());
+
+    // Standalone book by Author A (should sort first by author name)
+    let standalone_book = Book::new(
+        "A Book".to_string(),
+        "222".to_string(),
+        category_id,
+        author_a_id,
+        300,
+    );
+
+    storage.add_book(series_book);
+    storage.add_book(standalone_book);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+    let entries = group_books_by_series(&storage, &all_books);
+
+    assert_eq!(entries.len(), 2);
+    // Author A standalone should come first
+    match &entries[0] {
+        BookEntry::Standalone(book) => {
+            assert_eq!(book.title, "A Book");
+        }
+        _ => panic!("First entry should be Standalone (Author A)"),
+    }
+    // Author Z series group should come second
+    match &entries[1] {
+        BookEntry::SeriesGroup { name, .. } => {
+            assert_eq!(name, "Z Series");
+        }
+        _ => panic!("Second entry should be SeriesGroup (Author Z)"),
+    }
 }

@@ -640,7 +640,7 @@ impl Storage {
 /// Numeric positions (e.g. "1", "2.5") are sorted numerically.
 /// Non-numeric positions are sorted lexicographically after all numeric ones.
 /// `None` is sorted last.
-fn compare_positions(a: Option<&str>, b: Option<&str>) -> std::cmp::Ordering {
+pub fn compare_positions(a: Option<&str>, b: Option<&str>) -> std::cmp::Ordering {
     match (a, b) {
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Greater,
