@@ -2320,7 +2320,7 @@ fn test_handle_missing_fields_clears_orphaned_series_id() {
         author_id,
         total_pages: 200,
         series_id: Some("nonexistent-series-id".to_string()),
-        position_in_series: Some(3),
+        position_in_series: Some("3".to_string()),
     };
     let book_id = book.id.clone();
     storage.add_book(book);
@@ -2370,7 +2370,7 @@ fn test_handle_missing_fields_preserves_valid_series_id() {
         author_id,
         total_pages: 300,
         series_id: Some(series_id.clone()),
-        position_in_series: Some(1),
+        position_in_series: Some("1".to_string()),
     };
     let book_id = book.id.clone();
     storage.add_book(book);
@@ -2389,7 +2389,7 @@ fn test_handle_missing_fields_preserves_valid_series_id() {
     );
     assert_eq!(
         repaired_book.position_in_series,
-        Some(1),
+        Some("1".to_string()),
         "position_in_series should be preserved for valid series_id"
     );
 }

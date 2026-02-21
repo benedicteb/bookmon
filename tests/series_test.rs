@@ -54,13 +54,13 @@ fn test_book_with_series() {
         223,
     );
     book.series_id = Some(series_id.clone());
-    book.position_in_series = Some(1);
+    book.position_in_series = Some("1".to_string());
 
     storage.add_book(book.clone());
 
     let stored_book = storage.get_book(&book.id).unwrap();
     assert_eq!(stored_book.series_id, Some(series_id));
-    assert_eq!(stored_book.position_in_series, Some(1));
+    assert_eq!(stored_book.position_in_series, Some("1".to_string()));
 }
 
 #[test]
@@ -115,6 +115,26 @@ fn test_book_series_fields_backward_compatibility() {
 }
 
 #[test]
+fn test_book_series_fields_backward_compatibility_with_integer_position() {
+    // Simulate deserializing a book saved with the old i32 position format
+    let json_book_with_int_position = r#"{
+        "id": "test-id",
+        "title": "Old Book",
+        "added_on": "2024-01-01T00:00:00Z",
+        "isbn": "1234567890",
+        "category_id": "cat-id",
+        "author_id": "author-id",
+        "total_pages": 200,
+        "series_id": "series-1",
+        "position_in_series": 3
+    }"#;
+
+    let book: Book = serde_json::from_str(json_book_with_int_position).unwrap();
+    assert_eq!(book.series_id, Some("series-1".to_string()));
+    assert_eq!(book.position_in_series, Some("3".to_string()));
+}
+
+#[test]
 fn test_series_round_trip() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let path = tmp.path().to_str().unwrap().to_string();
@@ -141,7 +161,7 @@ fn test_series_round_trip() {
         200,
     );
     book.series_id = Some(series_id.clone());
-    book.position_in_series = Some(3);
+    book.position_in_series = Some("3".to_string());
     let book_id = book.id.clone();
     storage.add_book(book);
 
@@ -159,7 +179,7 @@ fn test_series_round_trip() {
     // Verify book's series fields round-tripped
     let loaded_book = loaded.get_book(&book_id).unwrap();
     assert_eq!(loaded_book.series_id, Some(series_id));
-    assert_eq!(loaded_book.position_in_series, Some(3));
+    assert_eq!(loaded_book.position_in_series, Some("3".to_string()));
 }
 
 #[test]
@@ -203,7 +223,7 @@ fn test_get_books_in_series() {
         100,
     );
     book1.series_id = Some(series_id.clone());
-    book1.position_in_series = Some(1);
+    book1.position_in_series = Some("1".to_string());
     let book1_id = book1.id.clone();
     storage.add_book(book1);
 
@@ -216,7 +236,7 @@ fn test_get_books_in_series() {
         300,
     );
     book3.series_id = Some(series_id.clone());
-    book3.position_in_series = Some(3);
+    book3.position_in_series = Some("3".to_string());
     let book3_id = book3.id.clone();
     storage.add_book(book3);
 
@@ -229,7 +249,7 @@ fn test_get_books_in_series() {
         200,
     );
     book2.series_id = Some(series_id.clone());
-    book2.position_in_series = Some(2);
+    book2.position_in_series = Some("2".to_string());
     let book2_id = book2.id.clone();
     storage.add_book(book2);
 
@@ -250,6 +270,82 @@ fn test_get_books_in_series() {
     assert_eq!(books_in_series[0].id, book1_id);
     assert_eq!(books_in_series[1].id, book2_id);
     assert_eq!(books_in_series[2].id, book3_id);
+}
+
+#[test]
+fn test_get_books_in_series_with_fractional_positions() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("My Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Book at position 1
+    let mut book1 = Book::new(
+        "Book One".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some("1".to_string());
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+
+    // Book at position 2.5 (novella between main entries)
+    let mut book_half = Book::new(
+        "Book Two-and-a-Half".to_string(),
+        "150".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        80,
+    );
+    book_half.series_id = Some(series_id.clone());
+    book_half.position_in_series = Some("2.5".to_string());
+    let book_half_id = book_half.id.clone();
+    storage.add_book(book_half);
+
+    // Book at position 2
+    let mut book2 = Book::new(
+        "Book Two".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    book2.series_id = Some(series_id.clone());
+    book2.position_in_series = Some("2".to_string());
+    let book2_id = book2.id.clone();
+    storage.add_book(book2);
+
+    // Book at position 0 (prequel)
+    let mut book0 = Book::new(
+        "Prequel".to_string(),
+        "000".to_string(),
+        category_id,
+        author_id,
+        50,
+    );
+    book0.series_id = Some(series_id.clone());
+    book0.position_in_series = Some("0".to_string());
+    let book0_id = book0.id.clone();
+    storage.add_book(book0);
+
+    let books = storage.get_books_in_series(&series_id);
+    assert_eq!(books.len(), 4);
+    assert_eq!(books[0].id, book0_id); // 0
+    assert_eq!(books[1].id, book1_id); // 1
+    assert_eq!(books[2].id, book2_id); // 2
+    assert_eq!(books[3].id, book_half_id); // 2.5
 }
 
 #[test]
@@ -380,13 +476,31 @@ fn test_store_book_without_series_succeeds() {
 #[test]
 fn test_format_series_label_with_position() {
     let series = Series::new("Harry Potter".to_string());
-    assert_eq!(format_series_label(&series, Some(3)), "Harry Potter #3");
+    assert_eq!(format_series_label(&series, Some("3")), "Harry Potter #3");
 }
 
 #[test]
 fn test_format_series_label_without_position() {
     let series = Series::new("Harry Potter".to_string());
     assert_eq!(format_series_label(&series, None), "Harry Potter");
+}
+
+#[test]
+fn test_format_series_label_with_fractional_position() {
+    let series = Series::new("Kingkiller Chronicle".to_string());
+    assert_eq!(
+        format_series_label(&series, Some("2.5")),
+        "Kingkiller Chronicle #2.5"
+    );
+}
+
+#[test]
+fn test_format_series_label_with_zero_position() {
+    let series = Series::new("Magicians Guild".to_string());
+    assert_eq!(
+        format_series_label(&series, Some("0")),
+        "Magicians Guild #0"
+    );
 }
 
 #[test]
@@ -413,12 +527,12 @@ fn test_series_label_for_book_in_storage() {
         423,
     );
     book.series_id = Some(series_id.clone());
-    book.position_in_series = Some(1);
+    book.position_in_series = Some("1".to_string());
     storage.add_book(book.clone());
 
     // Get the label for this book using its series data
     let series_ref = storage.get_series(&series_id).unwrap();
-    let label = format_series_label(series_ref, book.position_in_series);
+    let label = format_series_label(series_ref, book.position_in_series.as_deref());
     assert_eq!(label, "Lord of the Rings #1");
 }
 
@@ -437,7 +551,7 @@ fn test_series_name_for_book() {
         "auth".to_string(),
         100,
     );
-    book.series_id = Some(series_id.clone());
+    book.series_id = Some(series_id);
 
     assert_eq!(storage.series_name_for_book(&book), "My Series");
 }
@@ -458,15 +572,15 @@ fn test_series_name_for_book_without_series() {
 }
 
 #[test]
-fn test_parse_position_input_valid() {
-    assert_eq!(parse_position_input("1"), Some(1));
-    assert_eq!(parse_position_input("5"), Some(5));
-    assert_eq!(parse_position_input("100"), Some(100));
+fn test_parse_position_input_valid_integers() {
+    assert_eq!(parse_position_input("1"), Some("1".to_string()));
+    assert_eq!(parse_position_input("5"), Some("5".to_string()));
+    assert_eq!(parse_position_input("100"), Some("100".to_string()));
 }
 
 #[test]
 fn test_parse_position_input_with_whitespace() {
-    assert_eq!(parse_position_input("  3  "), Some(3));
+    assert_eq!(parse_position_input("  3  "), Some("3".to_string()));
 }
 
 #[test]
@@ -476,8 +590,8 @@ fn test_parse_position_input_empty() {
 }
 
 #[test]
-fn test_parse_position_input_zero_rejected() {
-    assert_eq!(parse_position_input("0"), None);
+fn test_parse_position_input_zero_accepted() {
+    assert_eq!(parse_position_input("0"), Some("0".to_string()));
 }
 
 #[test]
@@ -487,9 +601,15 @@ fn test_parse_position_input_negative_rejected() {
 }
 
 #[test]
-fn test_parse_position_input_non_numeric() {
+fn test_parse_position_input_fractional() {
+    assert_eq!(parse_position_input("2.5"), Some("2.5".to_string()));
+    assert_eq!(parse_position_input("0.5"), Some("0.5".to_string()));
+}
+
+#[test]
+fn test_parse_position_input_non_numeric_rejected() {
     assert_eq!(parse_position_input("abc"), None);
-    assert_eq!(parse_position_input("1.5"), None);
+    assert_eq!(parse_position_input("one"), None);
 }
 
 // --- Delete series tests ---
@@ -517,7 +637,7 @@ fn test_delete_series_removes_series_and_unlinks_books() {
         300,
     );
     book1.series_id = Some(series_id.clone());
-    book1.position_in_series = Some(1);
+    book1.position_in_series = Some("1".to_string());
     let book1_id = book1.id.clone();
     storage.add_book(book1);
 
@@ -529,7 +649,7 @@ fn test_delete_series_removes_series_and_unlinks_books() {
         350,
     );
     book2.series_id = Some(series_id.clone());
-    book2.position_in_series = Some(2);
+    book2.position_in_series = Some("2".to_string());
     let book2_id = book2.id.clone();
     storage.add_book(book2);
 
