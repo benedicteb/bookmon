@@ -20,7 +20,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         ProgressStyle::default_spinner()
             .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
             .template("{spinner} Looking up book details...")
-            .unwrap(),
+            .expect("static spinner template is always valid"),
     );
     spinner.enable_steady_tick(Duration::from_millis(100));
 

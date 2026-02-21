@@ -28,11 +28,15 @@ impl BibsokProvider {
         let document = Html::parse_document(html);
 
         // Selectors for different parts of the page
-        let book_selector = Selector::parse(".c-post--simple").unwrap();
-        let title_selector = Selector::parse(".o-adaptive-title").unwrap();
-        let author_selector = Selector::parse(".u-inlineblock[lang=nb]").unwrap();
-        let year_selector = Selector::parse("span").unwrap();
-        let cover_selector = Selector::parse(".c-post__bilde div").unwrap();
+        let book_selector =
+            Selector::parse(".c-post--simple").expect("valid CSS selector: .c-post--simple");
+        let title_selector =
+            Selector::parse(".o-adaptive-title").expect("valid CSS selector: .o-adaptive-title");
+        let author_selector = Selector::parse(".u-inlineblock[lang=nb]")
+            .expect("valid CSS selector: .u-inlineblock[lang=nb]");
+        let year_selector = Selector::parse("span").expect("valid CSS selector: span");
+        let cover_selector =
+            Selector::parse(".c-post__bilde div").expect("valid CSS selector: .c-post__bilde div");
 
         // Get the first book result
         let book_element = document
@@ -78,7 +82,8 @@ impl BibsokProvider {
         // Extract cover URL
         let cover_url = book_element.select(&cover_selector).next().and_then(|e| {
             e.value().attr("style").and_then(|style| {
-                let re = Regex::new(r"background-image:url\('([^']+)'\)").unwrap();
+                let re = Regex::new(r"background-image:url\('([^']+)'\)")
+                    .expect("valid static regex for background-image URL extraction");
                 re.captures(style).map(|caps| caps[1].to_string())
             })
         });

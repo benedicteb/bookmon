@@ -480,8 +480,14 @@ impl Storage {
 
     /// Returns all books that were finished in a specific year
     pub fn get_books_finished_in_year(&self, year: i32) -> Vec<&Book> {
-        let from = Utc.with_ymd_and_hms(year, 1, 1, 0, 0, 0).unwrap();
-        let to = Utc.with_ymd_and_hms(year, 12, 31, 23, 59, 59).unwrap();
+        let from = Utc
+            .with_ymd_and_hms(year, 1, 1, 0, 0, 0)
+            .single()
+            .expect("Jan 1 00:00:00 is always a valid UTC date");
+        let to = Utc
+            .with_ymd_and_hms(year, 12, 31, 23, 59, 59)
+            .single()
+            .expect("Dec 31 23:59:59 is always a valid UTC date");
         self.get_read_books_by_time_period(from, to)
     }
 }
