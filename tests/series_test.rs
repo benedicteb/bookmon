@@ -1,8 +1,8 @@
 use bookmon::series::{
-    delete_series, format_series_label, get_or_create_series, parse_position_input, rename_series,
-    store_series,
+    delete_series, format_series_display, format_series_label, get_or_create_series,
+    parse_position_input, rename_series, store_series,
 };
-use bookmon::storage::{Author, Book, Category, Series, Storage};
+use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::Utc;
 
 #[test]
@@ -346,6 +346,143 @@ fn test_get_books_in_series_with_fractional_positions() {
     assert_eq!(books[1].id, book1_id); // 1
     assert_eq!(books[2].id, book2_id); // 2
     assert_eq!(books[3].id, book_half_id); // 2.5
+}
+
+// --- Enriched series display tests ---
+
+#[test]
+fn test_format_series_display_with_reading_status() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("J.K. Rowling".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fantasy".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let mut series = Series::new("Harry Potter".to_string());
+    series.total_books = Some(7);
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Book 1: finished
+    let mut book1 = Book::new(
+        "Philosopher's Stone".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some("1".to_string());
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+    storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Finished));
+
+    // Book 2: currently reading
+    let mut book2 = Book::new(
+        "Chamber of Secrets".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        350,
+    );
+    book2.series_id = Some(series_id.clone());
+    book2.position_in_series = Some("2".to_string());
+    let book2_id = book2.id.clone();
+    storage.add_book(book2);
+    storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::Started));
+
+    // Book 3: not started
+    let mut book3 = Book::new(
+        "Prisoner of Azkaban".to_string(),
+        "333".to_string(),
+        category_id,
+        author_id,
+        400,
+    );
+    book3.series_id = Some(series_id.clone());
+    book3.position_in_series = Some("3".to_string());
+    storage.add_book(book3);
+
+    let output = format_series_display(&storage, &series_id);
+
+    // Should contain series name with progress
+    assert!(
+        output.contains("Harry Potter"),
+        "should contain series name"
+    );
+    assert!(output.contains("1/7"), "should show 1 of 7 read");
+
+    // Should contain status indicators
+    assert!(
+        output.contains("\u{2713}"),
+        "should contain checkmark for finished book"
+    );
+    assert!(
+        output.contains("\u{25b8}"),
+        "should contain triangle for currently reading"
+    );
+
+    // Should contain book titles
+    assert!(output.contains("Philosopher's Stone"));
+    assert!(output.contains("Chamber of Secrets"));
+    assert!(output.contains("Prisoner of Azkaban"));
+}
+
+#[test]
+fn test_format_series_display_without_total_books() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("Discworld".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // One finished book
+    let mut book1 = Book::new(
+        "The Colour of Magic".to_string(),
+        "111".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some("1".to_string());
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+    storage.add_reading(Reading::new(book1_id, ReadingEvent::Finished));
+
+    let output = format_series_display(&storage, &series_id);
+
+    // Without total_books, should show just count of read
+    assert!(output.contains("Discworld"), "should contain series name");
+    assert!(output.contains("1 read"), "should show books read count");
+    assert!(
+        !output.contains("/"),
+        "should not show X/Y format without total"
+    );
+}
+
+#[test]
+fn test_format_series_display_empty_series() {
+    let mut storage = Storage::new();
+    let series = Series::new("Empty Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let output = format_series_display(&storage, &series_id);
+    assert!(output.contains("Empty Series"));
+    assert!(output.contains("(no books)"));
 }
 
 // --- Series status and total_books tests ---
