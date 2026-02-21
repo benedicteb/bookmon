@@ -1821,3 +1821,182 @@ fn test_write_storage_and_load_storage_round_trip() {
     assert_eq!(loaded_book.category_id, category_id);
     assert_eq!(loaded_book.total_pages, 200);
 }
+
+#[test]
+fn test_get_currently_reading_and_want_to_read_books() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // Book 1: Currently reading (Started)
+    let book1 = Book::new(
+        "Reading Book".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+    storage.add_reading(Reading::new(book1_id.clone(), ReadingEvent::Started));
+
+    // Book 2: Want to read
+    let book2 = Book::new(
+        "Want Book".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book2_id = book2.id.clone();
+    storage.add_book(book2);
+    storage.add_reading(Reading::new(book2_id.clone(), ReadingEvent::WantToRead));
+
+    // Book 3: Finished (should NOT be included)
+    let book3 = Book::new(
+        "Finished Book".to_string(),
+        "333".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    let book3_id = book3.id.clone();
+    storage.add_book(book3);
+    storage.add_reading(Reading::new(book3_id.clone(), ReadingEvent::Finished));
+
+    // Book 4: No events (should NOT be included)
+    let book4 = Book::new(
+        "No Events Book".to_string(),
+        "444".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        400,
+    );
+    storage.add_book(book4);
+
+    let result = storage.get_currently_reading_and_want_to_read_books();
+
+    assert_eq!(
+        result.len(),
+        2,
+        "Should include started and want-to-read books"
+    );
+    assert!(
+        result.iter().any(|b| b.id == book1_id),
+        "Should include started book"
+    );
+    assert!(
+        result.iter().any(|b| b.id == book2_id),
+        "Should include want-to-read book"
+    );
+}
+
+#[test]
+fn test_get_currently_reading_and_want_to_read_no_duplicates() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // A book that is both started and has a WantToRead event earlier
+    let book = Book::new(
+        "Both Book".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    let mut want_reading = Reading::new(book_id.clone(), ReadingEvent::WantToRead);
+    want_reading.created_on = Utc::now() - Duration::hours(2);
+    storage.add_reading(want_reading);
+
+    storage.add_reading(Reading::new(book_id.clone(), ReadingEvent::Started));
+
+    let result = storage.get_currently_reading_and_want_to_read_books();
+
+    // The book should appear only once (as started, not duplicated)
+    assert_eq!(result.len(), 1, "Should not have duplicates");
+    assert_eq!(result[0].id, book_id);
+}
+
+#[test]
+fn test_sort_books_empty_storage() {
+    let storage = Storage::new();
+    let sorted = storage.sort_books();
+    assert!(
+        sorted.is_empty(),
+        "Sorting empty storage should return empty vec"
+    );
+}
+
+#[test]
+fn test_sort_books_all_same_status() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Zed Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let author2 = Author::new("Alpha Author".to_string());
+    let author2_id = author2.id.clone();
+    storage.add_author(author2);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    // All books are unstarted — should sort by author name then title
+    let book_a = Book::new(
+        "Book A".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author2_id.clone(), // Alpha Author
+        100,
+    );
+    let book_b = Book::new(
+        "Book B".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(), // Zed Author
+        200,
+    );
+    let book_c = Book::new(
+        "Book C".to_string(),
+        "333".to_string(),
+        category_id.clone(),
+        author2_id.clone(), // Alpha Author
+        300,
+    );
+
+    storage.add_book(book_a.clone());
+    storage.add_book(book_b.clone());
+    storage.add_book(book_c.clone());
+
+    let sorted = storage.sort_books();
+    assert_eq!(sorted.len(), 3);
+
+    // Alpha Author's books should come first, sorted by title
+    assert_eq!(sorted[0].title, "Book A"); // Alpha Author
+    assert_eq!(sorted[1].title, "Book C"); // Alpha Author
+    assert_eq!(sorted[2].title, "Book B"); // Zed Author
+}
+
+#[test]
+fn test_get_earliest_finished_year_empty() {
+    let storage = Storage::new();
+    assert_eq!(storage.get_earliest_finished_year(), None);
+}
