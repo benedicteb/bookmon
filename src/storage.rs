@@ -255,74 +255,27 @@ impl Storage {
             .collect()
     }
 
-    pub fn get_started_books(&self) -> Vec<&Book> {
-        // Group readings by book_id
-        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
-        for reading in self.readings.values() {
-            book_readings
-                .entry(reading.book_id.clone())
-                .or_default()
-                .push(reading);
-        }
+    /// Returns the most recent reading event for a given book, or None if no readings exist
+    pub fn most_recent_reading_event(&self, book_id: &str) -> Option<ReadingEvent> {
+        self.readings
+            .values()
+            .filter(|r| r.book_id == book_id)
+            .max_by_key(|r| r.created_on)
+            .map(|r| r.event)
+    }
 
-        // Filter books to only those that are currently being read
+    pub fn get_started_books(&self) -> Vec<&Book> {
         self.books
             .values()
-            .filter(|book| {
-                if let Some(readings) = book_readings.get(&book.id) {
-                    // Sort readings by created_on in descending order
-                    let mut sorted_readings = readings.clone();
-                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-
-                    // Find the most recent Started event that isn't followed by a Finished event
-                    for reading in sorted_readings {
-                        match reading.event {
-                            ReadingEvent::Started => return true,
-                            ReadingEvent::Finished => return false,
-                            ReadingEvent::Update => continue,
-                            ReadingEvent::Bought => continue,
-                            ReadingEvent::WantToRead => continue,
-                            ReadingEvent::UnmarkedAsWantToRead => continue,
-                        }
-                    }
-                    false
-                } else {
-                    false
-                }
-            })
+            .filter(|book| self.is_book_started(&book.id))
             .collect()
     }
 
     /// Helper method to get books with a specific event as their most recent reading
     pub fn get_books_by_most_recent_event(&self, target_event: ReadingEvent) -> Vec<&Book> {
-        // Group readings by book_id
-        let mut book_readings: HashMap<String, Vec<&Reading>> = HashMap::new();
-        for reading in self.readings.values() {
-            book_readings
-                .entry(reading.book_id.clone())
-                .or_default()
-                .push(reading);
-        }
-
-        // Filter books to only those that have the target event as their most recent reading
         self.books
             .values()
-            .filter(|book| {
-                if let Some(readings) = book_readings.get(&book.id) {
-                    // Sort readings by created_on in descending order
-                    let mut sorted_readings = readings.clone();
-                    sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-
-                    // Check if the most recent reading matches the target event
-                    if let Some(most_recent) = sorted_readings.first() {
-                        most_recent.event == target_event
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
+            .filter(|book| self.most_recent_reading_event(&book.id) == Some(target_event))
             .collect()
     }
 
@@ -365,52 +318,31 @@ impl Storage {
         result
     }
 
+    /// Returns true if the book is currently being read (most recent status-relevant event is Started)
+    ///
+    /// Note: Update, Bought, WantToRead, and UnmarkedAsWantToRead events are skipped
+    /// when determining started/finished status — only Started and Finished events matter.
     pub fn is_book_started(&self, book_id: &str) -> bool {
-        let readings: Vec<_> = self
+        let mut readings: Vec<_> = self
             .readings
             .values()
             .filter(|r| r.book_id == book_id)
             .collect();
 
-        if !readings.is_empty() {
-            let mut sorted_readings = readings;
-            sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+        readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
 
-            // Check if there's a Started event that isn't followed by a Finished event
-            for reading in sorted_readings {
-                match reading.event {
-                    ReadingEvent::Started => return true,
-                    ReadingEvent::Finished => return false,
-                    ReadingEvent::Update => continue,
-                    ReadingEvent::Bought => continue,
-                    ReadingEvent::WantToRead => continue,
-                    ReadingEvent::UnmarkedAsWantToRead => continue,
-                }
+        for reading in readings {
+            match reading.event {
+                ReadingEvent::Started => return true,
+                ReadingEvent::Finished => return false,
+                _ => continue,
             }
-            false
-        } else {
-            false
         }
+        false
     }
 
     pub fn is_book_finished(&self, book_id: &str) -> bool {
-        let readings: Vec<_> = self
-            .readings
-            .values()
-            .filter(|r| r.book_id == book_id)
-            .collect();
-
-        if !readings.is_empty() {
-            let mut sorted_readings = readings;
-            sorted_readings.sort_by(|a, b| b.created_on.cmp(&a.created_on));
-            if let Some(most_recent) = sorted_readings.first() {
-                most_recent.event == ReadingEvent::Finished
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+        self.most_recent_reading_event(book_id) == Some(ReadingEvent::Finished)
     }
 
     /// Sorts books by reading status, author name, and title
