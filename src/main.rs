@@ -126,6 +126,20 @@ enum Commands {
     ReviewBook,
     /// Show all book reviews
     PrintReviews,
+    /// Set a yearly reading goal (number of books to finish)
+    SetGoal {
+        /// Number of books to read
+        target: u32,
+        /// Year to set the goal for (defaults to current year)
+        #[arg(short, long)]
+        year: Option<i32>,
+    },
+    /// Show progress toward your reading goal
+    PrintGoal {
+        /// Year to check (defaults to current year)
+        #[arg(short, long)]
+        year: Option<i32>,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -180,6 +194,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(e) => eprintln!("Failed to get book input: {}", e),
                 }
             }
+            Commands::SetGoal { target, year } => {
+                let year = year.unwrap_or_else(|| chrono::Utc::now().year());
+                storage.set_goal(year, *target);
+                storage::write_storage(&settings.storage_file, &storage)?;
+                println!("Reading goal for {}: {} books", year, target);
+            }
+            Commands::PrintGoal { year } => {
+                let year = year.unwrap_or_else(|| chrono::Utc::now().year());
+                print_goal_status(&storage, year);
+            }
             Commands::ReviewBook => {
                 review_book_flow(&mut storage, &settings.storage_file)?;
             }
@@ -229,7 +253,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 for year in earliest_year..=current_year {
                                     let books = storage.get_books_finished_in_year(year);
                                     if !books.is_empty() {
-                                        println!("\n{}: {} books", year, books.len());
+                                        // Show goal progress if a goal is set for this year
+                                        if let Some(target) = storage.get_goal(year) {
+                                            let finished = books.len() as u32;
+                                            let pct = if target > 0 {
+                                                (finished as f64 / target as f64) * 100.0
+                                            } else {
+                                                100.0
+                                            };
+                                            let remaining = target.saturating_sub(finished);
+                                            if year == current_year && remaining > 0 {
+                                                println!(
+                                                    "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete, {} remaining)",
+                                                    year,
+                                                    books.len(),
+                                                    target,
+                                                    pct,
+                                                    remaining
+                                                );
+                                            } else {
+                                                println!(
+                                                    "\n{}: {} books (Goal: {} \u{2014} {:.0}% complete)",
+                                                    year,
+                                                    books.len(),
+                                                    target,
+                                                    pct
+                                                );
+                                            }
+                                        } else {
+                                            println!("\n{}: {} books", year, books.len());
+                                        }
                                         for book in books {
                                             let author_name = storage.author_name_for_book(book);
                                             let author_name = if author_name.is_empty() {
@@ -278,7 +331,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Commands::ChangeStoragePath { .. } => unreachable!(),
         }
     } else {
-        // Default case (no command) - show currently-reading
+        // Default case (no command) - show goal status + currently-reading
+        show_goal_status_if_set(&storage);
         if cli.interactive {
             interactive_mode(&storage, &settings.storage_file, None)?;
         } else {
@@ -290,6 +344,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Prints a progress bar using Unicode block characters.
+fn print_progress_bar(finished: u32, target: u32) {
+    let bar_width = 20;
+    let filled = if target > 0 {
+        ((finished as f64 / target as f64) * bar_width as f64)
+            .round()
+            .min(bar_width as f64) as usize
+    } else {
+        bar_width
+    };
+    let empty = bar_width - filled;
+
+    let bar: String = "\u{2588}".repeat(filled) + &"\u{2591}".repeat(empty);
+    print!("{}", bar);
+}
+
+/// Prints the reading goal status for a given year.
+/// Shows book count, percentage, progress bar, and remaining count.
+fn print_goal_status(storage: &Storage, year: i32) {
+    match storage.get_goal(year) {
+        Some(target) => {
+            let finished = storage.get_books_finished_in_year(year).len() as u32;
+            let pct = if target > 0 {
+                (finished as f64 / target as f64) * 100.0
+            } else {
+                100.0
+            };
+            let remaining = target.saturating_sub(finished);
+
+            print!(
+                "\nReading goal {}: {}/{} books ({:.0}%)\n",
+                year, finished, target, pct
+            );
+            print_progress_bar(finished, target);
+            if remaining > 0 {
+                println!(" {} remaining", remaining);
+            } else {
+                println!(" Goal reached!");
+            }
+            println!();
+        }
+        None => {
+            println!(
+                "No reading goal set for {}. Use `bookmon set-goal <number>` to set one.",
+                year
+            );
+        }
+    }
+}
+
+/// Prints the current year's goal status if one is set. Used by the default command.
+fn show_goal_status_if_set(storage: &Storage) {
+    let year = chrono::Utc::now().year();
+    if storage.get_goal(year).is_some() {
+        print_goal_status(storage, year);
+    }
 }
 
 // Helper function for interactive mode
