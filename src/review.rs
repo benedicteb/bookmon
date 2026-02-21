@@ -133,13 +133,18 @@ pub fn show_review_detail(storage: &Storage, review_id: &str) -> io::Result<()> 
     Ok(())
 }
 
-/// Truncates text to a maximum length, appending "..." if truncated.
+/// Truncates text to a maximum number of characters, appending "..." if truncated.
 /// Replaces newlines with spaces for single-line display.
-fn truncate_text(text: &str, max_len: usize) -> String {
+/// Uses char count (not byte count) to avoid panicking on multi-byte UTF-8 characters.
+fn truncate_text(text: &str, max_chars: usize) -> String {
     let single_line = text.replace('\n', " ");
-    if single_line.len() <= max_len {
+    if single_line.chars().count() <= max_chars {
         single_line
     } else {
-        format!("{}...", &single_line[..max_len.saturating_sub(3)])
+        let truncated: String = single_line
+            .chars()
+            .take(max_chars.saturating_sub(3))
+            .collect();
+        format!("{}...", truncated)
     }
 }

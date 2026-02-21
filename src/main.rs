@@ -596,8 +596,9 @@ fn review_interactive_mode(storage: &Storage) -> Result<(), Box<dyn std::error::
                 .unwrap_or("Unknown Author");
             let date = r.created_on.format("%Y-%m-%d").to_string();
             let preview: String = r.text.replace('\n', " ");
-            let preview = if preview.len() > 40 {
-                format!("{}...", &preview[..37])
+            let preview = if preview.chars().count() > 40 {
+                let truncated: String = preview.chars().take(37).collect();
+                format!("{}...", truncated)
             } else {
                 preview
             };
