@@ -45,3 +45,46 @@ pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
     storage.add_series(series);
     id
 }
+
+/// Deletes a series and unlinks all books that belong to it.
+/// Returns an error if the series does not exist.
+pub fn delete_series(storage: &mut Storage, series_id: &str) -> Result<(), String> {
+    if storage.series.remove(series_id).is_none() {
+        return Err(format!("Series with ID '{}' not found", series_id));
+    }
+
+    // Unlink all books from this series
+    for book in storage.books.values_mut() {
+        if book.series_id.as_deref() == Some(series_id) {
+            book.series_id = None;
+            book.position_in_series = None;
+        }
+    }
+
+    Ok(())
+}
+
+/// Renames a series. Returns an error if the series does not exist or if another
+/// series with the new name already exists (case-insensitive).
+pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> Result<(), String> {
+    // Check that the series exists
+    if !storage.series.contains_key(series_id) {
+        return Err(format!("Series with ID '{}' not found", series_id));
+    }
+
+    // Check for duplicate name (case-insensitive), excluding the series being renamed
+    let duplicate = storage
+        .series
+        .iter()
+        .any(|(id, s)| id != series_id && s.name.to_lowercase() == new_name.to_lowercase());
+    if duplicate {
+        return Err(format!("A series named '{}' already exists", new_name));
+    }
+
+    // Rename
+    if let Some(series) = storage.series.get_mut(series_id) {
+        series.name = new_name.to_string();
+    }
+
+    Ok(())
+}
