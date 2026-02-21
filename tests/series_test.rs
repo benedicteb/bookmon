@@ -1,4 +1,6 @@
-use bookmon::series::{format_series_label, get_or_create_series, store_series};
+use bookmon::series::{
+    format_series_label, get_or_create_series, parse_position_input, store_series,
+};
 use bookmon::storage::{Author, Book, Category, Series, Storage};
 use chrono::Utc;
 
@@ -452,4 +454,39 @@ fn test_series_name_for_book_without_series() {
     );
 
     assert_eq!(storage.series_name_for_book(&book), "");
+}
+
+#[test]
+fn test_parse_position_input_valid() {
+    assert_eq!(parse_position_input("1"), Some(1));
+    assert_eq!(parse_position_input("5"), Some(5));
+    assert_eq!(parse_position_input("100"), Some(100));
+}
+
+#[test]
+fn test_parse_position_input_with_whitespace() {
+    assert_eq!(parse_position_input("  3  "), Some(3));
+}
+
+#[test]
+fn test_parse_position_input_empty() {
+    assert_eq!(parse_position_input(""), None);
+    assert_eq!(parse_position_input("   "), None);
+}
+
+#[test]
+fn test_parse_position_input_zero_rejected() {
+    assert_eq!(parse_position_input("0"), None);
+}
+
+#[test]
+fn test_parse_position_input_negative_rejected() {
+    assert_eq!(parse_position_input("-1"), None);
+    assert_eq!(parse_position_input("-99"), None);
+}
+
+#[test]
+fn test_parse_position_input_non_numeric() {
+    assert_eq!(parse_position_input("abc"), None);
+    assert_eq!(parse_position_input("1.5"), None);
 }
