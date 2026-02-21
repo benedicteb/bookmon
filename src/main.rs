@@ -142,6 +142,10 @@ enum Commands {
     },
     /// Show all book series and their books
     PrintSeries,
+    /// Delete a series (books are kept but unlinked)
+    DeleteSeries,
+    /// Rename an existing series
+    RenameSeries,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -336,6 +340,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Commands::PrintSeries => {
                 print_series(&storage);
             }
+            Commands::DeleteSeries => {
+                delete_series_flow(&mut storage, &settings.storage_file)?;
+            }
+            Commands::RenameSeries => {
+                rename_series_flow(&mut storage, &settings.storage_file)?;
+            }
             Commands::ChangeStoragePath { .. } => unreachable!(),
         }
     } else {
@@ -457,6 +467,137 @@ fn print_series(storage: &Storage) {
         }
     }
     println!();
+}
+
+/// Interactive flow to delete a series. Prompts the user to select which series to delete.
+fn delete_series_flow(
+    storage: &mut Storage,
+    storage_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if storage.series.is_empty() {
+        println!("No series to delete.");
+        return Ok(());
+    }
+
+    let mut series_list: Vec<(&String, &storage::Series)> = storage.series.iter().collect();
+    series_list.sort_by(|a, b| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()));
+
+    let display_names: Vec<String> = series_list
+        .iter()
+        .map(|(_, s)| {
+            let count = storage.get_books_in_series(&s.id).len();
+            format!("{} ({} books)", s.name, count)
+        })
+        .collect();
+
+    let selection = match Select::new(
+        "Select series to delete:",
+        display_names.iter().map(|s| s.as_str()).collect(),
+    )
+    .prompt()
+    {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let idx = display_names
+        .iter()
+        .position(|s| s.as_str() == selection)
+        .unwrap();
+    let series_id = series_list[idx].0.clone();
+    let series_name = series_list[idx].1.name.clone();
+
+    // Confirm deletion
+    let confirm = match Select::new(
+        &format!(
+            "Are you sure you want to delete '{}'? Books will be kept but unlinked.",
+            series_name
+        ),
+        vec!["Yes", "No"],
+    )
+    .prompt()
+    {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    if confirm == "No" {
+        println!("Deletion cancelled.");
+        return Ok(());
+    }
+
+    match bookmon::series::delete_series(storage, &series_id) {
+        Ok(_) => {
+            storage::write_storage(storage_file, storage)?;
+            println!("Series '{}' deleted.", series_name);
+        }
+        Err(e) => eprintln!("Failed to delete series: {}", e),
+    }
+
+    Ok(())
+}
+
+/// Interactive flow to rename a series. Prompts the user to select which series to rename.
+fn rename_series_flow(
+    storage: &mut Storage,
+    storage_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if storage.series.is_empty() {
+        println!("No series to rename.");
+        return Ok(());
+    }
+
+    let mut series_list: Vec<(&String, &storage::Series)> = storage.series.iter().collect();
+    series_list.sort_by(|a, b| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()));
+
+    let names: Vec<&str> = series_list.iter().map(|(_, s)| s.name.as_str()).collect();
+
+    let selection = match Select::new("Select series to rename:", names).prompt() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let idx = series_list
+        .iter()
+        .position(|(_, s)| s.name.as_str() == selection)
+        .unwrap();
+    let series_id = series_list[idx].0.clone();
+
+    let new_name = match Text::new("Enter new name:")
+        .with_default(selection)
+        .prompt()
+    {
+        Ok(n) => n,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let new_name = new_name.trim();
+    if new_name.is_empty() {
+        println!("Name cannot be empty.");
+        return Ok(());
+    }
+
+    match bookmon::series::rename_series(storage, &series_id, new_name) {
+        Ok(_) => {
+            storage::write_storage(storage_file, storage)?;
+            println!("Series renamed to '{}'.", new_name);
+        }
+        Err(e) => eprintln!("Failed to rename series: {}", e),
+    }
+
+    Ok(())
 }
 
 // Helper function for interactive mode
