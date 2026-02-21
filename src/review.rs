@@ -56,7 +56,14 @@ pub fn get_review_text_from_editor(
 
     let path = tmp.path().to_path_buf();
 
-    let status = std::process::Command::new(&editor)
+    // Split editor command to support values like "code --wait" or "subl -w"
+    let parts: Vec<&str> = editor.split_whitespace().collect();
+    let (editor_bin, editor_args) = parts
+        .split_first()
+        .ok_or("$EDITOR is empty after splitting")?;
+
+    let status = std::process::Command::new(editor_bin)
+        .args(editor_args)
         .arg(&path)
         .status()
         .map_err(|e| format!("Failed to open editor '{}': {}", editor, e))?;
