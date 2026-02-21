@@ -1,3 +1,4 @@
+use crate::series::format_series_label;
 use crate::storage::{Book, Reading, ReadingEvent, Storage};
 use crate::table::print_table;
 use chrono::Utc;
@@ -29,6 +30,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         vec![
             "Title".to_string(),
             "Author".to_string(),
+            "Series".to_string(),
             "Days since started".to_string(),
             "Progress".to_string(),
         ], // header
@@ -50,6 +52,14 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     // For each started book, find the corresponding author and most recent started reading
     for book in sorted_books {
         let author_name = storage.author_name_for_book(book);
+
+        // Format series label
+        let series_label = book
+            .series_id
+            .as_ref()
+            .and_then(|sid| storage.get_series(sid))
+            .map(|s| format_series_label(s, book.position_in_series))
+            .unwrap_or_default();
 
         // Find the most recent started reading for this book
         let most_recent_reading = storage
@@ -91,6 +101,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         table_data.push(vec![
             book.title.clone(),
             author_name.to_string(),
+            series_label,
             days.to_string(),
             progress,
         ]);
@@ -117,6 +128,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
         vec![
             "Title".to_string(),
             "Author".to_string(),
+            "Series".to_string(),
             "Finished on".to_string(),
         ], // header
     ];
@@ -138,6 +150,14 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     for book in sorted_books {
         let author_name = storage.author_name_for_book(book);
 
+        // Format series label
+        let series_label = book
+            .series_id
+            .as_ref()
+            .and_then(|sid| storage.get_series(sid))
+            .map(|s| format_series_label(s, book.position_in_series))
+            .unwrap_or_default();
+
         // Find the most recent finished reading for this book
         let most_recent_reading = storage
             .readings
@@ -156,6 +176,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
         table_data.push(vec![
             book.title.clone(),
             author_name.to_string(),
+            series_label,
             finished_date,
         ]);
     }
@@ -189,6 +210,7 @@ pub fn print_book_list_table(
         vec![
             "Title".to_string(),
             "Author".to_string(),
+            "Series".to_string(),
             "Category".to_string(),
             "Added on".to_string(),
             "Bought".to_string(),
@@ -225,6 +247,14 @@ pub fn print_book_list_table(
             .get(&book.category_id)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Category not found"))?;
 
+        // Format series label
+        let series_label = book
+            .series_id
+            .as_ref()
+            .and_then(|sid| storage.get_series(sid))
+            .map(|s| format_series_label(s, book.position_in_series))
+            .unwrap_or_default();
+
         // Check if the book has a bought event
         let has_bought_event = storage
             .readings
@@ -241,6 +271,7 @@ pub fn print_book_list_table(
         table_data.push(vec![
             book.title.clone(),
             author_name.to_string(),
+            series_label,
             category.name.clone(),
             added_date,
             if has_bought_event {

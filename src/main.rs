@@ -140,6 +140,8 @@ enum Commands {
         #[arg(short, long)]
         year: Option<i32>,
     },
+    /// Show all book series and their books
+    PrintSeries,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -331,6 +333,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("No book found for ISBN {}", isbn);
                 }
             }
+            Commands::PrintSeries => {
+                print_series(&storage);
+            }
             Commands::ChangeStoragePath { .. } => unreachable!(),
         }
     } else {
@@ -415,6 +420,43 @@ fn show_goal_status_if_set(storage: &Storage) {
     if storage.get_goal(year).is_some() {
         print_goal_status(storage, year);
     }
+}
+
+/// Prints all series and their books, sorted by series name then position.
+fn print_series(storage: &Storage) {
+    if storage.series.is_empty() {
+        println!("No series found.");
+        return;
+    }
+
+    // Sort series by name
+    let mut all_series: Vec<&storage::Series> = storage.series.values().collect();
+    all_series.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    for s in all_series {
+        println!("\n{}", s.name);
+        println!("{}", "-".repeat(s.name.len()));
+
+        let books = storage.get_books_in_series(&s.id);
+        if books.is_empty() {
+            println!("  (no books)");
+        } else {
+            for book in books {
+                let author_name = storage.author_name_for_book(book);
+                let author_name = if author_name.is_empty() {
+                    "Unknown Author"
+                } else {
+                    author_name
+                };
+                let pos = book
+                    .position_in_series
+                    .map(|p| format!("#{} ", p))
+                    .unwrap_or_default();
+                println!("  {}\"{}\" by {}", pos, book.title, author_name);
+            }
+        }
+    }
+    println!();
 }
 
 // Helper function for interactive mode
