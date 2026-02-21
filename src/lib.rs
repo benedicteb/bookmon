@@ -3,6 +3,7 @@ pub mod book;
 pub mod category;
 pub mod config;
 pub mod reading;
+pub mod review;
 pub mod storage;
 pub mod lookup {
     pub mod book_lookup_dto;

@@ -76,6 +76,31 @@ pub struct Reading {
     pub metadata: ReadingMetadata,
 }
 
+/// A user-written review of a book.
+///
+/// Each review is linked to a book by `book_id` and contains free-form text
+/// written via the user's default editor (git-commit style).
+/// A book can have multiple reviews.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Review {
+    pub id: String,
+    pub created_on: DateTime<Utc>,
+    pub book_id: String,
+    pub text: String,
+}
+
+impl Review {
+    /// Creates a new review with a generated UUID and current timestamp.
+    pub fn new(book_id: String, text: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            text,
+        }
+    }
+}
+
 impl Author {
     /// Creates a new author with a generated UUID and current timestamp.
     pub fn new(name: String) -> Self {
@@ -178,7 +203,7 @@ impl Category {
     }
 }
 
-/// The central data store containing all books, readings, authors, and categories.
+/// The central data store containing all books, readings, authors, categories, and reviews.
 ///
 /// Persisted as a single JSON file. All collections are keyed by UUID string.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -187,6 +212,8 @@ pub struct Storage {
     pub readings: HashMap<String, Reading>,
     pub authors: HashMap<String, Author>,
     pub categories: HashMap<String, Category>,
+    #[serde(default)]
+    pub reviews: HashMap<String, Review>,
 }
 
 impl Default for Storage {
@@ -202,6 +229,7 @@ impl Storage {
             readings: HashMap::new(),
             authors: HashMap::new(),
             categories: HashMap::new(),
+            reviews: HashMap::new(),
         }
     }
 
@@ -250,6 +278,25 @@ impl Storage {
 
     pub fn get_category(&self, id: &str) -> Option<&Category> {
         self.categories.get(id)
+    }
+
+    pub fn add_review(&mut self, review: Review) -> Option<Review> {
+        self.reviews.insert(review.id.clone(), review)
+    }
+
+    pub fn get_review(&self, id: &str) -> Option<&Review> {
+        self.reviews.get(id)
+    }
+
+    /// Returns all reviews for a given book, sorted by creation date (newest first).
+    pub fn get_reviews_for_book(&self, book_id: &str) -> Vec<&Review> {
+        let mut reviews: Vec<&Review> = self
+            .reviews
+            .values()
+            .filter(|r| r.book_id == book_id)
+            .collect();
+        reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+        reviews
     }
 
     pub fn get_readings_by_event(&self, event_type: ReadingEvent) -> Vec<&Reading> {
