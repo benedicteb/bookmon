@@ -95,7 +95,29 @@ tests/
 - Integration tests use `tempfile` for isolated storage files
 - No ORM - direct JSON file I/O
 
+## Agent Collaboration
+
+The project uses a multi-agent workflow. The primary developer agent actively consults specialist subagents during planning, implementation, and review — not just at session end.
+
+### Agents
+
+| Agent | Role | When consulted |
+|---|---|---|
+| `@rust-developer` | Primary. Writes code, runs tests, makes commits. | Always active |
+| `@book-domain-expert` | Domain specialist for books, publishing, authors, bibliographic standards. | Data model changes, terminology decisions, new features involving book concepts |
+| `@ux-designer` | UX specialist for terminal applications. | CLI commands, interactive prompts, output formatting, error messages |
+| `@reviewer` | Code reviewer. Checks correctness, tests, Rust idioms, commit hygiene. | End of session |
+
+### Collaboration Model
+
+- **Before planning:** The developer consults `@book-domain-expert` and/or `@ux-designer` to validate understanding and surface domain or UX concerns early.
+- **Before implementing user-facing changes:** The developer consults `@ux-designer` on interaction design.
+- **Before implementing model changes:** The developer consults `@book-domain-expert` on data modeling and terminology.
+- **After implementing:** The developer calls `@ux-designer` to review the actual output/flow.
+- **At session end:** All three subagents (`@ux-designer`, `@book-domain-expert`, `@reviewer`) review the session's work.
+- **In ADRs:** Subagent input is recorded in a dedicated "Subagent Input" section when domain or UX decisions are involved.
+
 ## Documentation
 
-- `docs/adr/` - Architecture Decision Records (ADR format)
+- `docs/adr/` - Architecture Decision Records (ADR format, includes subagent input)
 - `docs/learnings/` - Session learning summaries
