@@ -78,7 +78,7 @@ pub fn get_review_text_from_editor(
 
 /// Displays a table of all reviews with book title, author, date, and a text preview.
 pub fn show_reviews(storage: &Storage) -> io::Result<()> {
-    use pretty_table::prelude::*;
+    use crate::table::print_table;
 
     let mut reviews: Vec<&Review> = storage.reviews.values().collect();
 
@@ -114,7 +114,7 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
         ]);
     }
 
-    print_table!(table_data);
+    print_table(&table_data);
     Ok(())
 }
 

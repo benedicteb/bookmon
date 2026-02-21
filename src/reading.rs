@@ -1,6 +1,6 @@
 use crate::storage::{Book, Reading, ReadingEvent, Storage};
+use crate::table::print_table;
 use chrono::Utc;
-use pretty_table::prelude::*;
 use std::io;
 
 /// Validates and stores a reading event. Returns an error if the referenced book doesn't exist.
@@ -97,7 +97,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     }
 
     // Print the table
-    print_table!(table_data);
+    print_table(&table_data);
 
     Ok(())
 }
@@ -161,7 +161,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     }
 
     // Print the table
-    print_table!(table_data);
+    print_table(&table_data);
 
     Ok(())
 }
@@ -257,7 +257,7 @@ pub fn print_book_list_table(
     }
 
     // Print the table
-    print_table!(table_data);
+    print_table(&table_data);
 
     Ok(())
 }
