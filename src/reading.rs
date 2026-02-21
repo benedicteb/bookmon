@@ -189,13 +189,6 @@ pub fn show_finished_books_list(
     Ok(())
 }
 
-/// Displays a table of books that haven't been started yet.
-pub fn show_unstarted_books(storage: &Storage) -> io::Result<()> {
-    // Get all unstarted books
-    let unstarted_books = storage.get_unstarted_books();
-    print_book_list_table(storage, unstarted_books, "No unstarted books found.")
-}
-
 /// Prints a table of books with common columns (Title, Author, Category, Added on, Bought)
 /// The Series column is only included when at least one book has a series.
 pub fn print_book_list_table(

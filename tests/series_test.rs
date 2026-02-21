@@ -1173,4 +1173,13 @@ fn test_series_filter_empty_message() {
         msg.contains("Harry Potter") || msg.contains("Discworld"),
         "should suggest known series"
     );
+
+    // When storage has no series at all
+    let empty_storage = Storage::new();
+    let msg = format_series_filter_empty_message(&empty_storage, "anything");
+    assert!(msg.contains("anything"), "should include the filter term");
+    assert!(
+        msg.contains("No series exist yet"),
+        "should indicate no series exist"
+    );
 }
