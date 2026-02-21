@@ -96,16 +96,8 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     // Sort the started books by author and title
     let mut sorted_books = started_books;
     sorted_books.sort_by(|a, b| {
-        let a_author_name = storage
-            .authors
-            .get(&a.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
-        let b_author_name = storage
-            .authors
-            .get(&b.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
+        let a_author_name = storage.author_name_for_book(a);
+        let b_author_name = storage.author_name_for_book(b);
 
         if a_author_name != b_author_name {
             a_author_name.cmp(b_author_name)
@@ -116,10 +108,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
 
     // For each started book, find the corresponding author and most recent started reading
     for book in sorted_books {
-        let author = storage
-            .authors
-            .get(&book.author_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+        let author_name = storage.author_name_for_book(book);
 
         // Find the most recent started reading for this book
         let most_recent_reading = storage
@@ -160,7 +149,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
         // Add row to table data
         table_data.push(vec![
             book.title.clone(),
-            author.name.clone(),
+            author_name.to_string(),
             days.to_string(),
             progress,
         ]);
@@ -193,16 +182,8 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     // Sort the finished books by author and title
     let mut sorted_books = finished_books;
     sorted_books.sort_by(|a, b| {
-        let a_author_name = storage
-            .authors
-            .get(&a.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
-        let b_author_name = storage
-            .authors
-            .get(&b.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
+        let a_author_name = storage.author_name_for_book(a);
+        let b_author_name = storage.author_name_for_book(b);
 
         if a_author_name != b_author_name {
             a_author_name.cmp(b_author_name)
@@ -213,10 +194,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
 
     // For each finished book, find the corresponding author and most recent finished reading
     for book in sorted_books {
-        let author = storage
-            .authors
-            .get(&book.author_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+        let author_name = storage.author_name_for_book(book);
 
         // Find the most recent finished reading for this book
         let most_recent_reading = storage
@@ -233,7 +211,11 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
             .to_string();
 
         // Add row to table data
-        table_data.push(vec![book.title.clone(), author.name.clone(), finished_date]);
+        table_data.push(vec![
+            book.title.clone(),
+            author_name.to_string(),
+            finished_date,
+        ]);
     }
 
     // Print the table
@@ -270,10 +252,7 @@ pub fn show_all_books(storage: &Storage) -> io::Result<()> {
 
     // For each book, find the corresponding author and category
     for book in books {
-        let author = storage
-            .authors
-            .get(&book.author_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+        let author_name = storage.author_name_for_book(book);
 
         let category = storage
             .categories
@@ -321,7 +300,7 @@ pub fn show_all_books(storage: &Storage) -> io::Result<()> {
         // Add row to table data
         table_data.push(vec![
             book.title.clone(),
-            author.name.clone(),
+            author_name.to_string(),
             category.name.clone(),
             status.to_string(),
             progress,
@@ -360,16 +339,8 @@ pub fn print_book_list_table(
     // Sort the books by author and title
     let mut sorted_books = books;
     sorted_books.sort_by(|a, b| {
-        let a_author_name = storage
-            .authors
-            .get(&a.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
-        let b_author_name = storage
-            .authors
-            .get(&b.author_id)
-            .map(|a| a.name.as_str())
-            .unwrap_or("");
+        let a_author_name = storage.author_name_for_book(a);
+        let b_author_name = storage.author_name_for_book(b);
 
         if a_author_name != b_author_name {
             a_author_name.cmp(b_author_name)
@@ -380,10 +351,7 @@ pub fn print_book_list_table(
 
     // For each book, find the corresponding author and category
     for book in sorted_books {
-        let author = storage
-            .authors
-            .get(&book.author_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Author not found"))?;
+        let author_name = storage.author_name_for_book(book);
 
         let category = storage
             .categories
@@ -408,7 +376,7 @@ pub fn print_book_list_table(
         // Add row to table data
         table_data.push(vec![
             book.title.clone(),
-            author.name.clone(),
+            author_name.to_string(),
             category.name.clone(),
             added_date,
             if has_bought_event {

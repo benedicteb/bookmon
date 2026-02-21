@@ -228,11 +228,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if !books.is_empty() {
                                     println!("\n{}: {} books", year, books.len());
                                     for book in books {
-                                        let author_name = storage
-                                            .authors
-                                            .get(&book.author_id)
-                                            .map(|a| a.name.as_str())
-                                            .unwrap_or("Unknown Author");
+                                        let author_name = storage.author_name_for_book(book);
+                                        let author_name = if author_name.is_empty() {
+                                            "Unknown Author"
+                                        } else {
+                                            author_name
+                                        };
                                         println!("  - \"{}\" by {}", book.title, author_name);
                                     }
                                 }
@@ -326,12 +327,10 @@ fn interactive_mode(
             let a_book = storage.books.get(&a.1);
             let b_book = storage.books.get(&b.1);
             let a_author = a_book
-                .and_then(|book| storage.authors.get(&book.author_id))
-                .map(|a| a.name.as_str())
+                .map(|book| storage.author_name_for_book(book))
                 .unwrap_or("");
             let b_author = b_book
-                .and_then(|book| storage.authors.get(&book.author_id))
-                .map(|a| a.name.as_str())
+                .map(|book| storage.author_name_for_book(book))
                 .unwrap_or("");
 
             if a_author != b_author {

@@ -205,6 +205,14 @@ impl Storage {
         self.categories.insert(category.id.clone(), category)
     }
 
+    /// Returns the author name for a given book, or an empty string if the author is not found
+    pub fn author_name_for_book(&self, book: &Book) -> &str {
+        self.authors
+            .get(&book.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("")
+    }
+
     pub fn get_book(&self, id: &str) -> Option<&Book> {
         self.books.get(id)
     }
@@ -425,22 +433,13 @@ impl Storage {
             if a_status != b_status {
                 a_status.cmp(&b_status)
             } else {
-                // Then sort by author name
-                let a_author_name = self
-                    .authors
-                    .get(&a.author_id)
-                    .map(|a| a.name.as_str())
-                    .unwrap_or("");
-                let b_author_name = self
-                    .authors
-                    .get(&b.author_id)
-                    .map(|a| a.name.as_str())
-                    .unwrap_or("");
+                // Then sort by author name, then by title
+                let a_author_name = self.author_name_for_book(a);
+                let b_author_name = self.author_name_for_book(b);
 
                 if a_author_name != b_author_name {
                     a_author_name.cmp(b_author_name)
                 } else {
-                    // Finally sort by title
                     a.title.cmp(&b.title)
                 }
             }
