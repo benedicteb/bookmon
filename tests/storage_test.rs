@@ -2296,3 +2296,100 @@ fn test_goals_empty_in_new_storage_json() {
     let goals = value.get("goals").unwrap().as_object().unwrap();
     assert!(goals.is_empty(), "New storage should have empty goals");
 }
+
+#[test]
+fn test_handle_missing_fields_clears_orphaned_series_id() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with a book that has an orphaned series_id
+    let mut storage = Storage::new();
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let book = Book {
+        id: Uuid::new_v4().to_string(),
+        title: "Series Orphan Book".to_string(),
+        added_on: Utc::now(),
+        isbn: "123".to_string(),
+        category_id,
+        author_id,
+        total_pages: 200,
+        series_id: Some("nonexistent-series-id".to_string()),
+        position_in_series: Some(3),
+    };
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    write_storage(&path, &storage).unwrap();
+
+    // Run repair — orphaned series_id should be silently cleared (no prompt needed)
+    let prompter = TestPrompter::new("Author", "Category", 100);
+    handle_missing_fields(&mut storage, &path, &prompter).unwrap();
+
+    // Verify the book's series_id and position_in_series were cleared
+    let repaired_book = storage.books.get(&book_id).unwrap();
+    assert_eq!(
+        repaired_book.series_id, None,
+        "Orphaned series_id should be cleared to None"
+    );
+    assert_eq!(
+        repaired_book.position_in_series, None,
+        "position_in_series should be cleared when series_id is orphaned"
+    );
+}
+
+#[test]
+fn test_handle_missing_fields_preserves_valid_series_id() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with a book that has a valid series_id
+    let mut storage = Storage::new();
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = bookmon::storage::Series::new("Harry Potter".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let book = Book {
+        id: Uuid::new_v4().to_string(),
+        title: "Philosopher's Stone".to_string(),
+        added_on: Utc::now(),
+        isbn: "456".to_string(),
+        category_id,
+        author_id,
+        total_pages: 300,
+        series_id: Some(series_id.clone()),
+        position_in_series: Some(1),
+    };
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    write_storage(&path, &storage).unwrap();
+
+    // Run repair — valid series_id should be left untouched
+    let prompter = TestPrompter::new("Author", "Category", 100);
+    handle_missing_fields(&mut storage, &path, &prompter).unwrap();
+
+    let repaired_book = storage.books.get(&book_id).unwrap();
+    assert_eq!(
+        repaired_book.series_id,
+        Some(series_id),
+        "Valid series_id should not be changed"
+    );
+    assert_eq!(
+        repaired_book.position_in_series,
+        Some(1),
+        "position_in_series should be preserved for valid series_id"
+    );
+}
