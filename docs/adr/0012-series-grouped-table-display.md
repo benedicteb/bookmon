@@ -24,7 +24,9 @@ Replace the flat Series column with visual grouping:
 A new `TableRow` enum and `format_structured_table` function were added to `table.rs`:
 - `TableRow::Header(Vec<String>)` — Column headers
 - `TableRow::Data(Vec<String>)` — Regular data row
-- `TableRow::GroupHeader(String)` — Spanning series name row
+- `TableRow::GroupHeader(String, usize)` — Spanning series name row with count of grouped `Data` rows that follow
+
+The `usize` count in `GroupHeader` explicitly bounds how many subsequent `Data` rows belong to the group. This prevents standalone `Data` rows after a group from being incorrectly treated as part of the preceding group (a bug found in the original `GroupHeader(String)` design).
 
 The existing `format_table`/`print_table` API is preserved for backward compatibility.
 

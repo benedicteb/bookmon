@@ -56,8 +56,10 @@ pub fn group_books_by_series<'a>(storage: &'a Storage, books: &[&'a Book]) -> Ve
     let mut entries: Vec<(String, u8, String, BookEntry<'a>)> = Vec::new();
 
     for (sid, group_books) in series_map {
-        let series = storage.get_series(sid).unwrap(); // safe: checked above
-                                                       // Sort author = author of the first (lowest position) book
+        let series = storage
+            .get_series(sid)
+            .expect("series must exist: filtered by is_some() above");
+        // Sort author = author of the first (lowest position) book
         let sort_author = group_books
             .first()
             .map(|b| storage.author_name_for_book(b))

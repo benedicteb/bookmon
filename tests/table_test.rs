@@ -405,3 +405,75 @@ fn test_structured_table_group_header_with_unicode() {
         );
     }
 }
+
+#[test]
+fn test_structured_table_group_header_with_zero_count() {
+    // Edge case: GroupHeader with count 0 means no Data rows belong to it.
+    // The group header should render, and a standalone Data row after it should
+    // still get its own separator.
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
+        TableRow::GroupHeader("Empty Series".to_string(), 0),
+        TableRow::Data(vec![
+            "Standalone Book".to_string(),
+            "Some Author".to_string(),
+        ]),
+    ];
+    let output = format_structured_table(&rows);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Structure:
+    // 0: +=====+=====+
+    // 1: | Title | Author |
+    // 2: +=====+=====+
+    // 3: | ── Empty Series ── |  (group header, but 0 grouped rows)
+    // 4: | Standalone Book | Some Author |  (standalone — sep after)
+    // 5: +-----+-----+
+    assert_eq!(lines.len(), 6, "Output:\n{}", output);
+    assert!(lines[3].contains("Empty Series"));
+    assert!(lines[4].contains("Standalone Book"));
+    assert!(
+        lines[5].starts_with('+'),
+        "Standalone row after empty group should have separator"
+    );
+}
+
+#[test]
+fn test_structured_table_consecutive_group_headers() {
+    // Edge case: Two GroupHeaders in a row (no Data between them).
+    // Each group header should render, and the second group's Data rows
+    // should belong to the second group, not the first.
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
+        TableRow::GroupHeader("First Series".to_string(), 0),
+        TableRow::GroupHeader("Second Series".to_string(), 2),
+        TableRow::Data(vec!["#1 Book A".to_string(), "Author A".to_string()]),
+        TableRow::Data(vec!["#2 Book B".to_string(), "Author A".to_string()]),
+    ];
+    let output = format_structured_table(&rows);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Structure:
+    // 0: +=====+=====+
+    // 1: | Title | Author |
+    // 2: +=====+=====+
+    // 3: | ── First Series ── |   (empty group)
+    // 4: | ── Second Series ── |  (group with 2 rows)
+    // 5: | #1 Book A | Author A |  (grouped, no sep)
+    // 6: | #2 Book B | Author A |  (grouped, sep after)
+    // 7: +-----+-----+
+    assert_eq!(lines.len(), 8, "Output:\n{}", output);
+    assert!(lines[3].contains("First Series"));
+    assert!(lines[4].contains("Second Series"));
+    assert!(lines[5].contains("#1 Book A"));
+    assert!(lines[6].contains("#2 Book B"));
+    assert!(
+        lines[7].starts_with('+'),
+        "Separator after last row in second group"
+    );
+    // No separator between the two grouped Data rows
+    assert!(
+        !lines[5].starts_with('+') && !lines[6].starts_with('+'),
+        "No separator between grouped rows"
+    );
+}
