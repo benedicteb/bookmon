@@ -1,7 +1,7 @@
 use bookmon::{
     book, config,
     lookup::http_client,
-    reading,
+    reading, review,
     storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
 };
 use chrono::Datelike;
@@ -122,6 +122,10 @@ enum Commands {
         /// The ISBN to look up
         isbn: String,
     },
+    /// Write a review for a book (opens $EDITOR)
+    ReviewBook,
+    /// Show all book reviews
+    PrintReviews,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -174,6 +178,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     Err(e) => eprintln!("Failed to get book input: {}", e),
+                }
+            }
+            Commands::ReviewBook => {
+                review_book_flow(&mut storage, &settings.storage_file)?;
+            }
+            Commands::PrintReviews => {
+                if cli.interactive {
+                    review_interactive_mode(&storage)?;
+                } else {
+                    match review::show_reviews(&storage) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to show reviews: {}", e),
+                    }
                 }
             }
             cmd @ (Commands::PrintFinished
@@ -405,6 +422,9 @@ fn interactive_mode(
         actions.push("Mark as bought");
     }
 
+    // Review is always available for any book
+    actions.push("Write review");
+
     if actions.is_empty() {
         println!("No available actions for this book.");
         return Ok(());
@@ -418,6 +438,35 @@ fn interactive_mode(
             return Ok(());
         }
     };
+
+    // Handle "Write review" action separately from reading events
+    if action_selection == "Write review" {
+        let author_name = storage.author_name_for_book(selected_book);
+        let author_name = if author_name.is_empty() {
+            "Unknown Author"
+        } else {
+            author_name
+        };
+
+        match review::get_review_text_from_editor(&selected_book.title, author_name) {
+            Ok(Some(text)) => {
+                let review_obj = storage::Review::new(selected_book.id.clone(), text);
+                let mut storage = storage.clone();
+                match review::store_review(&mut storage, review_obj) {
+                    Ok(_) => {
+                        storage::write_storage(storage_file, &storage)?;
+                        println!("Review saved successfully!");
+                    }
+                    Err(e) => eprintln!("Failed to store review: {}", e),
+                }
+            }
+            Ok(None) => {
+                println!("Review aborted (empty text).");
+            }
+            Err(e) => eprintln!("Failed to get review text: {}", e),
+        }
+        return Ok(());
+    }
 
     // Create and store the reading event
     let event = match action_selection {
@@ -454,4 +503,126 @@ fn interactive_mode(
     }
 
     Ok(())
+}
+
+/// Flow for the `review-book` command: select a book, open editor, save review.
+fn review_book_flow(
+    storage: &mut Storage,
+    storage_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if storage.books.is_empty() {
+        println!("No books in your collection. Add a book first.");
+        return Ok(());
+    }
+
+    // Build sorted book list for selection
+    let sorted_books = storage.sort_books();
+    let mut options: Vec<(String, String)> = Vec::new();
+    for book in &sorted_books {
+        let author_name = storage.author_name_for_book(book);
+        let display = format!("\"{}\" by {}", book.title, author_name);
+        options.push((display, book.id.clone()));
+    }
+
+    let display_to_id: std::collections::HashMap<String, String> = options
+        .iter()
+        .map(|(d, id)| (d.clone(), id.clone()))
+        .collect();
+    let display_options: Vec<String> = options.into_iter().map(|(d, _)| d).collect();
+
+    let selection = match Select::new("Select a book to review:", display_options).prompt() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Operation cancelled");
+            return Ok(());
+        }
+    };
+
+    let book_id = display_to_id
+        .get(&selection)
+        .ok_or("Selected book not found")?
+        .clone();
+    let book = storage
+        .books
+        .get(&book_id)
+        .ok_or("Book not found in storage")?;
+    let author_name = storage.author_name_for_book(book);
+    let author_name = if author_name.is_empty() {
+        "Unknown Author"
+    } else {
+        author_name
+    };
+    let book_title = book.title.clone();
+
+    match review::get_review_text_from_editor(&book_title, author_name) {
+        Ok(Some(text)) => {
+            let review_obj = storage::Review::new(book_id, text);
+            match review::store_review(storage, review_obj) {
+                Ok(_) => {
+                    storage::write_storage(storage_file, storage)?;
+                    println!("Review saved successfully!");
+                }
+                Err(e) => eprintln!("Failed to store review: {}", e),
+            }
+        }
+        Ok(None) => {
+            println!("Review aborted (empty text).");
+        }
+        Err(e) => eprintln!("Failed to get review text: {}", e),
+    }
+
+    Ok(())
+}
+
+/// Interactive mode for browsing reviews: select a review to view full text, loop.
+fn review_interactive_mode(storage: &Storage) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        let mut reviews: Vec<&storage::Review> = storage.reviews.values().collect();
+
+        if reviews.is_empty() {
+            println!("No reviews found.");
+            return Ok(());
+        }
+
+        // Sort by date, newest first
+        reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+        let mut options: Vec<(String, String)> = Vec::new();
+        for r in &reviews {
+            let book = storage.books.get(&r.book_id);
+            let title = book.map(|b| b.title.as_str()).unwrap_or("Unknown Book");
+            let author = book
+                .map(|b| storage.author_name_for_book(b))
+                .unwrap_or("Unknown Author");
+            let date = r.created_on.format("%Y-%m-%d").to_string();
+            let preview: String = r.text.replace('\n', " ");
+            let preview = if preview.len() > 40 {
+                format!("{}...", &preview[..37])
+            } else {
+                preview
+            };
+            let display = format!("[{}] \"{}\" by {} - {}", date, title, author, preview);
+            options.push((display, r.id.clone()));
+        }
+
+        let display_to_id: std::collections::HashMap<String, String> = options
+            .iter()
+            .map(|(d, id)| (d.clone(), id.clone()))
+            .collect();
+        let display_options: Vec<String> = options.into_iter().map(|(d, _)| d).collect();
+
+        let selection =
+            match Select::new("Select a review to view (Esc to quit):", display_options).prompt() {
+                Ok(s) => s,
+                Err(_) => {
+                    return Ok(());
+                }
+            };
+
+        let review_id = display_to_id
+            .get(&selection)
+            .ok_or("Selected review not found")?;
+
+        review::show_review_detail(storage, review_id)?;
+    }
 }
