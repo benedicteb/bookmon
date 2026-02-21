@@ -506,7 +506,7 @@ fn delete_series_flow(
     let idx = display_names
         .iter()
         .position(|s| s.as_str() == selection)
-        .unwrap();
+        .expect("selection from prompt must exist in display list");
     let series_id = series_list[idx].0.clone();
     let series_name = series_list[idx].1.name.clone();
 
@@ -569,7 +569,7 @@ fn rename_series_flow(
     let idx = series_list
         .iter()
         .position(|(_, s)| s.name.as_str() == selection)
-        .unwrap();
+        .expect("selection from prompt must exist in series list");
     let series_id = series_list[idx].0.clone();
 
     let new_name = match Text::new("Enter new name:")

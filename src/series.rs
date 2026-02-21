@@ -64,9 +64,14 @@ pub fn delete_series(storage: &mut Storage, series_id: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Renames a series. Returns an error if the series does not exist or if another
-/// series with the new name already exists (case-insensitive).
+/// Renames a series. Returns an error if the series does not exist, if the new
+/// name is empty, or if another series with the new name already exists (case-insensitive).
 pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> Result<(), String> {
+    let new_name_trimmed = new_name.trim();
+    if new_name_trimmed.is_empty() {
+        return Err("Series name cannot be empty".to_string());
+    }
+
     // Check that the series exists
     if !storage.series.contains_key(series_id) {
         return Err(format!("Series with ID '{}' not found", series_id));
@@ -76,14 +81,17 @@ pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> 
     let duplicate = storage
         .series
         .iter()
-        .any(|(id, s)| id != series_id && s.name.to_lowercase() == new_name.to_lowercase());
+        .any(|(id, s)| id != series_id && s.name.to_lowercase() == new_name_trimmed.to_lowercase());
     if duplicate {
-        return Err(format!("A series named '{}' already exists", new_name));
+        return Err(format!(
+            "A series named '{}' already exists",
+            new_name_trimmed
+        ));
     }
 
     // Rename
     if let Some(series) = storage.series.get_mut(series_id) {
-        series.name = new_name.to_string();
+        series.name = new_name_trimmed.to_string();
     }
 
     Ok(())

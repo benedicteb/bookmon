@@ -599,6 +599,26 @@ fn test_rename_series_to_duplicate_name_returns_error() {
 }
 
 #[test]
+fn test_rename_series_empty_name_returns_error() {
+    let mut storage = Storage::new();
+    let series = Series::new("Harry Potter".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let result = rename_series(&mut storage, &series_id, "");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("cannot be empty"));
+
+    // Whitespace-only should also fail
+    let result = rename_series(&mut storage, &series_id, "   ");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("cannot be empty"));
+
+    // Original name should be unchanged
+    assert_eq!(storage.series.get(&series_id).unwrap().name, "Harry Potter");
+}
+
+#[test]
 fn test_rename_series_same_name_different_case_ok() {
     let mut storage = Storage::new();
     let series = Series::new("harry potter".to_string());
