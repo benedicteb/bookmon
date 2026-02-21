@@ -25,6 +25,17 @@ pub struct Category {
     pub created_on: DateTime<Utc>,
 }
 
+/// Whether a book series is still being published or has concluded.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+pub enum SeriesStatus {
+    /// Series is still being published (new books expected).
+    Ongoing,
+    /// Series is complete (no more books expected).
+    Completed,
+    /// Series was abandoned (author died, publisher cancelled, etc.).
+    Abandoned,
+}
+
 /// A book series (e.g. "Harry Potter", "Lord of the Rings").
 /// Books can optionally belong to a series with a position number.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -32,6 +43,14 @@ pub struct Series {
     pub id: String,
     pub name: String,
     pub created_on: DateTime<Utc>,
+    /// Whether the series is ongoing, completed, or abandoned.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<SeriesStatus>,
+    /// Known total number of books in the series (if known).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_books: Option<u32>,
 }
 
 /// A book in the collection, linked to an author and category by ID.
@@ -257,6 +276,8 @@ impl Series {
             id: Uuid::new_v4().to_string(),
             name,
             created_on: Utc::now(),
+            status: None,
+            total_books: None,
         }
     }
 }
