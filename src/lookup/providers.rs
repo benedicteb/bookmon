@@ -1,5 +1,5 @@
 pub mod bibsok;
-mod openlibrary;
+pub mod openlibrary;
 
 use crate::lookup::book_lookup_dto::BookLookupDTO;
 use async_trait::async_trait;

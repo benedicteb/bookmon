@@ -43,6 +43,8 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
                 isbn: String::new(),
                 publish_date: None,
                 cover_url: None,
+                series_name: None,
+                series_position: None,
             }
         }
     };

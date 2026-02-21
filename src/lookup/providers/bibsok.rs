@@ -95,6 +95,8 @@ impl BibsokProvider {
             isbn: String::new(), // Will be set by the caller
             publish_date: year,
             cover_url,
+            series_name: None, // Bibsok doesn't provide series info in search results
+            series_position: None,
         })
     }
 }

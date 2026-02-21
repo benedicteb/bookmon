@@ -1,10 +1,36 @@
 use crate::lookup::book_lookup_dto::{AuthorDTO, BookLookupDTO};
 use crate::lookup::providers::BookProvider;
 use async_trait::async_trait;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 const HOSTNAME: &str = "https://openlibrary.org";
+
+/// Parses a series string from OpenLibrary's Edition API.
+///
+/// Examples:
+///   "Harry Potter #1" -> ("Harry Potter", Some(1))
+///   "OXFORD WORLD'S CLASSICS" -> ("OXFORD WORLD'S CLASSICS", None)
+///   "" -> ("", None)
+pub fn parse_series_string(s: &str) -> (String, Option<i32>) {
+    let s = s.trim();
+    let re = Regex::new(r"^(.+?)\s*#(\d+)\s*$").expect("valid static regex for series parsing");
+    if let Some(caps) = re.captures(s) {
+        let name = caps[1].trim().to_string();
+        let position = caps[2].parse::<i32>().ok();
+        (name, position)
+    } else {
+        (s.to_string(), None)
+    }
+}
+
+/// Edition data from OpenLibrary's ISBN API.
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenLibraryEdition {
+    #[serde(default)]
+    series: Option<Vec<String>>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenLibraryBook {
@@ -209,12 +235,46 @@ impl OpenLibraryProvider {
         Ok(authors)
     }
 
+    /// Fetches edition data by ISBN to get series information.
+    /// Returns None if the edition is not found or has no series data.
+    async fn fetch_edition_series(
+        &self,
+        isbn: &str,
+    ) -> Result<Option<(String, Option<i32>)>, Box<dyn Error>> {
+        let url = format!("{}/isbn/{}.json", HOSTNAME, isbn);
+        let response = self.client.get(&url).send().await?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let response_text = response.text().await?;
+        let edition: OpenLibraryEdition = serde_json::from_str(&response_text)?;
+
+        if let Some(series_list) = edition.series {
+            if let Some(first_series) = series_list.first() {
+                let (name, position) = parse_series_string(first_series);
+                if !name.is_empty() {
+                    return Ok(Some((name, position)));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
     fn convert_to_dto(
         &self,
         book: OpenLibraryBook,
         authors: Vec<Author>,
         isbn: &str,
+        series_info: Option<(String, Option<i32>)>,
     ) -> BookLookupDTO {
+        let (series_name, series_position) = match series_info {
+            Some((name, pos)) => (Some(name), pos),
+            None => (None, None),
+        };
+
         BookLookupDTO {
             title: book.title,
             authors: authors
@@ -234,6 +294,8 @@ impl OpenLibraryProvider {
                 c.first()
                     .map(|id| format!("https://covers.openlibrary.org/b/id/{}-L.jpg", id))
             }),
+            series_name,
+            series_position,
         }
     }
 }
@@ -266,8 +328,11 @@ impl BookProvider for OpenLibraryProvider {
             obj.remove("authors");
         }
 
+        // Fetch edition data for series info (best-effort, don't fail on error)
+        let series_info = self.fetch_edition_series(isbn).await.unwrap_or(None);
+
         // Parse book data and convert to DTO
         let book: OpenLibraryBook = serde_json::from_value(work_response)?;
-        Ok(Some(self.convert_to_dto(book, authors, isbn)))
+        Ok(Some(self.convert_to_dto(book, authors, isbn, series_info)))
     }
 }

@@ -320,6 +320,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(cover_url) = book.cover_url {
                         println!("Cover URL: {}", cover_url);
                     }
+                    if let Some(series_name) = book.series_name {
+                        if let Some(pos) = book.series_position {
+                            println!("Series: {} #{}", series_name, pos);
+                        } else {
+                            println!("Series: {}", series_name);
+                        }
+                    }
                 } else {
                     println!("No book found for ISBN {}", isbn);
                 }
