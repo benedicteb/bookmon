@@ -1,5 +1,5 @@
 use bookmon::{
-    book, config,
+    book, config, goal,
     lookup::http_client,
     reading, review,
     storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
@@ -368,7 +368,7 @@ fn print_progress_bar(finished: u32, target: u32) {
 }
 
 /// Prints the reading goal status for a given year.
-/// Shows book count, percentage, progress bar, and remaining count.
+/// Shows book count, percentage, progress bar, remaining count, and motivational pace text.
 fn print_goal_status(storage: &Storage, year: i32) {
     match storage.get_goal(year) {
         Some(target) => {
@@ -385,6 +385,11 @@ fn print_goal_status(storage: &Storage, year: i32) {
                 println!(" {} remaining", remaining);
             } else {
                 println!(" Goal reached!");
+            }
+            if let Some(motivation) =
+                goal::motivational_pace_text(finished, target, year, chrono::Utc::now())
+            {
+                println!("{}", motivation);
             }
             println!();
         }
