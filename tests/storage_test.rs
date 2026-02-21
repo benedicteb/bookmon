@@ -2179,3 +2179,99 @@ fn test_multiple_year_goals() {
     assert_eq!(storage.get_goal(2026), None);
     assert_eq!(storage.get_goal(2027), Some(30));
 }
+
+#[test]
+fn test_goals_backward_compatibility() {
+    // Simulate deserializing a JSON file from before the goals feature existed
+    let json_without_goals = r#"{
+        "authors": {},
+        "books": {},
+        "categories": {},
+        "readings": {},
+        "reviews": {}
+    }"#;
+
+    let storage: Storage = serde_json::from_str(json_without_goals).unwrap();
+    assert!(
+        storage.goals.is_empty(),
+        "Goals should default to empty HashMap when missing from JSON"
+    );
+    assert_eq!(storage.get_goal(2026), None);
+}
+
+#[test]
+fn test_goals_round_trip() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with goals
+    let mut storage = Storage::new();
+    storage.set_goal(2025, 10);
+    storage.set_goal(2026, 24);
+
+    // Also add some standard data to ensure goals coexist properly
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    storage.add_book(book);
+
+    // Write to file
+    write_storage(&path, &storage).unwrap();
+
+    // Load from file
+    let loaded = bookmon::storage::load_storage(&path).unwrap();
+
+    // Verify goals round-tripped correctly
+    assert_eq!(loaded.get_goal(2025), Some(10));
+    assert_eq!(loaded.get_goal(2026), Some(24));
+    assert_eq!(loaded.get_goal(2027), None);
+
+    // Verify other data is also intact
+    assert_eq!(loaded.books.len(), 1);
+    assert_eq!(loaded.authors.len(), 1);
+    assert_eq!(loaded.categories.len(), 1);
+}
+
+#[test]
+fn test_goals_in_sorted_json() {
+    let mut storage = Storage::new();
+    storage.set_goal(2026, 24);
+    storage.set_goal(2025, 12);
+
+    let json_string = storage.to_sorted_json_string().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json_string).unwrap();
+
+    // Verify the goals field appears in the JSON
+    assert!(
+        value.get("goals").is_some(),
+        "Goals should be present in serialized JSON"
+    );
+
+    // Verify the goals contain the right values
+    let goals = value.get("goals").unwrap().as_object().unwrap();
+    assert_eq!(goals.get("2025").unwrap().as_u64(), Some(12));
+    assert_eq!(goals.get("2026").unwrap().as_u64(), Some(24));
+}
+
+#[test]
+fn test_goals_empty_in_new_storage_json() {
+    let storage = Storage::new();
+    let json_string = storage.to_sorted_json_string().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json_string).unwrap();
+
+    // Verify goals serializes as empty object
+    let goals = value.get("goals").unwrap().as_object().unwrap();
+    assert!(goals.is_empty(), "New storage should have empty goals");
+}
