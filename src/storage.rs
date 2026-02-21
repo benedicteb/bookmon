@@ -355,7 +355,10 @@ impl Storage {
             match reading.event {
                 ReadingEvent::Started => return true,
                 ReadingEvent::Finished => return false,
-                _ => continue,
+                ReadingEvent::Update
+                | ReadingEvent::Bought
+                | ReadingEvent::WantToRead
+                | ReadingEvent::UnmarkedAsWantToRead => continue,
             }
         }
         false
