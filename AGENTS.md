@@ -16,11 +16,15 @@
 src/
   main.rs          # CLI entry point (clap-based), interactive mode
   lib.rs           # Public module declarations
-  storage.rs       # Core data model (Book, Author, Category, Reading, Storage) + JSON persistence
+  storage.rs       # Core data model (Book, Author, Category, Reading, Series, Storage) + JSON persistence
   book.rs          # Book input, ISBN lookup integration, book storage
   author.rs        # Author management
   category.rs      # Category management
   reading.rs       # Reading event tracking, display/printing
+  series.rs        # Series management, display, filtering
+  review.rs        # Book review management (editor workflow)
+  goal.rs          # Reading goal tracking and motivational text
+  table.rs         # Unicode-aware table formatting
   config.rs        # App configuration (storage path, settings)
   lookup/
     http_client.rs       # HTTP client for ISBN lookups
@@ -33,7 +37,7 @@ src/
 
 ### Key Concepts
 
-- **Storage:** All data persists in a single JSON file. The `Storage` struct holds `HashMap`s of `Book`, `Author`, `Category`, and `Reading`.
+- **Storage:** All data persists in a single JSON file. The `Storage` struct holds `HashMap`s of `Book`, `Author`, `Category`, `Reading`, `Series`, and `Review`.
 - **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`. The most recent event determines current status.
 - **Providers:** ISBN lookup uses a `BookProvider` trait with multiple implementations (OpenLibrary, Bibsok). `ProviderManager` tries each provider in order.
 - **CLI:** Built with `clap` (derive). Supports both command mode and interactive mode (`-i` flag) using `inquire` for prompts.
