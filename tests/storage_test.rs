@@ -2107,3 +2107,75 @@ fn test_most_recent_reading_event_skips_non_status_events_for_started_check() {
         Some(ReadingEvent::Bought)
     );
 }
+
+#[test]
+fn test_set_and_get_goal() {
+    let mut storage = Storage::new();
+
+    // Set a goal for 2026
+    storage.set_goal(2026, 24);
+
+    // Verify the goal was set
+    assert_eq!(storage.get_goal(2026), Some(24));
+}
+
+#[test]
+fn test_get_goal_returns_none_for_unset_year() {
+    let storage = Storage::new();
+
+    // No goal set for any year
+    assert_eq!(storage.get_goal(2026), None);
+    assert_eq!(storage.get_goal(2025), None);
+}
+
+#[test]
+fn test_set_goal_overwrites_existing() {
+    let mut storage = Storage::new();
+
+    // Set a goal, then change it
+    storage.set_goal(2026, 12);
+    assert_eq!(storage.get_goal(2026), Some(12));
+
+    storage.set_goal(2026, 24);
+    assert_eq!(storage.get_goal(2026), Some(24));
+}
+
+#[test]
+fn test_remove_goal() {
+    let mut storage = Storage::new();
+
+    // Set then remove a goal
+    storage.set_goal(2026, 24);
+    assert_eq!(storage.get_goal(2026), Some(24));
+
+    let removed = storage.remove_goal(2026);
+    assert_eq!(removed, Some(24));
+    assert_eq!(storage.get_goal(2026), None);
+}
+
+#[test]
+fn test_remove_goal_returns_none_for_unset_year() {
+    let mut storage = Storage::new();
+
+    let removed = storage.remove_goal(2026);
+    assert_eq!(removed, None);
+}
+
+#[test]
+fn test_multiple_year_goals() {
+    let mut storage = Storage::new();
+
+    storage.set_goal(2025, 10);
+    storage.set_goal(2026, 24);
+    storage.set_goal(2027, 30);
+
+    assert_eq!(storage.get_goal(2025), Some(10));
+    assert_eq!(storage.get_goal(2026), Some(24));
+    assert_eq!(storage.get_goal(2027), Some(30));
+
+    // Removing one doesn't affect others
+    storage.remove_goal(2026);
+    assert_eq!(storage.get_goal(2025), Some(10));
+    assert_eq!(storage.get_goal(2026), None);
+    assert_eq!(storage.get_goal(2027), Some(30));
+}
