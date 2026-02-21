@@ -97,6 +97,42 @@ fn test_table_header_only() {
 }
 
 #[test]
+fn test_table_structure_and_content() {
+    let rows = vec![
+        vec!["Name".to_string(), "Age".to_string()],
+        vec!["Alice".to_string(), "30".to_string()],
+    ];
+    let output = format_table(&rows);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // 5 lines: header separator, header, header separator, data row, data separator
+    assert_eq!(lines.len(), 5);
+
+    // Header separators use '='
+    assert!(lines[0].starts_with('+'));
+    assert!(lines[0].contains('='));
+    assert!(!lines[0].contains('-'));
+    assert!(lines[2].starts_with('+'));
+    assert!(lines[2].contains('='));
+
+    // Data separator uses '-'
+    assert!(lines[4].starts_with('+'));
+    assert!(lines[4].contains('-'));
+    assert!(!lines[4].contains('='));
+
+    // Header and data rows use '|'
+    assert!(lines[1].starts_with('|'));
+    assert!(lines[1].ends_with('|'));
+    assert!(lines[1].contains("Name"));
+    assert!(lines[1].contains("Age"));
+
+    assert!(lines[3].starts_with('|'));
+    assert!(lines[3].ends_with('|'));
+    assert!(lines[3].contains("Alice"));
+    assert!(lines[3].contains("30"));
+}
+
+#[test]
 fn test_table_with_emoji() {
     let rows = vec![
         vec!["Icon".to_string(), "Name".to_string()],
