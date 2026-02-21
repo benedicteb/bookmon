@@ -2181,6 +2181,19 @@ fn test_multiple_year_goals() {
 }
 
 #[test]
+fn test_set_goal_zero_stores_zero() {
+    let mut storage = Storage::new();
+
+    // Setting a goal of 0 is allowed and stores the value
+    storage.set_goal(2026, 0);
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(0),
+        "Goal of 0 should be stored as Some(0), not treated as None"
+    );
+}
+
+#[test]
 fn test_goals_backward_compatibility() {
     // Simulate deserializing a JSON file from before the goals feature existed
     let json_without_goals = r#"{

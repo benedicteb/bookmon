@@ -256,11 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         // Show goal progress if a goal is set for this year
                                         if let Some(target) = storage.get_goal(year) {
                                             let finished = books.len() as u32;
-                                            let pct = if target > 0 {
-                                                (finished as f64 / target as f64) * 100.0
-                                            } else {
-                                                100.0
-                                            };
+                                            let pct = goal_percentage(finished, target);
                                             let remaining = target.saturating_sub(finished);
                                             if year == current_year && remaining > 0 {
                                                 println!(
@@ -346,6 +342,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Calculates the percentage of a reading goal completed.
+fn goal_percentage(finished: u32, target: u32) -> f64 {
+    if target > 0 {
+        (finished as f64 / target as f64) * 100.0
+    } else {
+        100.0
+    }
+}
+
 /// Prints a progress bar using Unicode block characters.
 fn print_progress_bar(finished: u32, target: u32) {
     let bar_width = 20;
@@ -368,11 +373,7 @@ fn print_goal_status(storage: &Storage, year: i32) {
     match storage.get_goal(year) {
         Some(target) => {
             let finished = storage.get_books_finished_in_year(year).len() as u32;
-            let pct = if target > 0 {
-                (finished as f64 / target as f64) * 100.0
-            } else {
-                100.0
-            };
+            let pct = goal_percentage(finished, target);
             let remaining = target.saturating_sub(finished);
 
             print!(
