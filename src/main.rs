@@ -681,7 +681,7 @@ fn interactive_mode(
                         return Ok(());
                     }
                 };
-            let position = position_str.trim().parse::<i32>().ok();
+            let position = bookmon::series::parse_position_input(&position_str);
 
             if let Some(book) = storage.books.get_mut(selected_book_id) {
                 book.series_id = Some(series_id);

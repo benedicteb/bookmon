@@ -386,7 +386,7 @@ fn select_series(
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
     };
 
-    let position = position_str.trim().parse::<i32>().ok();
+    let position = crate::series::parse_position_input(&position_str);
 
     Ok((Some(series_id), position))
 }

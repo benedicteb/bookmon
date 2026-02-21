@@ -14,6 +14,19 @@ pub fn format_series_label(series: &Series, position: Option<i32>) -> String {
     }
 }
 
+/// Parses a position-in-series input string. Returns `Some(pos)` for valid
+/// positive integers, `None` for empty/whitespace, zero, negative, or non-numeric input.
+pub fn parse_position_input(input: &str) -> Option<i32> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.parse::<i32>() {
+        Ok(pos) if pos > 0 => Some(pos),
+        _ => None,
+    }
+}
+
 /// Finds an existing series by name (case-insensitive) or creates a new one.
 /// Returns the series ID.
 pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
