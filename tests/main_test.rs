@@ -1,14 +1,3 @@
-#[test]
-fn test_hello_world() {
-    // This is a basic test that we can expand later
-    // Currently, we're just testing that the program compiles
-    assert!(true);
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_basic_arithmetic() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+// Main binary tests
+// Integration tests for main.rs functionality should go here.
+// CLI tests can be added using `assert_cmd` crate if needed.

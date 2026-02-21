@@ -4,13 +4,6 @@ use chrono::{DateTime, Utc};
 use serde_json;
 
 #[test]
-fn test_get_book_input() {
-    // This is a basic test that we can expand later
-    // Currently, we're just testing that the function compiles
-    assert!(true);
-}
-
-#[test]
 fn test_store_book_with_valid_category_and_author() {
     let mut storage = Storage::new();
 
