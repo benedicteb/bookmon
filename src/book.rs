@@ -1,12 +1,10 @@
 use crate::lookup::book_lookup_dto::BookLookupDTO;
 use crate::lookup::http_client::HttpClient;
 use crate::storage::{Author, Book, Category, ReadingEvent, Storage};
-use chrono::Utc;
 use indicatif::{ProgressBar, ProgressStyle};
 use inquire::{Select, Text};
 use std::io;
 use std::time::Duration;
-use uuid::Uuid;
 
 pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEvent>)> {
     // First get ISBN
@@ -272,15 +270,13 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         _ => vec![],
     };
 
-    let book = Book {
-        id: Uuid::new_v4().to_string(),
-        title: title.trim().to_string(),
-        added_on: Utc::now(),
-        isbn: isbn.trim().to_string(),
+    let book = Book::new(
+        title.trim().to_string(),
+        isbn.trim().to_string(),
         category_id,
         author_id,
         total_pages,
-    };
+    );
 
     Ok((book, event))
 }
