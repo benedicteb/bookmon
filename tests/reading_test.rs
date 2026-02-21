@@ -1,5 +1,5 @@
 use bookmon::reading::{show_started_books, store_reading};
-use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Storage};
+use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::{DateTime, Utc};
 use serde_json;
 
@@ -319,4 +319,82 @@ fn test_show_started_books_table_format() {
 
     // Verify table formatting
     assert!(true, "Table formatting looks good!");
+}
+
+#[test]
+fn test_series_column_hidden_when_no_books_have_series() {
+    use bookmon::reading::build_started_books_table;
+
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    // Book without series
+    let book = Book::new(
+        "Standalone Book".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    storage.add_reading(Reading::new(book_id, ReadingEvent::Started));
+
+    let table = build_started_books_table(&storage).unwrap();
+    let header = &table[0];
+
+    // Series column should NOT be present when no books have series
+    assert!(
+        !header.contains(&"Series".to_string()),
+        "Series column should be hidden when no books have series"
+    );
+}
+
+#[test]
+fn test_series_column_shown_when_books_have_series() {
+    use bookmon::reading::build_started_books_table;
+
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let series = Series::new("My Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Book with series
+    let mut book = Book::new(
+        "Series Book".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    book.series_id = Some(series_id);
+    book.position_in_series = Some("1".to_string());
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    storage.add_reading(Reading::new(book_id, ReadingEvent::Started));
+
+    let table = build_started_books_table(&storage).unwrap();
+    let header = &table[0];
+
+    // Series column SHOULD be present when at least one book has a series
+    assert!(
+        header.contains(&"Series".to_string()),
+        "Series column should be shown when books have series"
+    );
 }
