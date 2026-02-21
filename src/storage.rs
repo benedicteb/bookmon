@@ -25,6 +25,15 @@ pub struct Category {
     pub created_on: DateTime<Utc>,
 }
 
+/// A book series (e.g. "Harry Potter", "Lord of the Rings").
+/// Books can optionally belong to a series with a position number.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Series {
+    pub id: String,
+    pub name: String,
+    pub created_on: DateTime<Utc>,
+}
+
 /// A book in the collection, linked to an author and category by ID.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Book {
@@ -39,6 +48,14 @@ pub struct Book {
     /// Values <= 0 are treated as "unknown" and trigger repair prompts on load.
     #[serde(default)]
     pub total_pages: i32,
+    /// Optional FK -> Series.id. None means the book is standalone (not part of a series).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_id: Option<String>,
+    /// Optional position within the series (e.g. 1 for the first book).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position_in_series: Option<i32>,
 }
 
 /// The type of reading event recorded for a book.
@@ -129,6 +146,8 @@ impl Book {
             category_id,
             author_id,
             total_pages,
+            series_id: None,
+            position_in_series: None,
         }
     }
 
@@ -203,6 +222,17 @@ impl Category {
     }
 }
 
+impl Series {
+    /// Creates a new series with a generated UUID and current timestamp.
+    pub fn new(name: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            created_on: Utc::now(),
+        }
+    }
+}
+
 /// The central data store containing all books, readings, authors, categories, and reviews.
 ///
 /// Persisted as a single JSON file. All collections are keyed by UUID string.
@@ -218,6 +248,10 @@ pub struct Storage {
     /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
     #[serde(default)]
     pub goals: HashMap<i32, u32>,
+    /// Book series (e.g. "Harry Potter", "A Song of Ice and Fire").
+    /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
+    #[serde(default)]
+    pub series: HashMap<String, Series>,
 }
 
 impl Default for Storage {
@@ -235,6 +269,7 @@ impl Storage {
             categories: HashMap::new(),
             reviews: HashMap::new(),
             goals: HashMap::new(),
+            series: HashMap::new(),
         }
     }
 
@@ -259,6 +294,30 @@ impl Storage {
 
     pub fn add_category(&mut self, category: Category) -> Option<Category> {
         self.categories.insert(category.id.clone(), category)
+    }
+
+    pub fn add_series(&mut self, series: Series) -> Option<Series> {
+        self.series.insert(series.id.clone(), series)
+    }
+
+    pub fn get_series(&self, id: &str) -> Option<&Series> {
+        self.series.get(id)
+    }
+
+    /// Returns all books that belong to a given series, sorted by position_in_series.
+    /// Books without a position are placed at the end.
+    pub fn get_books_in_series(&self, series_id: &str) -> Vec<&Book> {
+        let mut books: Vec<&Book> = self
+            .books
+            .values()
+            .filter(|b| b.series_id.as_deref() == Some(series_id))
+            .collect();
+        books.sort_by(|a, b| {
+            let a_pos = a.position_in_series.unwrap_or(i32::MAX);
+            let b_pos = b.position_in_series.unwrap_or(i32::MAX);
+            a_pos.cmp(&b_pos)
+        });
+        books
     }
 
     /// Returns the author name for a given book, or an empty string if the author is not found

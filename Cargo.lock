@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "bookmon"
-version = "1.0.67"
+version = "1.0.70"
 dependencies = [
  "async-trait",
  "chrono",

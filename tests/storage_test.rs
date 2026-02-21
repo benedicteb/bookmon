@@ -1,6 +1,6 @@
 use bookmon::storage::{
     handle_missing_fields, sort_json_value, write_storage, Author, Book, BookRepairInput, Category,
-    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
+    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Series, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
@@ -156,6 +156,8 @@ fn test_storage_save_and_load() {
         category_id: category_id.clone(),
         author_id: author_id.clone(),
         total_pages: 300,
+        series_id: None,
+        position_in_series: None,
     };
     storage.books.insert(book.isbn.clone(), book);
 
@@ -213,6 +215,8 @@ fn test_id_matches_hashmap_keys() {
         category_id: category_id,
         author_id: "author1".to_string(),
         total_pages: 300,
+        series_id: None,
+        position_in_series: None,
     };
 
     let author = Author::new("Test Author".to_string());
@@ -1690,6 +1694,8 @@ fn test_handle_missing_fields_updates_book_author_reference() {
         category_id,
         author_id: "nonexistent-author-id".to_string(),
         total_pages: 100,
+        series_id: None,
+        position_in_series: None,
     };
     let book_id = book.id.clone();
     storage.add_book(book);
@@ -1733,6 +1739,8 @@ fn test_handle_missing_fields_updates_book_category_reference() {
         category_id: "nonexistent-category-id".to_string(),
         author_id,
         total_pages: 100,
+        series_id: None,
+        position_in_series: None,
     };
     let book_id = book.id.clone();
     storage.add_book(book);
