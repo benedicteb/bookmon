@@ -46,7 +46,7 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut settings = config::Settings::load().expect("Failed to load config");
+    let mut settings = config::Settings::load()?;
     let cli = Cli::parse();
 
     match cli.command {
@@ -58,20 +58,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             if settings.storage_file.is_empty() {
-                eprintln!("Error: Storage path not set. Please set it using the change-storage-path command.");
-                std::process::exit(1);
+                return Err(
+                    "Storage path not set. Please set it using the change-storage-path command."
+                        .into(),
+                );
             }
         }
     }
 
     // Initialize storage file if it doesn't exist
-    if let Err(e) = storage::initialize_storage_file(&settings.storage_file) {
-        eprintln!("Failed to initialize storage file: {}", e);
-        std::process::exit(1);
-    }
+    storage::initialize_storage_file(&settings.storage_file)?;
 
-    let mut storage =
-        storage::load_storage(&settings.storage_file).expect("Failed to load storage");
+    let mut storage = storage::load_storage(&settings.storage_file)?;
 
     // Handle the default case (no command) - show currently-reading
     if cli.command.is_none() {
@@ -103,8 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
 
-                            storage::write_storage(&settings.storage_file, &storage)
-                                .expect("Failed to save storage");
+                            storage::write_storage(&settings.storage_file, &storage)?;
                             println!("Book added successfully!");
                         }
                         Err(e) => eprintln!("Failed to add book: {}", e),
@@ -151,8 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if !books.is_empty() {
                                     println!("\n{}: {} books", year, books.len());
                                     for book in books {
-                                        let author = storage.authors.get(&book.author_id).unwrap();
-                                        println!("  - \"{}\" by {}", book.title, author.name);
+                                        let author_name = storage
+                                            .authors
+                                            .get(&book.author_id)
+                                            .map(|a| a.name.as_str())
+                                            .unwrap_or("Unknown Author");
+                                        println!("  - \"{}\" by {}", book.title, author_name);
                                     }
                                 }
                             }
@@ -218,23 +219,21 @@ fn interactive_mode(
         return Ok(());
     }
 
-    // Create options for book selection with status
-    let mut options: Vec<(String, String)> = filtered_books
-        .into_iter()
-        .map(|b| {
-            let status = if storage.is_book_started(&b.id) {
-                "Started"
-            } else {
-                "Not Started"
-            };
-            let display = b.to_display_string(storage, status);
-            (display, b.id.clone())
-        })
-        .collect();
+    // Create options for book selection with status, keeping book IDs
+    let mut options: Vec<(String, String)> = Vec::new();
+    for b in &filtered_books {
+        let status = if storage.is_book_started(&b.id) {
+            "Started"
+        } else {
+            "Not Started"
+        };
+        let display = b.to_display_string(storage, status)?;
+        options.push((display, b.id.clone()));
+    }
 
     // Sort options by:
     // 1. Reading status (Started first)
-    // 2. Author name
+    // 2. Author name (from the book's author_id, not from parsing display string)
     // 3. Book title
     options.sort_by(|a, b| {
         let a_started = a.0.starts_with("[Started]");
@@ -243,23 +242,38 @@ fn interactive_mode(
         if a_started != b_started {
             b_started.cmp(&a_started)
         } else {
-            let a_author = a.0.split(" by ").nth(1).unwrap();
-            let b_author = b.0.split(" by ").nth(1).unwrap();
+            // Look up author names by book ID for robust sorting
+            let a_book = storage.books.get(&a.1);
+            let b_book = storage.books.get(&b.1);
+            let a_author = a_book
+                .and_then(|book| storage.authors.get(&book.author_id))
+                .map(|a| a.name.as_str())
+                .unwrap_or("");
+            let b_author = b_book
+                .and_then(|book| storage.authors.get(&book.author_id))
+                .map(|a| a.name.as_str())
+                .unwrap_or("");
 
             if a_author != b_author {
                 a_author.cmp(b_author)
             } else {
-                let a_title = Book::title_from_display_string(&a.0);
-                let b_title = Book::title_from_display_string(&b.0);
-                a_title.cmp(&b_title)
+                let a_title = a_book.map(|b| b.title.as_str()).unwrap_or("");
+                let b_title = b_book.map(|b| b.title.as_str()).unwrap_or("");
+                a_title.cmp(b_title)
             }
         }
     });
 
-    let options: Vec<String> = options.into_iter().map(|(display, _)| display).collect();
+    // Build a mapping from display string → book ID
+    let display_to_id: std::collections::HashMap<String, String> = options
+        .iter()
+        .map(|(display, id)| (display.clone(), id.clone()))
+        .collect();
+
+    let display_options: Vec<String> = options.into_iter().map(|(display, _)| display).collect();
 
     // Let user select a book
-    let book_selection = match Select::new("Select a book to update:", options).prompt() {
+    let book_selection = match Select::new("Select a book to update:", display_options).prompt() {
         Ok(selection) => selection,
         Err(_) => {
             println!("Operation cancelled");
@@ -267,15 +281,15 @@ fn interactive_mode(
         }
     };
 
-    // Extract book title from selection
-    let title = Book::title_from_display_string(&book_selection);
+    // Find the selected book by ID (not by fragile title parsing)
+    let selected_book_id = display_to_id
+        .get(&book_selection)
+        .ok_or("Selected book not found in display mapping")?;
 
-    // Find the selected book
     let selected_book = storage
         .books
-        .values()
-        .find(|b| b.title == title)
-        .expect("Selected book not found");
+        .get(selected_book_id)
+        .ok_or_else(|| format!("Book with ID {} not found in storage", selected_book_id))?;
 
     // Determine available actions based on book status
     let mut actions = Vec::new();

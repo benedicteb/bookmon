@@ -96,11 +96,19 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
     // Sort the started books by author and title
     let mut sorted_books = started_books;
     sorted_books.sort_by(|a, b| {
-        let a_author = storage.authors.get(&a.author_id).unwrap();
-        let b_author = storage.authors.get(&b.author_id).unwrap();
+        let a_author_name = storage
+            .authors
+            .get(&a.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
+        let b_author_name = storage
+            .authors
+            .get(&b.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
 
-        if a_author.name != b_author.name {
-            a_author.name.cmp(&b_author.name)
+        if a_author_name != b_author_name {
+            a_author_name.cmp(b_author_name)
         } else {
             a.title.cmp(&b.title)
         }
@@ -185,11 +193,19 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
     // Sort the finished books by author and title
     let mut sorted_books = finished_books;
     sorted_books.sort_by(|a, b| {
-        let a_author = storage.authors.get(&a.author_id).unwrap();
-        let b_author = storage.authors.get(&b.author_id).unwrap();
+        let a_author_name = storage
+            .authors
+            .get(&a.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
+        let b_author_name = storage
+            .authors
+            .get(&b.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
 
-        if a_author.name != b_author.name {
-            a_author.name.cmp(&b_author.name)
+        if a_author_name != b_author_name {
+            a_author_name.cmp(b_author_name)
         } else {
             a.title.cmp(&b.title)
         }
@@ -344,11 +360,19 @@ pub fn print_book_list_table(
     // Sort the books by author and title
     let mut sorted_books = books;
     sorted_books.sort_by(|a, b| {
-        let a_author = storage.authors.get(&a.author_id).unwrap();
-        let b_author = storage.authors.get(&b.author_id).unwrap();
+        let a_author_name = storage
+            .authors
+            .get(&a.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
+        let b_author_name = storage
+            .authors
+            .get(&b.author_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("");
 
-        if a_author.name != b_author.name {
-            a_author.name.cmp(&b_author.name)
+        if a_author_name != b_author_name {
+            a_author_name.cmp(b_author_name)
         } else {
             a.title.cmp(&b.title)
         }

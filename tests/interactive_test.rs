@@ -87,7 +87,7 @@ fn test_interactive_mode_book_selection() {
             } else {
                 "Not Started"
             };
-            b.to_display_string(&storage, status)
+            b.to_display_string(&storage, status).unwrap()
         })
         .collect();
 
@@ -133,10 +133,11 @@ fn test_book_selection_from_display_string() {
         .books
         .get(&book_id)
         .unwrap()
-        .to_display_string(&storage, "Started");
+        .to_display_string(&storage, "Started")
+        .unwrap();
 
     // Extract the title using the new method
-    let title = Book::title_from_display_string(&display);
+    let title = Book::title_from_display_string(&display).unwrap();
 
     // Find the book by title
     let selected_book = storage
@@ -180,10 +181,11 @@ fn test_book_selection_with_quoted_titles() {
         .books
         .get(&book_id)
         .unwrap()
-        .to_display_string(&storage, "Not Started");
+        .to_display_string(&storage, "Not Started")
+        .unwrap();
 
     // Extract the title using the new method
-    let title = Book::title_from_display_string(&display);
+    let title = Book::title_from_display_string(&display).unwrap();
 
     // Find the book by title
     let selected_book = storage

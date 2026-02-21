@@ -92,22 +92,35 @@ impl Book {
     }
 
     /// Creates a display string for a book with its status and author name
-    pub fn to_display_string(&self, storage: &Storage, status: &str) -> String {
-        let author = storage.authors.get(&self.author_id).unwrap();
-        format!("[{}] \"{}\" by {}", status, self.title, author.name)
+    pub fn to_display_string(&self, storage: &Storage, status: &str) -> Result<String, String> {
+        let author = storage
+            .authors
+            .get(&self.author_id)
+            .ok_or_else(|| format!("Author with ID {} not found", self.author_id))?;
+        Ok(format!(
+            "[{}] \"{}\" by {}",
+            status, self.title, author.name
+        ))
     }
 
-    /// Extracts a book title from a display string
-    pub fn title_from_display_string(display: &str) -> String {
-        display
-            .split(" by ")
-            .next()
-            .unwrap()
-            .split("] ")
-            .nth(1)
-            .unwrap()
-            .trim_matches('"')
-            .to_string()
+    /// Extracts a book title from a display string formatted as `[Status] "Title" by Author`
+    ///
+    /// Handles titles that contain " by " by finding the quoted title between the first
+    /// pair of double quotes after the status bracket.
+    pub fn title_from_display_string(display: &str) -> Result<String, String> {
+        // Find the first '"' after '] '
+        let after_bracket = display
+            .find("] \"")
+            .ok_or_else(|| format!("Invalid display string format: {}", display))?;
+        let title_start = after_bracket + 3; // skip '] "'
+
+        // Find the closing '"' before ' by ' — search from the end for the last '" by '
+        let remaining = &display[title_start..];
+        let title_end = remaining
+            .rfind("\" by ")
+            .ok_or_else(|| format!("Invalid display string format: {}", display))?;
+
+        Ok(remaining[..title_end].to_string())
     }
 }
 
@@ -447,11 +460,19 @@ impl Storage {
                 a_status.cmp(&b_status)
             } else {
                 // Then sort by author name
-                let a_author = self.authors.get(&a.author_id).unwrap();
-                let b_author = self.authors.get(&b.author_id).unwrap();
+                let a_author_name = self
+                    .authors
+                    .get(&a.author_id)
+                    .map(|a| a.name.as_str())
+                    .unwrap_or("");
+                let b_author_name = self
+                    .authors
+                    .get(&b.author_id)
+                    .map(|a| a.name.as_str())
+                    .unwrap_or("");
 
-                if a_author.name != b_author.name {
-                    a_author.name.cmp(&b_author.name)
+                if a_author_name != b_author_name {
+                    a_author_name.cmp(b_author_name)
                 } else {
                     // Finally sort by title
                     a.title.cmp(&b.title)
