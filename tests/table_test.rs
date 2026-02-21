@@ -1,4 +1,4 @@
-use bookmon::table::{format_structured_table, format_table, TableRow};
+use bookmon::table::{format_structured_table, format_table, Alignment, TableRow};
 
 #[test]
 fn test_table_ascii_rows_are_aligned() {
@@ -475,5 +475,152 @@ fn test_structured_table_consecutive_group_headers() {
     assert!(
         !lines[5].starts_with('+') && !lines[6].starts_with('+'),
         "No separator between grouped rows"
+    );
+}
+
+// ============================================================
+// Alignment tests
+// ============================================================
+
+#[test]
+fn test_structured_table_left_aligned_text_right_aligned_dates() {
+    let rows = vec![
+        TableRow::Header(vec![
+            "Title".to_string(),
+            "Author".to_string(),
+            "Finished on".to_string(),
+        ]),
+        TableRow::Data(vec![
+            "Nullpunkt".to_string(),
+            "Jørn Lier Horst".to_string(),
+            "2025-04-27".to_string(),
+        ]),
+        TableRow::Data(vec![
+            "Orbital".to_string(),
+            "Samantha Harvey".to_string(),
+            "2026-02-20".to_string(),
+        ]),
+    ];
+    let alignments = vec![Alignment::Left, Alignment::Left, Alignment::Right];
+    let output = format_structured_table(&rows, &alignments);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Header row: left-aligned Title and Author, right-aligned "Finished on"
+    let header_line = lines[1];
+    // "| Title" — starts with "| " then text immediately
+    assert!(
+        header_line.starts_with("| Title"),
+        "Title header should be left-aligned: {:?}",
+        header_line
+    );
+
+    // First data row: "| Nullpunkt" — left-aligned
+    let data_line = lines[3];
+    assert!(
+        data_line.starts_with("| Nullpunkt"),
+        "Title should be left-aligned: {:?}",
+        data_line
+    );
+
+    // Date should be right-aligned: ends with "2025-04-27 |"
+    assert!(
+        data_line.contains("2025-04-27 |"),
+        "Date should be right-aligned (ends with space+pipe): {:?}",
+        data_line
+    );
+}
+
+#[test]
+fn test_structured_table_center_alignment() {
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Flag".to_string()]),
+        TableRow::Data(vec!["Some Book".to_string(), "x".to_string()]),
+    ];
+    let alignments = vec![Alignment::Left, Alignment::Center];
+    let output = format_structured_table(&rows, &alignments);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // The "x" flag should be center-aligned (equal padding on both sides)
+    let data_line = lines[3];
+    // Extract the Flag cell (after the second |)
+    let cells: Vec<&str> = data_line.split('|').collect();
+    let flag_cell = cells[2]; // 0="" (before first |), 1=title, 2=flag
+    let trimmed = flag_cell.trim();
+    assert_eq!(trimmed, "x");
+    // Check that padding is roughly equal on both sides
+    let left_spaces = flag_cell.len() - flag_cell.trim_start().len();
+    let right_spaces = flag_cell.len() - flag_cell.trim_end().len();
+    assert!(
+        (left_spaces as i32 - right_spaces as i32).abs() <= 1,
+        "Center-aligned flag should have roughly equal padding: left={}, right={}",
+        left_spaces,
+        right_spaces
+    );
+}
+
+#[test]
+fn test_structured_table_default_alignment_is_left() {
+    // When no alignments are provided, all columns should be left-aligned
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
+        TableRow::Data(vec!["Short".to_string(), "A".to_string()]),
+    ];
+    let output = format_structured_table(&rows, &[]);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Data row should be left-aligned: starts with "| Short"
+    assert!(
+        lines[3].starts_with("| Short"),
+        "Default alignment should be left: {:?}",
+        lines[3]
+    );
+}
+
+#[test]
+fn test_structured_table_group_header_left_aligned_with_indent() {
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
+        TableRow::GroupHeader("The Expanse".to_string(), 1),
+        TableRow::Data(vec![
+            "  #1 Leviathan Wakes".to_string(),
+            "James S.A. Corey".to_string(),
+        ]),
+    ];
+    let alignments = vec![Alignment::Left, Alignment::Left];
+    let output = format_structured_table(&rows, &alignments);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Group header should be left-aligned with 2-space indent:
+    // "|   ── The Expanse ──"  (1 space pad + 2 indent + decoration)
+    let group_line = lines[3];
+    assert!(
+        group_line.starts_with("|   \u{2500}\u{2500} The Expanse"),
+        "Group header should be left-aligned with indent: {:?}",
+        group_line
+    );
+}
+
+#[test]
+fn test_format_table_with_alignments() {
+    // The legacy format_table should also support alignments
+    let rows = vec![
+        vec!["Title".to_string(), "Date".to_string()],
+        vec!["My Book".to_string(), "2025-01-01".to_string()],
+    ];
+    let alignments = vec![Alignment::Left, Alignment::Right];
+    let output = format_table(&rows, &alignments);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Title left-aligned
+    assert!(
+        lines[1].starts_with("| Title"),
+        "Title should be left-aligned: {:?}",
+        lines[1]
+    );
+    // Date right-aligned: ends with "Date |" or "2025-01-01 |"
+    assert!(
+        lines[3].contains("2025-01-01 |"),
+        "Date should be right-aligned: {:?}",
+        lines[3]
     );
 }
