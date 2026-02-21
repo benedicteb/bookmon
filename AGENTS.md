@@ -45,7 +45,7 @@ src/
 - `chrono` - Date/time handling
 - `uuid` - ID generation
 - `reqwest` + `tokio` - Async HTTP for ISBN lookups
-- `inquire` / `dialoguer` - Interactive terminal prompts
+- `inquire` - Interactive terminal prompts
 - `scraper` + `regex` - HTML scraping (Bibsok provider)
 - `config` - Configuration management
 - `tempfile` (dev) - Temporary files in tests
