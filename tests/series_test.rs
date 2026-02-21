@@ -1,5 +1,6 @@
 use bookmon::series::{
-    format_series_label, get_or_create_series, parse_position_input, store_series,
+    delete_series, format_series_label, get_or_create_series, parse_position_input, rename_series,
+    store_series,
 };
 use bookmon::storage::{Author, Book, Category, Series, Storage};
 use chrono::Utc;
@@ -489,4 +490,123 @@ fn test_parse_position_input_negative_rejected() {
 fn test_parse_position_input_non_numeric() {
     assert_eq!(parse_position_input("abc"), None);
     assert_eq!(parse_position_input("1.5"), None);
+}
+
+// --- Delete series tests ---
+
+#[test]
+fn test_delete_series_removes_series_and_unlinks_books() {
+    let mut storage = Storage::new();
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("Harry Potter".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Add two books in the series
+    let mut book1 = Book::new(
+        "Philosopher's Stone".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    book1.series_id = Some(series_id.clone());
+    book1.position_in_series = Some(1);
+    let book1_id = book1.id.clone();
+    storage.add_book(book1);
+
+    let mut book2 = Book::new(
+        "Chamber of Secrets".to_string(),
+        "222".to_string(),
+        category_id,
+        author_id,
+        350,
+    );
+    book2.series_id = Some(series_id.clone());
+    book2.position_in_series = Some(2);
+    let book2_id = book2.id.clone();
+    storage.add_book(book2);
+
+    // Delete the series
+    let result = delete_series(&mut storage, &series_id);
+    assert!(result.is_ok());
+
+    // Series should be gone
+    assert!(storage.series.get(&series_id).is_none());
+
+    // Books should still exist but have no series
+    let b1 = storage.books.get(&book1_id).unwrap();
+    assert_eq!(b1.series_id, None);
+    assert_eq!(b1.position_in_series, None);
+
+    let b2 = storage.books.get(&book2_id).unwrap();
+    assert_eq!(b2.series_id, None);
+    assert_eq!(b2.position_in_series, None);
+}
+
+#[test]
+fn test_delete_series_nonexistent_returns_error() {
+    let mut storage = Storage::new();
+    let result = delete_series(&mut storage, "nonexistent-id");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("not found"));
+}
+
+// --- Rename series tests ---
+
+#[test]
+fn test_rename_series() {
+    let mut storage = Storage::new();
+    let series = Series::new("Harry Poter".to_string()); // typo
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let result = rename_series(&mut storage, &series_id, "Harry Potter");
+    assert!(result.is_ok());
+
+    let renamed = storage.series.get(&series_id).unwrap();
+    assert_eq!(renamed.name, "Harry Potter");
+}
+
+#[test]
+fn test_rename_series_nonexistent_returns_error() {
+    let mut storage = Storage::new();
+    let result = rename_series(&mut storage, "nonexistent-id", "New Name");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("not found"));
+}
+
+#[test]
+fn test_rename_series_to_duplicate_name_returns_error() {
+    let mut storage = Storage::new();
+    let series1 = Series::new("Harry Potter".to_string());
+    let series1_id = series1.id.clone();
+    storage.add_series(series1);
+
+    let series2 = Series::new("Lord of the Rings".to_string());
+    storage.add_series(series2);
+
+    // Renaming series1 to match series2's name (case-insensitive) should fail
+    let result = rename_series(&mut storage, &series1_id, "lord of the rings");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("already exists"));
+}
+
+#[test]
+fn test_rename_series_same_name_different_case_ok() {
+    let mut storage = Storage::new();
+    let series = Series::new("harry potter".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Renaming to fix casing of the same series should work
+    let result = rename_series(&mut storage, &series_id, "Harry Potter");
+    assert!(result.is_ok());
+    assert_eq!(storage.series.get(&series_id).unwrap().name, "Harry Potter");
 }
