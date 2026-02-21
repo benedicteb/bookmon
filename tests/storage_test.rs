@@ -2048,3 +2048,77 @@ fn test_handle_missing_fields_updates_reading_book_id() {
     assert_eq!(repaired_book.title, "Repaired Book");
     assert_eq!(repaired_book.total_pages, 300);
 }
+
+#[test]
+fn test_most_recent_reading_event_returns_none_for_unknown_book() {
+    let storage = Storage::new();
+    assert_eq!(storage.most_recent_reading_event("nonexistent"), None);
+}
+
+#[test]
+fn test_most_recent_reading_event_returns_latest_event() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Test Author".to_string());
+    let category = Category::new("Fiction".to_string(), None);
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        category.id.clone(),
+        author.id.clone(),
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_author(author);
+    storage.add_category(category);
+    storage.add_book(book);
+
+    // Add Started then Finished
+    let mut started = Reading::new(book_id.clone(), ReadingEvent::Started);
+    started.created_on = Utc::now() - Duration::hours(2);
+    storage.add_reading(started);
+
+    let finished = Reading::new(book_id.clone(), ReadingEvent::Finished);
+    storage.add_reading(finished);
+
+    assert_eq!(
+        storage.most_recent_reading_event(&book_id),
+        Some(ReadingEvent::Finished)
+    );
+}
+
+#[test]
+fn test_most_recent_reading_event_skips_non_status_events_for_started_check() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Test Author".to_string());
+    let category = Category::new("Fiction".to_string(), None);
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        category.id.clone(),
+        author.id.clone(),
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_author(author);
+    storage.add_category(category);
+    storage.add_book(book);
+
+    // Started -> Update -> Bought (most recent is Bought)
+    let mut started = Reading::new(book_id.clone(), ReadingEvent::Started);
+    started.created_on = Utc::now() - Duration::hours(3);
+    storage.add_reading(started);
+
+    let mut update = Reading::new(book_id.clone(), ReadingEvent::Update);
+    update.created_on = Utc::now() - Duration::hours(2);
+    storage.add_reading(update);
+
+    let bought = Reading::new(book_id.clone(), ReadingEvent::Bought);
+    storage.add_reading(bought);
+
+    assert_eq!(
+        storage.most_recent_reading_event(&book_id),
+        Some(ReadingEvent::Bought)
+    );
+}
