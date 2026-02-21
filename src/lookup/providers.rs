@@ -27,15 +27,22 @@ pub struct ProviderManager {
     providers: Vec<Box<dyn BookProvider>>,
 }
 
+impl Default for ProviderManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProviderManager {
     pub fn new() -> Self {
-        let mut providers: Vec<Box<dyn BookProvider>> = Vec::new();
-        providers.push(Box::new(OpenLibraryProvider {
-            client: create_http_client(),
-        }));
-        providers.push(Box::new(BibsokProvider {
-            client: create_http_client(),
-        }));
+        let providers: Vec<Box<dyn BookProvider>> = vec![
+            Box::new(OpenLibraryProvider {
+                client: create_http_client(),
+            }),
+            Box::new(BibsokProvider {
+                client: create_http_client(),
+            }),
+        ];
         Self { providers }
     }
 

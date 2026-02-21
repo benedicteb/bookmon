@@ -154,6 +154,12 @@ pub struct Storage {
     pub categories: HashMap<String, Category>,
 }
 
+impl Default for Storage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Storage {
     pub fn new() -> Self {
         Storage {

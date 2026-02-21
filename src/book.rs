@@ -149,7 +149,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         let suggested_author = book_info
             .authors
             .first()
-            .and_then(|a| Some(a.name.clone()))
+            .map(|a| a.name.clone())
             .unwrap_or_default();
 
         let author_name = if !suggested_author.is_empty() {
@@ -189,7 +189,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
         let suggested_author = book_info
             .authors
             .first()
-            .and_then(|a| Some(a.name.clone()))
+            .map(|a| a.name.clone())
             .unwrap_or_default();
 
         // Track if we added the suggested author to options
@@ -210,7 +210,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
             let suggested_author = book_info
                 .authors
                 .first()
-                .and_then(|a| Some(a.name.clone()))
+                .map(|a| a.name.clone())
                 .unwrap_or_default();
 
             let author_name = if !suggested_author.is_empty() {

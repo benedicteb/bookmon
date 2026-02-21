@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::GetIsbn { isbn } => {
             let client = http_client::HttpClient::new();
-            let book = tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(&isbn))?;
+            let book = tokio::runtime::Runtime::new()?.block_on(client.get_book_by_isbn(isbn))?;
             if let Some(book) = book {
                 println!("Title: {}", book.title);
                 println!("Authors:");

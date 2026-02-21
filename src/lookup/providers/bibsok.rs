@@ -11,6 +11,12 @@ pub struct BibsokProvider {
     pub client: reqwest::Client,
 }
 
+impl Default for BibsokProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BibsokProvider {
     pub fn new() -> Self {
         Self {
@@ -63,11 +69,10 @@ impl BibsokProvider {
         // Extract year
         let year = book_element
             .select(&year_selector)
-            .filter(|e| {
+            .find(|e| {
                 let text = e.text().collect::<String>();
-                text.chars().all(|c| c.is_digit(10)) && text.len() == 4
+                text.chars().all(|c| c.is_ascii_digit()) && text.len() == 4
             })
-            .next()
             .map(|e| e.text().collect::<String>());
 
         // Extract cover URL

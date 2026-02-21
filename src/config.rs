@@ -1,7 +1,6 @@
 use config::{Config, ConfigError, File, FileFormat};
 use dirs::config_dir;
 use serde::Deserialize;
-use serde_yaml;
 use std::fs;
 use std::path::PathBuf;
 
@@ -38,7 +37,9 @@ fn create_config() -> Result<(), ConfigError> {
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
+    #[allow(dead_code)]
     pub app_name: String,
+    #[allow(dead_code)]
     pub debug: bool,
     #[serde(skip)]
     pub storage_file: String,
