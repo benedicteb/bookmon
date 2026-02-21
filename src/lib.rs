@@ -2,6 +2,7 @@ pub mod author;
 pub mod book;
 pub mod category;
 pub mod config;
+pub mod goal;
 pub mod reading;
 pub mod review;
 pub mod storage;
