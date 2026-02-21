@@ -589,6 +589,13 @@ fn interactive_mode(
         actions.push("Mark as bought");
     }
 
+    // Series assignment is always available
+    if selected_book.series_id.is_some() {
+        actions.push("Change series");
+    } else {
+        actions.push("Assign to series");
+    }
+
     // Review is always available for any book
     actions.push("Write review");
 
@@ -605,6 +612,87 @@ fn interactive_mode(
             return Ok(());
         }
     };
+
+    // Handle "Assign to series" / "Change series" action
+    if action_selection == "Assign to series" || action_selection == "Change series" {
+        let mut storage = storage.clone();
+
+        // Build series options
+        let existing_series: Vec<(String, String)> = storage
+            .series
+            .iter()
+            .map(|(id, s)| (s.name.clone(), id.clone()))
+            .collect();
+
+        let mut options: Vec<String> = Vec::new();
+        let mut sorted_existing: Vec<&(String, String)> = existing_series.iter().collect();
+        sorted_existing.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        for (name, _) in &sorted_existing {
+            options.push(name.clone());
+        }
+        options.push("+ Create new series".to_string());
+        if action_selection == "Change series" {
+            options.push("Remove from series".to_string());
+        }
+
+        let selection = match Select::new(
+            "Select series:",
+            options.iter().map(|s| s.as_str()).collect(),
+        )
+        .prompt()
+        {
+            Ok(s) => s,
+            Err(_) => {
+                println!("Operation cancelled");
+                return Ok(());
+            }
+        };
+
+        if selection == "Remove from series" {
+            if let Some(book) = storage.books.get_mut(selected_book_id) {
+                book.series_id = None;
+                book.position_in_series = None;
+            }
+            storage::write_storage(storage_file, &storage)?;
+            println!("Removed from series.");
+        } else {
+            let series_id = if selection == "+ Create new series" {
+                let name = match Text::new("Enter series name:").prompt() {
+                    Ok(n) => n,
+                    Err(_) => {
+                        println!("Operation cancelled");
+                        return Ok(());
+                    }
+                };
+                bookmon::series::get_or_create_series(&mut storage, name.trim())
+            } else {
+                existing_series
+                    .iter()
+                    .find(|(name, _)| name.as_str() == selection)
+                    .map(|(_, id)| id.clone())
+                    .ok_or("Selected series not found")?
+            };
+
+            let position_str =
+                match Text::new("Position in series (or leave empty to skip):").prompt() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        println!("Operation cancelled");
+                        return Ok(());
+                    }
+                };
+            let position = position_str.trim().parse::<i32>().ok();
+
+            if let Some(book) = storage.books.get_mut(selected_book_id) {
+                book.series_id = Some(series_id);
+                book.position_in_series = position;
+            }
+            storage::write_storage(storage_file, &storage)?;
+            println!("Series assignment updated!");
+        }
+
+        return Ok(());
+    }
 
     // Handle "Write review" action separately from reading events
     if action_selection == "Write review" {
