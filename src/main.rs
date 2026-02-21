@@ -433,6 +433,7 @@ fn show_goal_status_if_set(storage: &Storage) {
 }
 
 /// Prints all series and their books, sorted by series name then position.
+/// Shows reading status indicators and progress for each series.
 fn print_series(storage: &Storage) {
     if storage.series.is_empty() {
         println!("No series found.");
@@ -444,28 +445,10 @@ fn print_series(storage: &Storage) {
     all_series.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
     for s in all_series {
-        println!("\n{}", s.name);
-        println!("{}", "-".repeat(s.name.len()));
-
-        let books = storage.get_books_in_series(&s.id);
-        if books.is_empty() {
-            println!("  (no books)");
-        } else {
-            for book in books {
-                let author_name = storage.author_name_for_book(book);
-                let author_name = if author_name.is_empty() {
-                    "Unknown Author"
-                } else {
-                    author_name
-                };
-                let pos = book
-                    .position_in_series
-                    .as_deref()
-                    .map(|p| format!("#{} ", p))
-                    .unwrap_or_default();
-                println!("  {}\"{}\" by {}", pos, book.title, author_name);
-            }
-        }
+        println!(
+            "\n{}",
+            bookmon::series::format_series_display(storage, &s.id)
+        );
     }
     println!();
 }

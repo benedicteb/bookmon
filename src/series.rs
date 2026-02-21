@@ -28,6 +28,98 @@ pub fn parse_position_input(input: &str) -> Option<String> {
     }
 }
 
+/// Formats a rich display of a series with reading status indicators.
+///
+/// Output includes:
+/// - Header line with series name and progress (e.g. "Harry Potter (3/7 read)")
+/// - Unicode separator line
+/// - Books listed with status indicators: `✓` finished, `▸` reading, blank for unread
+///
+/// Returns the formatted string (no trailing newline).
+pub fn format_series_display(storage: &Storage, series_id: &str) -> String {
+    let series = match storage.get_series(series_id) {
+        Some(s) => s,
+        None => return String::new(),
+    };
+
+    let books = storage.get_books_in_series(series_id);
+    let mut lines = Vec::new();
+
+    if books.is_empty() {
+        // Header with no progress
+        lines.push(series.name.to_string());
+        lines.push("\u{2500}".repeat(series.name.len()));
+        lines.push("  (no books)".to_string());
+        return lines.join("\n");
+    }
+
+    // Count reading status
+    let finished_count = books
+        .iter()
+        .filter(|b| storage.is_book_finished(&b.id))
+        .count();
+    let reading_count = books
+        .iter()
+        .filter(|b| storage.is_book_started(&b.id))
+        .count();
+
+    // Build header with progress
+    let progress = match series.total_books {
+        Some(total) => {
+            let mut parts = vec![format!("{}/{} read", finished_count, total)];
+            if reading_count > 0 {
+                parts.push(format!("{} reading", reading_count));
+            }
+            parts.join(", ")
+        }
+        None => {
+            let mut parts = vec![format!("{} read", finished_count)];
+            if reading_count > 0 {
+                parts.push(format!("{} reading", reading_count));
+            }
+            parts.join(", ")
+        }
+    };
+
+    let header = format!("{} ({})", series.name, progress);
+    lines.push(header.clone());
+    lines.push("\u{2500}".repeat(header.len()));
+
+    // List books with status indicators
+    for book in &books {
+        let is_finished = storage.is_book_finished(&book.id);
+        let is_started = storage.is_book_started(&book.id);
+
+        let status_indicator = if is_finished {
+            "\u{2713}" // ✓
+        } else if is_started {
+            "\u{25b8}" // ▸
+        } else {
+            " "
+        };
+
+        let author_name = storage.author_name_for_book(book);
+        let author_name = if author_name.is_empty() {
+            "Unknown Author"
+        } else {
+            author_name
+        };
+
+        let pos = book
+            .position_in_series
+            .as_deref()
+            .map(|p| format!("#{} ", p))
+            .unwrap_or_default();
+
+        lines.push(format!(
+            "  {}{} \"{}\" by {}",
+            pos, status_indicator, book.title, author_name
+        ));
+    }
+
+    lines.join("\n")
+}
+
 /// Finds an existing series by name (case-insensitive) or creates a new one.
 /// Returns the series ID.
 pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
