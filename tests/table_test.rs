@@ -185,7 +185,7 @@ fn test_structured_table_data_only_no_groups() {
 fn test_structured_table_with_group_header() {
     let rows = vec![
         TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
-        TableRow::GroupHeader("The Expanse".to_string()),
+        TableRow::GroupHeader("The Expanse".to_string(), 2),
         TableRow::Data(vec![
             "#1 Leviathan Wakes".to_string(),
             "James S.A. Corey".to_string(),
@@ -234,7 +234,7 @@ fn test_structured_table_mixed_groups_and_standalone() {
         TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
         // Standalone book (before any group header)
         TableRow::Data(vec!["Piranesi".to_string(), "Susanna Clarke".to_string()]),
-        TableRow::GroupHeader("Harry Potter".to_string()),
+        TableRow::GroupHeader("Harry Potter".to_string(), 2),
         TableRow::Data(vec![
             "#1 Philosopher's Stone".to_string(),
             "J.K. Rowling".to_string(),
@@ -243,7 +243,7 @@ fn test_structured_table_mixed_groups_and_standalone() {
             "#2 Chamber of Secrets".to_string(),
             "J.K. Rowling".to_string(),
         ]),
-        TableRow::GroupHeader("Discworld".to_string()),
+        TableRow::GroupHeader("Discworld".to_string(), 1),
         TableRow::Data(vec![
             "#1 The Colour of Magic".to_string(),
             "Terry Pratchett".to_string(),
@@ -284,10 +284,77 @@ fn test_structured_table_mixed_groups_and_standalone() {
 }
 
 #[test]
+fn test_structured_table_standalone_after_group_has_separator() {
+    // Regression test: standalone Data rows after a group must have separators.
+    // Previously, they were incorrectly treated as part of the preceding group.
+    let rows = vec![
+        TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
+        TableRow::GroupHeader("The Expanse".to_string(), 2),
+        TableRow::Data(vec![
+            "#1 Leviathan Wakes".to_string(),
+            "James S.A. Corey".to_string(),
+        ]),
+        TableRow::Data(vec![
+            "#2 Caliban's War".to_string(),
+            "James S.A. Corey".to_string(),
+        ]),
+        // These are standalone — NOT part of The Expanse
+        TableRow::Data(vec!["Piranesi".to_string(), "Susanna Clarke".to_string()]),
+        TableRow::Data(vec![
+            "Project Hail Mary".to_string(),
+            "Andy Weir".to_string(),
+        ]),
+        TableRow::GroupHeader("Discworld".to_string(), 1),
+        TableRow::Data(vec![
+            "#1 The Colour of Magic".to_string(),
+            "Terry Pratchett".to_string(),
+        ]),
+    ];
+    let output = format_structured_table(&rows);
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Structure:
+    // 0: +=====+=====+
+    // 1: | Title | Author |
+    // 2: +=====+=====+
+    // 3: | ── The Expanse ── |  (group header)
+    // 4: | #1 Leviathan.. |    (grouped, no sep)
+    // 5: | #2 Caliban's.. |    (grouped, sep after — end of group)
+    // 6: +-----+-----+
+    // 7: | Piranesi |          (standalone, sep after)
+    // 8: +-----+-----+
+    // 9: | Project Hail.. |    (standalone, sep after)
+    // 10: +-----+-----+
+    // 11: | ── Discworld ── |  (group header)
+    // 12: | #1 Colour.. |      (grouped, sep after — end of rows)
+    // 13: +-----+-----+
+    assert_eq!(lines.len(), 14, "Output:\n{}", output);
+
+    // No separator between grouped rows
+    assert!(lines[4].starts_with('|'), "First grouped row");
+    assert!(
+        lines[5].starts_with('|'),
+        "Second grouped row — no separator before"
+    );
+
+    // Separator after the group ends
+    assert!(lines[6].starts_with('+'), "Separator after Expanse group");
+
+    // Each standalone row gets its own separator
+    assert!(lines[7].contains("Piranesi"), "Piranesi is standalone");
+    assert!(lines[8].starts_with('+'), "Separator after Piranesi");
+    assert!(lines[9].contains("Project Hail Mary"), "PHM is standalone");
+    assert!(lines[10].starts_with('+'), "Separator after PHM");
+
+    // Next group header
+    assert!(lines[11].contains("Discworld"), "Discworld group header");
+}
+
+#[test]
 fn test_structured_table_all_lines_same_display_width() {
     let rows = vec![
         TableRow::Header(vec!["Title".to_string(), "Author".to_string()]),
-        TableRow::GroupHeader("The Expanse".to_string()),
+        TableRow::GroupHeader("The Expanse".to_string(), 2),
         TableRow::Data(vec![
             "#1 Leviathan Wakes".to_string(),
             "James S.A. Corey".to_string(),
@@ -319,7 +386,7 @@ fn test_structured_table_all_lines_same_display_width() {
 fn test_structured_table_group_header_with_unicode() {
     let rows = vec![
         TableRow::Header(vec!["Tittel".to_string(), "Forfatter".to_string()]),
-        TableRow::GroupHeader("Ringenes Herre".to_string()),
+        TableRow::GroupHeader("Ringenes Herre".to_string(), 1),
         TableRow::Data(vec![
             "#1 Ringens brorskap".to_string(),
             "J.R.R. Tolkien".to_string(),

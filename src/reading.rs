@@ -128,7 +128,7 @@ pub fn build_started_books_table(storage: &Storage) -> io::Result<Vec<TableRow>>
         for entry in &entries {
             match entry {
                 BookEntry::SeriesGroup { name, books } => {
-                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
                             "{}{}",
@@ -259,7 +259,7 @@ pub fn show_finished_books_list(
         for entry in &entries {
             match entry {
                 BookEntry::SeriesGroup { name, books } => {
-                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
                             "{}{}",
@@ -371,7 +371,7 @@ pub fn print_book_list_table(
         for entry in &entries {
             match entry {
                 BookEntry::SeriesGroup { name, books } => {
-                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
                     for book in books {
                         let title = format!(
                             "{}{}",

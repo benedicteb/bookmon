@@ -15,15 +15,19 @@ pub enum TableRow {
     /// A regular data row.
     Data(Vec<String>),
     /// A group header that spans the full table width (e.g. series name).
-    GroupHeader(String),
+    /// The `usize` is the number of `Data` rows that belong to this group
+    /// (i.e. the count of immediately following `Data` rows that should
+    /// have no separators between them).
+    GroupHeader(String, usize),
 }
 
 /// Formats a structured table with support for group headers.
 ///
 /// Group headers span the full table width as a centered label.
-/// Data rows within a group (between a GroupHeader and the next GroupHeader
-/// or end of rows) have no separator between them — only a separator after
-/// the last row in a group.
+/// The `usize` in `GroupHeader(label, count)` specifies exactly how many
+/// subsequent `Data` rows belong to the group. Only those rows have their
+/// inter-row separators suppressed. Data rows outside any group get normal
+/// separators.
 ///
 /// The first row must be a `Header` variant.
 pub fn format_structured_table(rows: &[TableRow]) -> String {
@@ -43,7 +47,7 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
     for row in rows {
         let cells = match row {
             TableRow::Header(cells) | TableRow::Data(cells) => cells,
-            TableRow::GroupHeader(_) => continue,
+            TableRow::GroupHeader(_, _) => continue,
         };
         debug_assert!(
             cells.len() == col_count,
@@ -75,22 +79,18 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
     output.push_str(&draw_line(&col_widths, '='));
     output.push('\n');
 
-    // Track whether we're inside a group (after GroupHeader, before next GroupHeader or end)
-    let mut in_group = false;
+    // Track how many grouped Data rows remain in the current group.
+    // 0 means we're not inside a group (next Data row is standalone).
+    let mut group_rows_remaining: usize = 0;
 
-    for i in 1..rows.len() {
-        match &rows[i] {
+    for row in rows.iter().skip(1) {
+        match row {
             TableRow::Header(_) => {
                 // Ignore extra headers (shouldn't happen, but be defensive)
             }
-            TableRow::GroupHeader(label) => {
-                // If we were in a group, close it with a separator
-                if in_group {
-                    output.push_str(&draw_line(&col_widths, '-'));
-                    output.push('\n');
-                }
-                in_group = true;
-                // Render the group header as a spanning row
+            TableRow::GroupHeader(label, count) => {
+                // Start a new group with the specified number of Data rows
+                group_rows_remaining = *count;
                 output.push_str(&format_group_header(label, total_width));
                 output.push('\n');
             }
@@ -98,18 +98,17 @@ pub fn format_structured_table(rows: &[TableRow]) -> String {
                 output.push_str(&format_row(cells, &col_widths));
                 output.push('\n');
 
-                // Determine if next row is also Data in the same group
-                let next_is_grouped_data =
-                    in_group && i + 1 < rows.len() && matches!(&rows[i + 1], TableRow::Data(_));
-
-                if !next_is_grouped_data {
-                    output.push_str(&draw_line(&col_widths, '-'));
-                    output.push('\n');
-                    // Close the group if next row is not a Data row (or we're at the end)
-                    if i + 1 >= rows.len() || !matches!(&rows[i + 1], TableRow::Data(_)) {
-                        in_group = false;
+                if group_rows_remaining > 0 {
+                    group_rows_remaining -= 1;
+                    // Suppress separator if more grouped rows follow
+                    if group_rows_remaining > 0 {
+                        continue; // no separator — next row is still in this group
                     }
                 }
+
+                // Separator after: standalone row, or last row in a group
+                output.push_str(&draw_line(&col_widths, '-'));
+                output.push('\n');
             }
         }
     }

@@ -353,7 +353,7 @@ fn test_no_group_headers_when_no_books_have_series() {
     // No GroupHeader rows should exist when no books have series
     let has_group_headers = table
         .iter()
-        .any(|row| matches!(row, TableRow::GroupHeader(_)));
+        .any(|row| matches!(row, TableRow::GroupHeader(_, _)));
     assert!(
         !has_group_headers,
         "No group headers when no books have series"
@@ -409,7 +409,7 @@ fn test_group_header_present_when_books_have_series() {
     let group_headers: Vec<&str> = table
         .iter()
         .filter_map(|row| match row {
-            TableRow::GroupHeader(name) => Some(name.as_str()),
+            TableRow::GroupHeader(name, _) => Some(name.as_str()),
             _ => None,
         })
         .collect();
