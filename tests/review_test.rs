@@ -266,6 +266,29 @@ fn test_strip_editor_text_handles_template_format() {
     assert_eq!(result, Some("A great book about dystopia.".to_string()));
 }
 
+// --- truncate_text tests (via show_reviews with long unicode text) ---
+
+#[test]
+fn test_show_reviews_with_unicode_text_does_not_panic() {
+    let (mut storage, book_id) = create_storage_with_book();
+    // Text with multi-byte UTF-8 characters that would panic if truncated by byte index
+    let text = "Caf\u{00e9} \u{2615} r\u{00e9}sum\u{00e9} is a great book. This review contains enough text to trigger truncation in the table preview column which should handle unicode gracefully.";
+    let review = Review::new(book_id, text.to_string());
+    storage.add_review(review);
+    // This should not panic due to byte-index slicing on multi-byte chars
+    assert!(show_reviews(&storage).is_ok());
+}
+
+#[test]
+fn test_show_reviews_with_emoji_text_does_not_panic() {
+    let (mut storage, book_id) = create_storage_with_book();
+    // Emoji are 4 bytes each in UTF-8
+    let text = "\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}\u{1f4da}";
+    let review = Review::new(book_id, text.to_string());
+    storage.add_review(review);
+    assert!(show_reviews(&storage).is_ok());
+}
+
 // --- Display function tests ---
 
 #[test]
