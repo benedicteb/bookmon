@@ -192,18 +192,23 @@ pub fn print_table(rows: &[Vec<String>]) {
 }
 
 /// Formats a group header label centered across the full table width.
-/// Rendered as `| <centered label> |` where the inner space spans all columns.
+///
+/// Rendered as `| ── Label ── |` with `──` decorations flanking the label
+/// to visually distinguish it from data rows.
 fn format_group_header(label: &str, total_width: usize) -> String {
     // Inner width is total_width minus the outer `|` characters (2)
     let inner_width = total_width.saturating_sub(2);
-    let display_width = UnicodeWidthStr::width(label);
+
+    // Build decorated label: "── Label ──"
+    let decorated = format!("\u{2500}\u{2500} {} \u{2500}\u{2500}", label);
+    let display_width = UnicodeWidthStr::width(decorated.as_str());
     let total_padding = inner_width.saturating_sub(display_width);
     let left_pad = total_padding / 2;
     let right_pad = total_padding - left_pad;
     format!(
         "|{}{}{}|",
         " ".repeat(left_pad),
-        label,
+        decorated,
         " ".repeat(right_pad)
     )
 }
