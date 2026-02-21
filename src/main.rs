@@ -843,6 +843,26 @@ fn interactive_mode(
                 };
             let position = bookmon::series::parse_position_input(&position_str);
 
+            // Warn if the position is already occupied by another book
+            if let Some(ref pos) = position {
+                if let Some(existing_title) =
+                    bookmon::series::is_position_occupied(&storage, &series_id, pos)
+                {
+                    // Don't warn if the book being assigned is the one already at that position
+                    if storage
+                        .books
+                        .get(selected_book_id)
+                        .map(|b| b.title.as_str())
+                        != Some(existing_title.as_str())
+                    {
+                        println!(
+                            "Note: '{}' is already #{} in this series.",
+                            existing_title, pos
+                        );
+                    }
+                }
+            }
+
             let series_name = storage
                 .series
                 .get(&series_id)

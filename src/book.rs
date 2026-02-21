@@ -388,6 +388,17 @@ fn select_series(
 
     let position = crate::series::parse_position_input(&position_str);
 
+    // Warn if the position is already occupied by another book
+    if let Some(ref pos) = position {
+        if let Some(existing_title) = crate::series::is_position_occupied(storage, &series_id, pos)
+        {
+            println!(
+                "Note: '{}' is already #{} in this series.",
+                existing_title, pos
+            );
+        }
+    }
+
     Ok((Some(series_id), position))
 }
 

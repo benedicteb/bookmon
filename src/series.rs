@@ -120,6 +120,19 @@ pub fn format_series_display(storage: &Storage, series_id: &str) -> String {
     lines.join("\n")
 }
 
+/// Checks if a position is already occupied by another book in the series.
+/// Returns the title of the book at that position, or None if the position is free.
+pub fn is_position_occupied(storage: &Storage, series_id: &str, position: &str) -> Option<String> {
+    storage
+        .books
+        .values()
+        .find(|b| {
+            b.series_id.as_deref() == Some(series_id)
+                && b.position_in_series.as_deref() == Some(position)
+        })
+        .map(|b| b.title.clone())
+}
+
 /// Finds an existing series by name (case-insensitive) or creates a new one.
 /// Returns the series ID.
 pub fn get_or_create_series(storage: &mut Storage, name: &str) -> String {
