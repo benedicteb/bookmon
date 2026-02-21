@@ -3,11 +3,91 @@ use bookmon::{
     book,
     lookup::http_client,
     reading,
-    storage::{self, Book, Storage},
+    storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
 };
 use chrono::Datelike;
 use clap::{Parser, Subcommand};
 use inquire::{Select, Text};
+
+/// Interactive prompter that uses `inquire` for user input during storage repair
+struct InquirePrompter;
+
+impl RepairPrompter for InquirePrompter {
+    fn prompt_author_name(&self, book_title: &str) -> Result<String, Box<dyn std::error::Error>> {
+        println!(
+            "Book '{}' references a missing author. Please provide the author name:",
+            book_title
+        );
+        Ok(Text::new("Enter author name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get author input: {}", e))?)
+    }
+
+    fn prompt_category_name(&self, book_title: &str) -> Result<String, Box<dyn std::error::Error>> {
+        println!(
+            "Book '{}' references a missing category. Please provide the category name:",
+            book_title
+        );
+        Ok(Text::new("Enter category name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get category input: {}", e))?)
+    }
+
+    fn prompt_total_pages(&self, book_title: &str) -> Result<i32, Box<dyn std::error::Error>> {
+        println!(
+            "Book '{}' is missing total pages. Please provide the total pages:",
+            book_title
+        );
+        let total_pages = Text::new("Enter total pages:")
+            .prompt()
+            .map_err(|e| format!("Failed to get total pages: {}", e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| format!("Invalid total pages: {}", e))?;
+        Ok(total_pages)
+    }
+
+    fn prompt_book_details(
+        &self,
+        reading_id: &str,
+    ) -> Result<BookRepairInput, Box<dyn std::error::Error>> {
+        println!(
+            "Reading event {} references a missing book. Please provide the book details:",
+            reading_id
+        );
+
+        let title = Text::new("Enter book title:")
+            .prompt()
+            .map_err(|e| format!("Failed to get book title: {}", e))?;
+
+        let isbn = Text::new("Enter book ISBN:")
+            .prompt()
+            .map_err(|e| format!("Failed to get book ISBN: {}", e))?;
+
+        let total_pages = Text::new("Enter total pages:")
+            .prompt()
+            .map_err(|e| format!("Failed to get total pages: {}", e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| format!("Invalid total pages: {}", e))?;
+
+        let author_name = Text::new("Enter author name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get author name: {}", e))?;
+
+        let category_name = Text::new("Enter category name:")
+            .prompt()
+            .map_err(|e| format!("Failed to get category name: {}", e))?;
+
+        Ok(BookRepairInput {
+            title,
+            isbn,
+            total_pages,
+            author_name,
+            category_name,
+        })
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -69,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize storage file if it doesn't exist
     storage::initialize_storage_file(&settings.storage_file)?;
 
-    let mut storage = storage::load_storage(&settings.storage_file)?;
+    let mut storage = storage::load_and_repair_storage(&settings.storage_file, &InquirePrompter)?;
 
     // Handle the default case (no command) - show currently-reading
     if cli.command.is_none() {

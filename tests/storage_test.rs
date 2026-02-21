@@ -1,9 +1,57 @@
 use bookmon::storage::{
-    sort_json_value, Author, Book, Category, Reading, ReadingEvent, ReadingMetadata, Storage,
+    handle_missing_fields, sort_json_value, write_storage, Author, Book, BookRepairInput, Category,
+    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
 use uuid::Uuid;
+
+/// A test prompter that returns predefined values
+struct TestPrompter {
+    author_name: String,
+    category_name: String,
+    total_pages: i32,
+}
+
+impl TestPrompter {
+    fn new(author: &str, category: &str, pages: i32) -> Self {
+        Self {
+            author_name: author.to_string(),
+            category_name: category.to_string(),
+            total_pages: pages,
+        }
+    }
+}
+
+impl RepairPrompter for TestPrompter {
+    fn prompt_author_name(&self, _book_title: &str) -> Result<String, Box<dyn std::error::Error>> {
+        Ok(self.author_name.clone())
+    }
+
+    fn prompt_category_name(
+        &self,
+        _book_title: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        Ok(self.category_name.clone())
+    }
+
+    fn prompt_total_pages(&self, _book_title: &str) -> Result<i32, Box<dyn std::error::Error>> {
+        Ok(self.total_pages)
+    }
+
+    fn prompt_book_details(
+        &self,
+        _reading_id: &str,
+    ) -> Result<BookRepairInput, Box<dyn std::error::Error>> {
+        Ok(BookRepairInput {
+            title: "Repaired Book".to_string(),
+            isbn: "000".to_string(),
+            total_pages: self.total_pages,
+            author_name: self.author_name.clone(),
+            category_name: self.category_name.clone(),
+        })
+    }
+}
 
 #[test]
 fn test_storage_initialization() {
@@ -1636,4 +1684,140 @@ fn test_get_books_finished_in_year() {
     // Test getting books finished in 2024 (should be empty)
     let books_2024 = storage.get_books_finished_in_year(2024);
     assert!(books_2024.is_empty());
+}
+
+#[test]
+fn test_handle_missing_fields_updates_book_author_reference() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with a book that has an orphaned author_id
+    let mut storage = Storage::new();
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let book = Book {
+        id: Uuid::new_v4().to_string(),
+        title: "Orphaned Book".to_string(),
+        added_on: Utc::now(),
+        isbn: "123".to_string(),
+        category_id,
+        author_id: "nonexistent-author-id".to_string(),
+        total_pages: 100,
+    };
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    // Save initial storage
+    write_storage(&path, &storage).unwrap();
+
+    // Run repair with the test prompter
+    let prompter = TestPrompter::new("Repaired Author", "Fiction", 100);
+    handle_missing_fields(&mut storage, &path, &prompter).unwrap();
+
+    // Verify the book's author_id was updated to point to the new author
+    let repaired_book = storage.books.get(&book_id).unwrap();
+    assert_ne!(
+        repaired_book.author_id, "nonexistent-author-id",
+        "Book's author_id should be updated to point to the new author"
+    );
+
+    // Verify the new author exists in storage
+    let new_author = storage.authors.get(&repaired_book.author_id);
+    assert!(new_author.is_some(), "New author should exist in storage");
+    assert_eq!(new_author.unwrap().name, "Repaired Author");
+}
+
+#[test]
+fn test_handle_missing_fields_updates_book_category_reference() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with a book that has an orphaned category_id
+    let mut storage = Storage::new();
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let book = Book {
+        id: Uuid::new_v4().to_string(),
+        title: "Orphaned Book".to_string(),
+        added_on: Utc::now(),
+        isbn: "123".to_string(),
+        category_id: "nonexistent-category-id".to_string(),
+        author_id,
+        total_pages: 100,
+    };
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    // Save initial storage
+    write_storage(&path, &storage).unwrap();
+
+    // Run repair with the test prompter
+    let prompter = TestPrompter::new("Author", "Repaired Category", 100);
+    handle_missing_fields(&mut storage, &path, &prompter).unwrap();
+
+    // Verify the book's category_id was updated
+    let repaired_book = storage.books.get(&book_id).unwrap();
+    assert_ne!(
+        repaired_book.category_id, "nonexistent-category-id",
+        "Book's category_id should be updated to point to the new category"
+    );
+
+    // Verify the new category exists
+    let new_category = storage.categories.get(&repaired_book.category_id);
+    assert!(
+        new_category.is_some(),
+        "New category should exist in storage"
+    );
+    assert_eq!(new_category.unwrap().name, "Repaired Category");
+}
+
+#[test]
+fn test_write_storage_and_load_storage_round_trip() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+
+    // Create storage with test data
+    let mut storage = Storage::new();
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), Some("Fiction books".to_string()));
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let book = Book::new(
+        "Test Book".to_string(),
+        "123".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        200,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    let reading = Reading::new(book_id.clone(), ReadingEvent::Started);
+    storage.add_reading(reading);
+
+    // Write to file
+    write_storage(&path, &storage).unwrap();
+
+    // Load from file
+    let loaded = bookmon::storage::load_storage(&path).unwrap();
+
+    // Verify all data round-tripped correctly
+    assert_eq!(loaded.books.len(), 1);
+    assert_eq!(loaded.authors.len(), 1);
+    assert_eq!(loaded.categories.len(), 1);
+    assert_eq!(loaded.readings.len(), 1);
+
+    let loaded_book = loaded.books.get(&book_id).unwrap();
+    assert_eq!(loaded_book.title, "Test Book");
+    assert_eq!(loaded_book.author_id, author_id);
+    assert_eq!(loaded_book.category_id, category_id);
+    assert_eq!(loaded_book.total_pages, 200);
 }
