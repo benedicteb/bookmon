@@ -1007,3 +1007,170 @@ fn test_rename_series_same_name_different_case_ok() {
     assert!(result.is_ok());
     assert_eq!(storage.series.get(&series_id).unwrap().name, "Harry Potter");
 }
+
+// --- Series filter tests ---
+
+#[test]
+fn test_filter_books_by_series_case_insensitive_substring() {
+    use bookmon::series::filter_books_by_series;
+
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series_hp = Series::new("Harry Potter".to_string());
+    let series_hp_id = series_hp.id.clone();
+    storage.add_series(series_hp);
+
+    let series_lotr = Series::new("Lord of the Rings".to_string());
+    let series_lotr_id = series_lotr.id.clone();
+    storage.add_series(series_lotr);
+
+    // Book in Harry Potter
+    let mut book1 = Book::new(
+        "Philosopher's Stone".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    book1.series_id = Some(series_hp_id.clone());
+    storage.add_book(book1);
+
+    // Book in Lord of the Rings
+    let mut book2 = Book::new(
+        "Fellowship".to_string(),
+        "222".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        400,
+    );
+    book2.series_id = Some(series_lotr_id.clone());
+    storage.add_book(book2);
+
+    // Standalone book
+    let book3 = Book::new(
+        "Standalone".to_string(),
+        "333".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    storage.add_book(book3);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+
+    // Filter by "potter" should match Harry Potter (case-insensitive substring)
+    let filtered = filter_books_by_series(&storage, &all_books, "potter");
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].title, "Philosopher's Stone");
+
+    // Filter by "RING" should match Lord of the Rings
+    let filtered = filter_books_by_series(&storage, &all_books, "RING");
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].title, "Fellowship");
+
+    // Filter by "nonexistent" should return empty
+    let filtered = filter_books_by_series(&storage, &all_books, "nonexistent");
+    assert!(filtered.is_empty());
+}
+
+#[test]
+fn test_filter_books_by_series_excludes_standalone_books() {
+    use bookmon::series::filter_books_by_series;
+
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("Test Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    // Book in series
+    let mut book_in_series = Book::new(
+        "Series Book".to_string(),
+        "111".to_string(),
+        category_id.clone(),
+        author_id.clone(),
+        300,
+    );
+    book_in_series.series_id = Some(series_id);
+    storage.add_book(book_in_series);
+
+    // Standalone book (no series)
+    let standalone = Book::new(
+        "Standalone".to_string(),
+        "222".to_string(),
+        category_id,
+        author_id,
+        200,
+    );
+    storage.add_book(standalone);
+
+    let all_books: Vec<&Book> = storage.books.values().collect();
+
+    // Even a broad filter should not include standalone books
+    let filtered = filter_books_by_series(&storage, &all_books, "test");
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].title, "Series Book");
+}
+
+#[test]
+fn test_find_matching_series_names() {
+    use bookmon::series::find_matching_series_names;
+
+    let mut storage = Storage::new();
+    storage.add_series(Series::new("Harry Potter".to_string()));
+    storage.add_series(Series::new("Lord of the Rings".to_string()));
+    storage.add_series(Series::new("Discworld".to_string()));
+
+    // "potter" matches "Harry Potter"
+    let matches = find_matching_series_names(&storage, "potter");
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0], "Harry Potter");
+
+    // "nonexistent" matches nothing
+    let matches = find_matching_series_names(&storage, "nonexistent");
+    assert!(matches.is_empty());
+
+    // "or" matches both "Harry Potter" and "Lord of the Rings" and "Discworld"
+    let matches = find_matching_series_names(&storage, "or");
+    assert!(matches.len() >= 2); // "Harry P-or-tter", "L-or-d of the Rings", "Discw-or-ld"
+}
+
+#[test]
+fn test_series_filter_empty_message() {
+    use bookmon::series::format_series_filter_empty_message;
+
+    let mut storage = Storage::new();
+    storage.add_series(Series::new("Harry Potter".to_string()));
+    storage.add_series(Series::new("Discworld".to_string()));
+
+    // When the filter matches known series but no books in the result set
+    let msg = format_series_filter_empty_message(&storage, "potter");
+    assert!(msg.contains("potter"), "should include the filter term");
+
+    // When the filter matches no series at all
+    let msg = format_series_filter_empty_message(&storage, "nonexistent");
+    assert!(
+        msg.contains("nonexistent"),
+        "should include the filter term"
+    );
+    assert!(
+        msg.contains("Harry Potter") || msg.contains("Discworld"),
+        "should suggest known series"
+    );
+}
