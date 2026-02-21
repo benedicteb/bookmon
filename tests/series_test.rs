@@ -1,4 +1,4 @@
-use bookmon::series::{get_or_create_series, store_series};
+use bookmon::series::{format_series_label, get_or_create_series, store_series};
 use bookmon::storage::{Author, Book, Category, Series, Storage};
 use chrono::Utc;
 
@@ -372,4 +372,84 @@ fn test_store_book_without_series_succeeds() {
     );
 
     assert!(store_book(&mut storage, book).is_ok());
+}
+
+#[test]
+fn test_format_series_label_with_position() {
+    let series = Series::new("Harry Potter".to_string());
+    assert_eq!(format_series_label(&series, Some(3)), "Harry Potter #3");
+}
+
+#[test]
+fn test_format_series_label_without_position() {
+    let series = Series::new("Harry Potter".to_string());
+    assert_eq!(format_series_label(&series, None), "Harry Potter");
+}
+
+#[test]
+fn test_series_label_for_book_in_storage() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("Lord of the Rings".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let mut book = Book::new(
+        "The Fellowship of the Ring".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        423,
+    );
+    book.series_id = Some(series_id.clone());
+    book.position_in_series = Some(1);
+    storage.add_book(book.clone());
+
+    // Get the label for this book using its series data
+    let series_ref = storage.get_series(&series_id).unwrap();
+    let label = format_series_label(series_ref, book.position_in_series);
+    assert_eq!(label, "Lord of the Rings #1");
+}
+
+#[test]
+fn test_series_name_for_book() {
+    let mut storage = Storage::new();
+
+    let series = Series::new("My Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let mut book = Book::new(
+        "Test".to_string(),
+        "123".to_string(),
+        "cat".to_string(),
+        "auth".to_string(),
+        100,
+    );
+    book.series_id = Some(series_id.clone());
+
+    assert_eq!(storage.series_name_for_book(&book), "My Series");
+}
+
+#[test]
+fn test_series_name_for_book_without_series() {
+    let storage = Storage::new();
+
+    let book = Book::new(
+        "Standalone".to_string(),
+        "123".to_string(),
+        "cat".to_string(),
+        "auth".to_string(),
+        100,
+    );
+
+    assert_eq!(storage.series_name_for_book(&book), "");
 }
