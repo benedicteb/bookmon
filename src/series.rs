@@ -170,6 +170,68 @@ pub fn delete_series(storage: &mut Storage, series_id: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// Filters a list of books to only those belonging to a series whose name
+/// contains `filter` (case-insensitive substring match).
+/// Standalone books (no series) are always excluded.
+pub fn filter_books_by_series<'a>(
+    storage: &Storage,
+    books: &[&'a crate::storage::Book],
+    filter: &str,
+) -> Vec<&'a crate::storage::Book> {
+    let filter_lower = filter.to_lowercase();
+    books
+        .iter()
+        .filter(|book| {
+            book.series_id
+                .as_ref()
+                .and_then(|sid| storage.get_series(sid))
+                .map(|s| s.name.to_lowercase().contains(&filter_lower))
+                .unwrap_or(false)
+        })
+        .copied()
+        .collect()
+}
+
+/// Returns the names of all series whose name contains `filter` (case-insensitive substring).
+/// Useful for suggesting alternatives when a filter matches no books.
+pub fn find_matching_series_names(storage: &Storage, filter: &str) -> Vec<String> {
+    let filter_lower = filter.to_lowercase();
+    let mut names: Vec<String> = storage
+        .series
+        .values()
+        .filter(|s| s.name.to_lowercase().contains(&filter_lower))
+        .map(|s| s.name.clone())
+        .collect();
+    names.sort_by_key(|a| a.to_lowercase());
+    names
+}
+
+/// Builds a helpful empty-result message when a `--series` filter yields no books.
+///
+/// - If the filter term matches known series names, tells the user no books matched.
+/// - If the filter term matches no series at all, lists known series as suggestions.
+pub fn format_series_filter_empty_message(storage: &Storage, filter: &str) -> String {
+    let matching_series = find_matching_series_names(storage, filter);
+    if !matching_series.is_empty() {
+        format!("No books found matching series \"{}\".", filter)
+    } else {
+        let mut all_names: Vec<String> = storage.series.values().map(|s| s.name.clone()).collect();
+        all_names.sort_by_key(|a| a.to_lowercase());
+        if all_names.is_empty() {
+            format!(
+                "No series matching \"{}\" found. No series exist yet.",
+                filter
+            )
+        } else {
+            format!(
+                "No series matching \"{}\" found. Known series: {}.",
+                filter,
+                all_names.join(", ")
+            )
+        }
+    }
+}
+
 /// Renames a series. Returns an error if the series does not exist, if the new
 /// name is empty, or if another series with the new name already exists (case-insensitive).
 pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> Result<(), String> {
