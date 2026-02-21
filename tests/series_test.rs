@@ -1,6 +1,6 @@
 use bookmon::series::{
     delete_series, format_series_display, format_series_label, get_or_create_series,
-    parse_position_input, rename_series, store_series,
+    is_position_occupied, parse_position_input, rename_series, store_series,
 };
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::Utc;
@@ -483,6 +483,55 @@ fn test_format_series_display_empty_series() {
     let output = format_series_display(&storage, &series_id);
     assert!(output.contains("Empty Series"));
     assert!(output.contains("(no books)"));
+}
+
+// --- Duplicate position detection tests ---
+
+#[test]
+fn test_is_position_occupied_returns_book_title_when_occupied() {
+    let mut storage = Storage::new();
+
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let series = Series::new("My Series".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    let mut book = Book::new(
+        "First Book".to_string(),
+        "111".to_string(),
+        category_id,
+        author_id,
+        100,
+    );
+    book.series_id = Some(series_id.clone());
+    book.position_in_series = Some("1".to_string());
+    storage.add_book(book);
+
+    // Position 1 is occupied
+    assert_eq!(
+        is_position_occupied(&storage, &series_id, "1"),
+        Some("First Book".to_string())
+    );
+
+    // Position 2 is not occupied
+    assert_eq!(is_position_occupied(&storage, &series_id, "2"), None);
+}
+
+#[test]
+fn test_is_position_occupied_returns_none_for_empty_series() {
+    let mut storage = Storage::new();
+    let series = Series::new("Empty".to_string());
+    let series_id = series.id.clone();
+    storage.add_series(series);
+
+    assert_eq!(is_position_occupied(&storage, &series_id, "1"), None);
 }
 
 // --- Series status and total_books tests ---
