@@ -1,4 +1,4 @@
-use crate::series::{format_position_prefix, format_series_label};
+use crate::series::format_position_prefix;
 use crate::storage::{compare_positions, Book, Reading, ReadingEvent, Storage};
 use crate::table::{print_structured_table, print_table, TableRow};
 use chrono::Utc;
@@ -100,100 +100,123 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
     Ok(())
 }
 
-/// Builds the table data for currently-reading books.
-/// Returns the table as a Vec of rows (first row is header).
-/// The Series column is only included when at least one book has a series.
-pub fn build_started_books_table(storage: &Storage) -> io::Result<Vec<Vec<String>>> {
+/// Builds the structured table data for currently-reading books.
+///
+/// Returns `Vec<TableRow>` with series grouping when any book has a series,
+/// or a flat table when no books have series. Returns empty vec if no started books.
+pub fn build_started_books_table(storage: &Storage) -> io::Result<Vec<TableRow>> {
     let started_books = storage.get_started_books();
 
     if started_books.is_empty() {
         return Ok(vec![]);
     }
 
-    let mut sorted_books = started_books;
-    sorted_books.sort_by(|a, b| {
-        let a_author_name = storage.author_name_for_book(a);
-        let b_author_name = storage.author_name_for_book(b);
-        if a_author_name != b_author_name {
-            a_author_name.cmp(b_author_name)
-        } else {
-            a.title.cmp(&b.title)
-        }
-    });
+    let any_has_series = started_books.iter().any(|b| b.series_id.is_some());
 
-    let any_has_series = sorted_books.iter().any(|b| b.series_id.is_some());
+    let header = vec![
+        "Title".to_string(),
+        "Author".to_string(),
+        "Days since started".to_string(),
+        "Progress".to_string(),
+    ];
 
-    let mut header = vec!["Title".to_string(), "Author".to_string()];
+    let mut table_rows = vec![TableRow::Header(header)];
+
     if any_has_series {
-        header.push("Series".to_string());
-    }
-    header.push("Days since started".to_string());
-    header.push("Progress".to_string());
+        let entries = group_books_by_series(storage, &started_books);
 
-    let mut table_data = vec![header];
-
-    for book in sorted_books {
-        let author_name = storage.author_name_for_book(book);
-
-        let series_label = book
-            .series_id
-            .as_ref()
-            .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
-            .unwrap_or_default();
-
-        let most_recent_reading = storage
-            .readings
-            .values()
-            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Started)
-            .max_by_key(|r| r.created_on)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
-
-        let days = (Utc::now() - most_recent_reading.created_on).num_days();
-
-        let most_recent_update = storage
-            .readings
-            .values()
-            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Update)
-            .max_by_key(|r| r.created_on);
-
-        let progress = if let Some(update) = most_recent_update {
-            if let Some(current_page) = update.metadata.current_page {
-                if book.total_pages > 0 {
-                    format!(
-                        "{:.1}%",
-                        (current_page as f64 / book.total_pages as f64) * 100.0
-                    )
-                } else {
-                    "".to_string()
+        for entry in &entries {
+            match entry {
+                BookEntry::SeriesGroup { name, books } => {
+                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    for book in books {
+                        let title = format!(
+                            "{}{}",
+                            format_position_prefix(book.position_in_series.as_deref()),
+                            book.title
+                        );
+                        let row = build_started_book_row(storage, book, title)?;
+                        table_rows.push(TableRow::Data(row));
+                    }
                 }
+                BookEntry::Standalone(book) => {
+                    let row = build_started_book_row(storage, book, book.title.clone())?;
+                    table_rows.push(TableRow::Data(row));
+                }
+            }
+        }
+    } else {
+        let mut sorted_books = started_books;
+        sorted_books.sort_by(|a, b| {
+            let a_author = storage.author_name_for_book(a);
+            let b_author = storage.author_name_for_book(b);
+            a_author.cmp(b_author).then(a.title.cmp(&b.title))
+        });
+
+        for book in sorted_books {
+            let row = build_started_book_row(storage, book, book.title.clone())?;
+            table_rows.push(TableRow::Data(row));
+        }
+    }
+
+    Ok(table_rows)
+}
+
+/// Builds a data row for a currently-reading book.
+fn build_started_book_row(
+    storage: &Storage,
+    book: &Book,
+    title: String,
+) -> io::Result<Vec<String>> {
+    let author_name = storage.author_name_for_book(book);
+
+    let most_recent_reading = storage
+        .readings
+        .values()
+        .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Started)
+        .max_by_key(|r| r.created_on)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
+
+    let days = (Utc::now() - most_recent_reading.created_on).num_days();
+
+    let most_recent_update = storage
+        .readings
+        .values()
+        .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Update)
+        .max_by_key(|r| r.created_on);
+
+    let progress = if let Some(update) = most_recent_update {
+        if let Some(current_page) = update.metadata.current_page {
+            if book.total_pages > 0 {
+                format!(
+                    "{:.1}%",
+                    (current_page as f64 / book.total_pages as f64) * 100.0
+                )
             } else {
                 "".to_string()
             }
         } else {
             "".to_string()
-        };
-
-        let mut row = vec![book.title.clone(), author_name.to_string()];
-        if any_has_series {
-            row.push(series_label);
         }
-        row.push(days.to_string());
-        row.push(progress);
+    } else {
+        "".to_string()
+    };
 
-        table_data.push(row);
-    }
-
-    Ok(table_data)
+    Ok(vec![
+        title,
+        author_name.to_string(),
+        days.to_string(),
+        progress,
+    ])
 }
 
 /// Displays a table of currently-reading books with author, days since started, and progress.
 pub fn show_started_books(storage: &Storage) -> io::Result<()> {
-    let table_data = build_started_books_table(storage)?;
-    if table_data.is_empty() {
+    let table_rows = build_started_books_table(storage)?;
+    if table_rows.is_empty() {
         println!("No books currently being read.");
     } else {
-        print_table(&table_data);
+        print_structured_table(&table_rows);
     }
     Ok(())
 }
@@ -208,6 +231,10 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
 }
 
 /// Displays a table of the given finished books with author and finish date.
+///
+/// When books belong to series, they are grouped under a series header row
+/// with no separators between books in the same group. The Series column is
+/// replaced by position prefixes (e.g. `#1`) on the book title.
 pub fn show_finished_books_list(
     storage: &Storage,
     finished_books: Vec<&Book>,
@@ -218,64 +245,98 @@ pub fn show_finished_books_list(
         return Ok(());
     }
 
-    let mut sorted_books = finished_books;
-    sorted_books.sort_by(|a, b| {
-        let a_author_name = storage.author_name_for_book(a);
-        let b_author_name = storage.author_name_for_book(b);
-        if a_author_name != b_author_name {
-            a_author_name.cmp(b_author_name)
-        } else {
-            a.title.cmp(&b.title)
-        }
-    });
+    let any_has_series = finished_books.iter().any(|b| b.series_id.is_some());
 
-    let any_has_series = sorted_books.iter().any(|b| b.series_id.is_some());
-
-    let mut header = vec!["Title".to_string(), "Author".to_string()];
     if any_has_series {
-        header.push("Series".to_string());
-    }
-    header.push("Finished on".to_string());
+        let entries = group_books_by_series(storage, &finished_books);
+        let header = vec![
+            "Title".to_string(),
+            "Author".to_string(),
+            "Finished on".to_string(),
+        ];
+        let mut table_rows = vec![TableRow::Header(header)];
 
-    let mut table_data = vec![header];
-
-    for book in sorted_books {
-        let author_name = storage.author_name_for_book(book);
-
-        let series_label = book
-            .series_id
-            .as_ref()
-            .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
-            .unwrap_or_default();
-
-        let most_recent_reading = storage
-            .readings
-            .values()
-            .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Finished)
-            .max_by_key(|r| r.created_on)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
-
-        let finished_date = most_recent_reading
-            .created_on
-            .format("%Y-%m-%d")
-            .to_string();
-
-        let mut row = vec![book.title.clone(), author_name.to_string()];
-        if any_has_series {
-            row.push(series_label);
+        for entry in &entries {
+            match entry {
+                BookEntry::SeriesGroup { name, books } => {
+                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    for book in books {
+                        let title = format!(
+                            "{}{}",
+                            format_position_prefix(book.position_in_series.as_deref()),
+                            book.title
+                        );
+                        let author_name = storage.author_name_for_book(book);
+                        let finished_date = finished_date_for_book(storage, book)?;
+                        table_rows.push(TableRow::Data(vec![
+                            title,
+                            author_name.to_string(),
+                            finished_date,
+                        ]));
+                    }
+                }
+                BookEntry::Standalone(book) => {
+                    let author_name = storage.author_name_for_book(book);
+                    let finished_date = finished_date_for_book(storage, book)?;
+                    table_rows.push(TableRow::Data(vec![
+                        book.title.clone(),
+                        author_name.to_string(),
+                        finished_date,
+                    ]));
+                }
+            }
         }
-        row.push(finished_date);
 
-        table_data.push(row);
+        print_structured_table(&table_rows);
+    } else {
+        // No series — use the flat table
+        let mut sorted_books = finished_books;
+        sorted_books.sort_by(|a, b| {
+            let a_author = storage.author_name_for_book(a);
+            let b_author = storage.author_name_for_book(b);
+            a_author.cmp(b_author).then(a.title.cmp(&b.title))
+        });
+
+        let header = vec![
+            "Title".to_string(),
+            "Author".to_string(),
+            "Finished on".to_string(),
+        ];
+        let mut table_data = vec![header];
+
+        for book in sorted_books {
+            let author_name = storage.author_name_for_book(book);
+            let finished_date = finished_date_for_book(storage, book)?;
+            table_data.push(vec![
+                book.title.clone(),
+                author_name.to_string(),
+                finished_date,
+            ]);
+        }
+
+        print_table(&table_data);
     }
-
-    print_table(&table_data);
     Ok(())
 }
 
-/// Prints a table of books with common columns (Title, Author, Category, Added on, Bought)
-/// The Series column is only included when at least one book has a series.
+/// Returns the formatted finish date for a book (most recent Finished event).
+fn finished_date_for_book(storage: &Storage, book: &Book) -> io::Result<String> {
+    let most_recent_reading = storage
+        .readings
+        .values()
+        .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Finished)
+        .max_by_key(|r| r.created_on)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
+    Ok(most_recent_reading
+        .created_on
+        .format("%Y-%m-%d")
+        .to_string())
+}
+
+/// Prints a table of books with common columns (Title, Author, Category, Added on, Bought, Want to read).
+///
+/// When books belong to series, they are grouped under series header rows
+/// with position prefixes on titles. The Series column is omitted.
 pub fn print_book_list_table(
     storage: &Storage,
     books: Vec<&Book>,
@@ -286,31 +347,7 @@ pub fn print_book_list_table(
         return Ok(());
     }
 
-    let mut sorted_books = books;
-    sorted_books.sort_by(|a, b| {
-        let a_author_name = storage.author_name_for_book(a);
-        let b_author_name = storage.author_name_for_book(b);
-        if a_author_name != b_author_name {
-            a_author_name.cmp(b_author_name)
-        } else {
-            a.title.cmp(&b.title)
-        }
-    });
-
-    let any_has_series = sorted_books.iter().any(|b| b.series_id.is_some());
-
-    let mut header = vec!["Title".to_string(), "Author".to_string()];
-    if any_has_series {
-        header.push("Series".to_string());
-    }
-    header.extend([
-        "Category".to_string(),
-        "Added on".to_string(),
-        "Bought".to_string(),
-        "Want to read".to_string(),
-    ]);
-
-    let mut table_data = vec![header];
+    let any_has_series = books.iter().any(|b| b.series_id.is_some());
 
     let want_to_read_ids: std::collections::HashSet<&str> = storage
         .get_want_to_read_books()
@@ -318,52 +355,99 @@ pub fn print_book_list_table(
         .map(|b| b.id.as_str())
         .collect();
 
-    for book in sorted_books {
-        let author_name = storage.author_name_for_book(book);
+    let header = vec![
+        "Title".to_string(),
+        "Author".to_string(),
+        "Category".to_string(),
+        "Added on".to_string(),
+        "Bought".to_string(),
+        "Want to read".to_string(),
+    ];
 
-        let category = storage
-            .categories
-            .get(&book.category_id)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Category not found"))?;
+    if any_has_series {
+        let entries = group_books_by_series(storage, &books);
+        let mut table_rows = vec![TableRow::Header(header)];
 
-        let series_label = book
-            .series_id
-            .as_ref()
-            .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
-            .unwrap_or_default();
-
-        let has_bought_event = storage
-            .readings
-            .values()
-            .any(|r| r.book_id == book.id && r.event == ReadingEvent::Bought);
-
-        let is_want_to_read = want_to_read_ids.contains(book.id.as_str());
-
-        let added_date = book.added_on.format("%Y-%m-%d").to_string();
-
-        let mut row = vec![book.title.clone(), author_name.to_string()];
-        if any_has_series {
-            row.push(series_label);
+        for entry in &entries {
+            match entry {
+                BookEntry::SeriesGroup { name, books } => {
+                    table_rows.push(TableRow::GroupHeader(name.clone()));
+                    for book in books {
+                        let title = format!(
+                            "{}{}",
+                            format_position_prefix(book.position_in_series.as_deref()),
+                            book.title
+                        );
+                        let row = build_book_list_row(storage, book, title, &want_to_read_ids)?;
+                        table_rows.push(TableRow::Data(row));
+                    }
+                }
+                BookEntry::Standalone(book) => {
+                    let row =
+                        build_book_list_row(storage, book, book.title.clone(), &want_to_read_ids)?;
+                    table_rows.push(TableRow::Data(row));
+                }
+            }
         }
-        row.extend([
-            category.name.clone(),
-            added_date,
-            if has_bought_event {
-                "x".to_string()
-            } else {
-                "".to_string()
-            },
-            if is_want_to_read {
-                "x".to_string()
-            } else {
-                "".to_string()
-            },
-        ]);
 
-        table_data.push(row);
+        print_structured_table(&table_rows);
+    } else {
+        let mut sorted_books = books;
+        sorted_books.sort_by(|a, b| {
+            let a_author = storage.author_name_for_book(a);
+            let b_author = storage.author_name_for_book(b);
+            a_author.cmp(b_author).then(a.title.cmp(&b.title))
+        });
+
+        let mut table_data = vec![header];
+
+        for book in sorted_books {
+            let row = build_book_list_row(storage, book, book.title.clone(), &want_to_read_ids)?;
+            table_data.push(row);
+        }
+
+        print_table(&table_data);
     }
-
-    print_table(&table_data);
     Ok(())
+}
+
+/// Builds a data row for the book list table (backlog / want-to-read).
+fn build_book_list_row(
+    storage: &Storage,
+    book: &Book,
+    title: String,
+    want_to_read_ids: &std::collections::HashSet<&str>,
+) -> io::Result<Vec<String>> {
+    let author_name = storage.author_name_for_book(book);
+
+    let category = storage
+        .categories
+        .get(&book.category_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Category not found"))?;
+
+    let has_bought_event = storage
+        .readings
+        .values()
+        .any(|r| r.book_id == book.id && r.event == ReadingEvent::Bought);
+
+    let is_want_to_read = want_to_read_ids.contains(book.id.as_str());
+
+    let added_date = book.added_on.format("%Y-%m-%d").to_string();
+
+    Ok(vec![
+        title,
+        author_name.to_string(),
+        category.name.clone(),
+        added_date,
+        if has_bought_event {
+            "x".to_string()
+        } else {
+            "".to_string()
+        },
+        if is_want_to_read {
+            "x".to_string()
+        } else {
+            "".to_string()
+        },
+    ])
 }

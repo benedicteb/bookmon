@@ -322,8 +322,9 @@ fn test_show_started_books_table_format() {
 }
 
 #[test]
-fn test_series_column_hidden_when_no_books_have_series() {
+fn test_no_group_headers_when_no_books_have_series() {
     use bookmon::reading::build_started_books_table;
+    use bookmon::table::TableRow;
 
     let mut storage = Storage::new();
 
@@ -348,18 +349,31 @@ fn test_series_column_hidden_when_no_books_have_series() {
     storage.add_reading(Reading::new(book_id, ReadingEvent::Started));
 
     let table = build_started_books_table(&storage).unwrap();
-    let header = &table[0];
 
-    // Series column should NOT be present when no books have series
+    // No GroupHeader rows should exist when no books have series
+    let has_group_headers = table
+        .iter()
+        .any(|row| matches!(row, TableRow::GroupHeader(_)));
     assert!(
-        !header.contains(&"Series".to_string()),
-        "Series column should be hidden when no books have series"
+        !has_group_headers,
+        "No group headers when no books have series"
     );
+
+    // Header should NOT contain a Series column
+    if let TableRow::Header(header) = &table[0] {
+        assert!(
+            !header.contains(&"Series".to_string()),
+            "Series column should not be in header"
+        );
+    } else {
+        panic!("First row should be a Header");
+    }
 }
 
 #[test]
-fn test_series_column_shown_when_books_have_series() {
+fn test_group_header_present_when_books_have_series() {
     use bookmon::reading::build_started_books_table;
+    use bookmon::table::TableRow;
 
     let mut storage = Storage::new();
 
@@ -390,13 +404,36 @@ fn test_series_column_shown_when_books_have_series() {
     storage.add_reading(Reading::new(book_id, ReadingEvent::Started));
 
     let table = build_started_books_table(&storage).unwrap();
-    let header = &table[0];
 
-    // Series column SHOULD be present when at least one book has a series
-    assert!(
-        header.contains(&"Series".to_string()),
-        "Series column should be shown when books have series"
-    );
+    // Should have a GroupHeader row with the series name
+    let group_headers: Vec<&str> = table
+        .iter()
+        .filter_map(|row| match row {
+            TableRow::GroupHeader(name) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(group_headers, vec!["My Series"]);
+
+    // The data row should have a position prefix in the title
+    let data_titles: Vec<&str> = table
+        .iter()
+        .filter_map(|row| match row {
+            TableRow::Data(cells) => Some(cells[0].as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(data_titles, vec!["#1 Series Book"]);
+
+    // Header should NOT contain a Series column (replaced by GroupHeader)
+    if let TableRow::Header(header) = &table[0] {
+        assert!(
+            !header.contains(&"Series".to_string()),
+            "Series column should not be in header when grouping is active"
+        );
+    } else {
+        panic!("First row should be a Header");
+    }
 }
 
 // ── Series grouping tests ──────────────────────────────────────────
