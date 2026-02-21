@@ -214,6 +214,10 @@ pub struct Storage {
     pub categories: HashMap<String, Category>,
     #[serde(default)]
     pub reviews: HashMap<String, Review>,
+    /// Yearly reading goals: year -> number of books to finish.
+    /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
+    #[serde(default)]
+    pub goals: HashMap<i32, u32>,
 }
 
 impl Default for Storage {
@@ -230,6 +234,7 @@ impl Storage {
             authors: HashMap::new(),
             categories: HashMap::new(),
             reviews: HashMap::new(),
+            goals: HashMap::new(),
         }
     }
 
@@ -494,6 +499,21 @@ impl Storage {
             .single()
             .expect("Dec 31 23:59:59 is always a valid UTC date");
         self.get_read_books_by_time_period(from, to)
+    }
+
+    /// Sets a yearly reading goal (number of books to finish).
+    pub fn set_goal(&mut self, year: i32, target: u32) {
+        self.goals.insert(year, target);
+    }
+
+    /// Returns the reading goal for a given year, or None if no goal is set.
+    pub fn get_goal(&self, year: i32) -> Option<u32> {
+        self.goals.get(&year).copied()
+    }
+
+    /// Removes the reading goal for a given year, returning the previous value if it existed.
+    pub fn remove_goal(&mut self, year: i32) -> Option<u32> {
+        self.goals.remove(&year)
     }
 }
 
