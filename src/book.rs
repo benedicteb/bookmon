@@ -296,7 +296,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
 fn select_series(
     storage: &mut Storage,
     book_info: &BookLookupDTO,
-) -> io::Result<(Option<String>, Option<i32>)> {
+) -> io::Result<(Option<String>, Option<String>)> {
     // Build the options list
     let existing_series: Vec<(String, String)> = storage
         .series
@@ -305,7 +305,7 @@ fn select_series(
         .collect();
 
     let suggested_series = book_info.series_name.clone().unwrap_or_default();
-    let suggested_position = book_info.series_position;
+    let suggested_position = book_info.series_position.clone();
 
     let mut options = Vec::new();
 
@@ -375,9 +375,9 @@ fn select_series(
         None
     };
 
-    let position_str = if let Some(pos) = default_position {
+    let position_str = if let Some(ref pos) = default_position {
         Text::new("Position in series (or leave empty to skip):")
-            .with_default(&pos.to_string())
+            .with_default(pos)
             .prompt()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
     } else {

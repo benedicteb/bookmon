@@ -7,22 +7,23 @@ pub fn store_series(storage: &mut Storage, series: Series) -> Result<(), String>
 }
 
 /// Formats a series label for display, e.g. "Harry Potter #3" or "Harry Potter" (if no position).
-pub fn format_series_label(series: &Series, position: Option<i32>) -> String {
+pub fn format_series_label(series: &Series, position: Option<&str>) -> String {
     match position {
         Some(pos) => format!("{} #{}", series.name, pos),
         None => series.name.clone(),
     }
 }
 
-/// Parses a position-in-series input string. Returns `Some(pos)` for valid
-/// positive integers, `None` for empty/whitespace, zero, negative, or non-numeric input.
-pub fn parse_position_input(input: &str) -> Option<i32> {
+/// Parses a position-in-series input string. Returns `Some(position)` for valid
+/// non-negative numbers (integers like "1", "0" or decimals like "2.5").
+/// Returns `None` for empty/whitespace, negative numbers, or non-numeric input.
+pub fn parse_position_input(input: &str) -> Option<String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return None;
     }
-    match trimmed.parse::<i32>() {
-        Ok(pos) if pos > 0 => Some(pos),
+    match trimmed.parse::<f64>() {
+        Ok(val) if val >= 0.0 => Some(trimmed.to_string()),
         _ => None,
     }
 }

@@ -17,6 +17,6 @@ pub struct BookLookupDTO {
     pub cover_url: Option<String>,
     /// Series name from ISBN lookup (e.g. "Harry Potter")
     pub series_name: Option<String>,
-    /// Position within the series (e.g. 1 for first book)
-    pub series_position: Option<i32>,
+    /// Position within the series (e.g. "1", "2.5" for novellas)
+    pub series_position: Option<String>,
 }

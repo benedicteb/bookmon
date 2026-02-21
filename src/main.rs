@@ -460,6 +460,7 @@ fn print_series(storage: &Storage) {
                 };
                 let pos = book
                     .position_in_series
+                    .as_deref()
                     .map(|p| format!("#{} ", p))
                     .unwrap_or_default();
                 println!("  {}\"{}\" by {}", pos, book.title, author_name);

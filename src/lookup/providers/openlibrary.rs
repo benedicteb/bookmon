@@ -8,21 +8,22 @@ use std::sync::LazyLock;
 
 const HOSTNAME: &str = "https://openlibrary.org";
 
-/// Compiled once on first use — matches series strings like "Harry Potter #1".
+/// Compiled once on first use — matches series strings like "Harry Potter #1" or "Kingkiller #2.5".
 static SERIES_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(.+?)\s*#(\d+)\s*$").expect("valid static regex"));
+    LazyLock::new(|| Regex::new(r"^(.+?)\s*#(\d+(?:\.\d+)?)\s*$").expect("valid static regex"));
 
 /// Parses a series string from OpenLibrary's Edition API.
 ///
 /// Examples:
-///   "Harry Potter #1" -> ("Harry Potter", Some(1))
+///   "Harry Potter #1" -> ("Harry Potter", Some("1"))
+///   "Kingkiller Chronicle #2.5" -> ("Kingkiller Chronicle", Some("2.5"))
 ///   "OXFORD WORLD'S CLASSICS" -> ("OXFORD WORLD'S CLASSICS", None)
 ///   "" -> ("", None)
-pub fn parse_series_string(s: &str) -> (String, Option<i32>) {
+pub fn parse_series_string(s: &str) -> (String, Option<String>) {
     let s = s.trim();
     if let Some(caps) = SERIES_REGEX.captures(s) {
         let name = caps[1].trim().to_string();
-        let position = caps[2].parse::<i32>().ok();
+        let position = Some(caps[2].to_string());
         (name, position)
     } else {
         (s.to_string(), None)
@@ -244,7 +245,7 @@ impl OpenLibraryProvider {
     async fn fetch_edition_series(
         &self,
         isbn: &str,
-    ) -> Result<Option<(String, Option<i32>)>, Box<dyn Error>> {
+    ) -> Result<Option<(String, Option<String>)>, Box<dyn Error>> {
         let url = format!("{}/isbn/{}.json", HOSTNAME, isbn);
         let response = self.client.get(&url).send().await?;
 
@@ -272,7 +273,7 @@ impl OpenLibraryProvider {
         book: OpenLibraryBook,
         authors: Vec<Author>,
         isbn: &str,
-        series_info: Option<(String, Option<i32>)>,
+        series_info: Option<(String, Option<String>)>,
     ) -> BookLookupDTO {
         let (series_name, series_position) = match series_info {
             Some((name, pos)) => (Some(name), pos),

@@ -58,7 +58,7 @@ pub fn show_started_books(storage: &Storage) -> io::Result<()> {
             .series_id
             .as_ref()
             .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series))
+            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
             .unwrap_or_default();
 
         // Find the most recent started reading for this book
@@ -155,7 +155,7 @@ pub fn show_finished_books(storage: &Storage) -> io::Result<()> {
             .series_id
             .as_ref()
             .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series))
+            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
             .unwrap_or_default();
 
         // Find the most recent finished reading for this book
@@ -252,7 +252,7 @@ pub fn print_book_list_table(
             .series_id
             .as_ref()
             .and_then(|sid| storage.get_series(sid))
-            .map(|s| format_series_label(s, book.position_in_series))
+            .map(|s| format_series_label(s, book.position_in_series.as_deref()))
             .unwrap_or_default();
 
         // Check if the book has a bought event
