@@ -283,7 +283,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
     Ok((book, event))
 }
 
-/// Validates and stores a book. Returns an error if the referenced author or category doesn't exist.
+/// Validates and stores a book. Returns an error if the referenced author, category, or series doesn't exist.
 pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
     // Validate that the category exists
     if !storage.categories.contains_key(&book.category_id) {
@@ -296,6 +296,13 @@ pub fn store_book(storage: &mut Storage, book: Book) -> Result<(), String> {
     // Validate that the author exists
     if !storage.authors.contains_key(&book.author_id) {
         return Err(format!("Author with ID {} does not exist", book.author_id));
+    }
+
+    // Validate that the series exists (if set)
+    if let Some(ref series_id) = book.series_id {
+        if !storage.series.contains_key(series_id) {
+            return Err(format!("Series with ID {} does not exist", series_id));
+        }
     }
 
     storage.books.insert(book.id.clone(), book);

@@ -5,6 +5,7 @@ pub mod config;
 pub mod goal;
 pub mod reading;
 pub mod review;
+pub mod series;
 pub mod storage;
 pub mod table;
 pub mod lookup {
