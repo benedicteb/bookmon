@@ -119,11 +119,16 @@ pub enum ReadingEvent {
     UnmarkedAsWantToRead,
 }
 
-/// Optional metadata attached to a reading event (e.g. current page for Update events).
+/// Optional metadata attached to a reading event.
+///
+/// `current_page` records progress for `Update` events. `note` holds the user's
+/// free-text remarks about that progress, written in their editor.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadingMetadata {
     #[serde(default)]
     pub current_page: Option<i32>,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// A timestamped reading event for a book (event-sourcing pattern).
@@ -239,7 +244,7 @@ impl Reading {
             created_on: Utc::now(),
             book_id,
             event,
-            metadata: ReadingMetadata { current_page: None },
+            metadata: ReadingMetadata::default(),
         }
     }
 
@@ -252,6 +257,22 @@ impl Reading {
             event,
             metadata: ReadingMetadata {
                 current_page: Some(current_page),
+                note: None,
+            },
+        }
+    }
+
+    /// Creates an `Update` reading event carrying both a page number and a
+    /// free-text note about the reader's progress.
+    pub fn with_progress_note(book_id: String, current_page: i32, note: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            event: ReadingEvent::Update,
+            metadata: ReadingMetadata {
+                current_page: Some(current_page),
+                note: Some(note),
             },
         }
     }

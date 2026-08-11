@@ -1505,7 +1505,7 @@ fn test_get_read_books_by_time_period() {
         created_on: base_time + Duration::days(5),
         book_id: book2_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading2);
 
@@ -1515,7 +1515,7 @@ fn test_get_read_books_by_time_period() {
         created_on: base_time + Duration::days(15),
         book_id: book3_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading3);
 
@@ -1570,7 +1570,7 @@ fn test_get_earliest_finished_year() {
         created_on: Utc.with_ymd_and_hms(2022, 1, 1, 0, 0, 0).unwrap(),
         book_id: book_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading1);
 
@@ -1579,7 +1579,7 @@ fn test_get_earliest_finished_year() {
         created_on: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
         book_id: book_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading2);
 
@@ -1637,7 +1637,7 @@ fn test_get_books_finished_in_year() {
         created_on: Utc.with_ymd_and_hms(2022, 1, 1, 0, 0, 0).unwrap(),
         book_id: book1_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading1);
 
@@ -1646,7 +1646,7 @@ fn test_get_books_finished_in_year() {
         created_on: Utc.with_ymd_and_hms(2022, 6, 1, 0, 0, 0).unwrap(),
         book_id: book2_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading2);
 
@@ -1655,7 +1655,7 @@ fn test_get_books_finished_in_year() {
         created_on: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
         book_id: book3_id.clone(),
         event: ReadingEvent::Finished,
-        metadata: ReadingMetadata { current_page: None },
+        metadata: ReadingMetadata::default(),
     };
     storage.add_reading(reading3);
 
@@ -2392,4 +2392,73 @@ fn test_handle_missing_fields_preserves_valid_series_id() {
         Some("1".to_string()),
         "position_in_series should be preserved for valid series_id"
     );
+}
+
+// --- progress note tests ---
+
+#[test]
+fn test_with_progress_note_sets_event_page_and_note() {
+    let reading = Reading::with_progress_note(
+        "book-id".to_string(),
+        143,
+        "Chapter on orthogonality finally clicked.".to_string(),
+    );
+
+    assert_eq!(reading.book_id, "book-id");
+    assert_eq!(reading.event, ReadingEvent::Update);
+    assert_eq!(reading.metadata.current_page, Some(143));
+    assert_eq!(
+        reading.metadata.note,
+        Some("Chapter on orthogonality finally clicked.".to_string())
+    );
+}
+
+#[test]
+fn test_progress_note_round_trips_through_json() {
+    let reading = Reading::with_progress_note(
+        "book-id".to_string(),
+        143,
+        "First line.\n\nSecond paragraph.".to_string(),
+    );
+
+    let json = serde_json::to_string(&reading).expect("Failed to serialize reading");
+    let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize reading");
+
+    assert_eq!(deserialized.metadata.current_page, Some(143));
+    assert_eq!(
+        deserialized.metadata.note,
+        Some("First line.\n\nSecond paragraph.".to_string())
+    );
+}
+
+#[test]
+fn test_reading_without_note_key_deserializes_to_none() {
+    // A reading event as written by versions before progress notes existed.
+    let json = r#"{
+        "id": "11111111-1111-1111-1111-111111111111",
+        "created_on": "2026-08-11T09:12:44Z",
+        "book_id": "22222222-2222-2222-2222-222222222222",
+        "event": "Update",
+        "metadata": { "current_page": 50 }
+    }"#;
+
+    let reading: Reading = serde_json::from_str(json).expect("legacy JSON must deserialize");
+
+    assert_eq!(reading.metadata.current_page, Some(50));
+    assert_eq!(reading.metadata.note, None);
+}
+
+#[test]
+fn test_default_metadata_has_no_note() {
+    let metadata = ReadingMetadata::default();
+    assert_eq!(metadata.current_page, None);
+    assert_eq!(metadata.note, None);
+}
+
+#[test]
+fn test_with_metadata_leaves_note_unset() {
+    // The existing page-only constructor must keep working and set no note.
+    let reading = Reading::with_metadata("book-id".to_string(), ReadingEvent::Update, 50);
+    assert_eq!(reading.metadata.current_page, Some(50));
+    assert_eq!(reading.metadata.note, None);
 }
