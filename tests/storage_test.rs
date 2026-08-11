@@ -2462,3 +2462,82 @@ fn test_with_metadata_leaves_note_unset() {
     assert_eq!(reading.metadata.current_page, Some(50));
     assert_eq!(reading.metadata.note, None);
 }
+
+#[test]
+fn test_event_without_note_omits_the_key_entirely() {
+    // Events that carry no note must not gain a "note": null key on write.
+    let started = Reading::new("book-id".to_string(), ReadingEvent::Started);
+    let json = serde_json::to_string(&started).expect("Failed to serialize");
+    assert!(
+        !json.contains("note"),
+        "expected no note key for a Started event, got: {}",
+        json
+    );
+
+    let page_only = Reading::with_metadata("book-id".to_string(), ReadingEvent::Update, 50);
+    let json = serde_json::to_string(&page_only).expect("Failed to serialize");
+    assert!(
+        !json.contains("note"),
+        "expected no note key for a page-only Update, got: {}",
+        json
+    );
+}
+
+#[test]
+fn test_event_with_note_still_serializes_it() {
+    let reading =
+        Reading::with_progress_note("book-id".to_string(), 143, "Worth re-reading.".to_string());
+    let json = serde_json::to_string(&reading).expect("Failed to serialize");
+    assert!(
+        json.contains("\"note\":\"Worth re-reading.\""),
+        "got: {}",
+        json
+    );
+
+    let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize");
+    assert_eq!(
+        deserialized.metadata.note,
+        Some("Worth re-reading.".to_string())
+    );
+}
+
+#[test]
+fn test_note_absent_on_write_reads_back_as_none() {
+    // The full loop: an event with no note writes no key, and that key-less
+    // JSON reads back as None rather than failing.
+    let started = Reading::new("book-id".to_string(), ReadingEvent::Started);
+    let json = serde_json::to_string(&started).expect("Failed to serialize");
+    assert!(!json.contains("note"), "sanity: no note key, got {}", json);
+
+    let reloaded: Reading = serde_json::from_str(&json).expect("key-less JSON must deserialize");
+    assert_eq!(reloaded.metadata.note, None);
+    assert_eq!(reloaded.event, ReadingEvent::Started);
+}
+
+#[test]
+fn test_event_without_page_omits_the_key_entirely() {
+    // Non-progress events must not gain a "current_page": null key on write.
+    let started = Reading::new("book-id".to_string(), ReadingEvent::Started);
+    let json = serde_json::to_string(&started).expect("Failed to serialize");
+    assert!(
+        !json.contains("current_page"),
+        "expected no current_page key for a Started event, got: {}",
+        json
+    );
+    // An event with neither field serializes an empty metadata object.
+    assert!(json.contains("\"metadata\":{}"), "got: {}", json);
+
+    let reloaded: Reading = serde_json::from_str(&json).expect("key-less JSON must deserialize");
+    assert_eq!(reloaded.metadata.current_page, None);
+    assert_eq!(reloaded.metadata.note, None);
+}
+
+#[test]
+fn test_event_with_page_still_serializes_it() {
+    let reading = Reading::with_metadata("book-id".to_string(), ReadingEvent::Update, 50);
+    let json = serde_json::to_string(&reading).expect("Failed to serialize");
+    assert!(json.contains("\"current_page\":50"), "got: {}", json);
+
+    let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize");
+    assert_eq!(deserialized.metadata.current_page, Some(50));
+}

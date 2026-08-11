@@ -11,10 +11,11 @@ Reading progress was recorded as `ReadingEvent::Update` events carrying only a c
 ## Decision
 
 1. **The note lives on the metadata, not on the event enum.** `ReadingMetadata` gains `note: Option<String>`. `ReadingEvent` is unchanged.
-2. **New constructor** `Reading::with_progress_note(book_id, current_page, note)` sits beside the existing `with_metadata`, which keeps its signature. `Reading::new` now builds `ReadingMetadata::default()` rather than naming fields, so it does not need editing when the struct grows.
-3. **Interactive entry only.** A new "Update progress with notes" action in the book menu prompts for a page, then opens `$EDITOR`. The page-only "Update progress" action is untouched.
-4. **An empty note aborts the whole update.** Nothing is written to storage, matching how `review-book` handles an empty review. The template is entirely comment lines, so saving an untouched buffer aborts.
-5. **Editor mechanics extracted** to `src/editor.rs` and shared by reviews and progress notes.
+2. **Absent metadata is omitted from the JSON, not written as null.** Both `note` and `current_page` carry `skip_serializing_if = "Option::is_none"`. Without it, every existing event — `Started`, `Finished`, `Bought` — would be rewritten with a `"note": null` key the first time the file was saved. Applying the same to `current_page` also drops the `"null"` entries it had been writing. Reads are unaffected: `#[serde(default)]` still maps a missing key to `None`. An event with neither field serializes as `"metadata": {}`.
+3. **New constructor** `Reading::with_progress_note(book_id, current_page, note)` sits beside the existing `with_metadata`, which keeps its signature. `Reading::new` now builds `ReadingMetadata::default()` rather than naming fields, so it does not need editing when the struct grows.
+4. **Interactive entry only.** A new "Update progress with notes" action in the book menu prompts for a page, then opens `$EDITOR`. The page-only "Update progress" action is untouched.
+5. **An empty note aborts the whole update.** Nothing is written to storage, matching how `review-book` handles an empty review. The template is entirely comment lines, so saving an untouched buffer aborts.
+6. **Editor mechanics extracted** to `src/editor.rs` and shared by reviews and progress notes.
 
 ### Rejected: a new `ReadingEvent` variant
 

@@ -125,9 +125,11 @@ pub enum ReadingEvent {
 /// free-text remarks about that progress, written in their editor.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadingMetadata {
-    #[serde(default)]
+    /// Both fields are omitted from the JSON entirely when absent, so events
+    /// that carry no progress data are not written with null keys.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_page: Option<i32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
 
