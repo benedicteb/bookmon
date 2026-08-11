@@ -2587,3 +2587,38 @@ fn test_progress_events_still_carry_metadata() {
         json
     );
 }
+
+#[test]
+fn test_old_shape_file_is_cleaned_for_every_event_type() {
+    // Regression: files written before the serialization fix carry
+    // "metadata": {"current_page": null} on every event. Loading and writing
+    // such a file must strip it for all non-progress events — Finished
+    // included — while preserving real progress data.
+    let old = r#"{
+      "authors": {}, "books": {}, "categories": {},
+      "readings": {
+        "finished":   {"id":"finished","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"Finished","metadata":{"current_page":null}},
+        "started":    {"id":"started","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"Started","metadata":{"current_page":null}},
+        "bought":     {"id":"bought","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"Bought","metadata":{"current_page":null}},
+        "want":       {"id":"want","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"WantToRead","metadata":{"current_page":null}},
+        "unmarked":   {"id":"unmarked","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"UnmarkedAsWantToRead","metadata":{"current_page":null}},
+        "update":     {"id":"update","created_on":"2025-11-25T05:56:20Z","book_id":"b","event":"Update","metadata":{"current_page":88}}
+      }
+    }"#;
+
+    let storage: Storage = serde_json::from_str(old).expect("old shape must load");
+    let out = storage.to_sorted_json_string().expect("must serialize");
+    let v: serde_json::Value = serde_json::from_str(&out).expect("output must parse");
+
+    for id in ["finished", "started", "bought", "want", "unmarked"] {
+        assert!(
+            v["readings"][id].get("metadata").is_none(),
+            "{} must have no metadata after rewrite, got: {}",
+            id,
+            v["readings"][id]
+        );
+    }
+
+    // Real progress data survives untouched.
+    assert_eq!(v["readings"]["update"]["metadata"]["current_page"], 88);
+}
