@@ -1,8 +1,8 @@
 class Bookmon < Formula
   desc "A command-line tool for tracking your reading progress"
   homepage "https://github.com/benedicteb/bookmon"
-  url "https://github.com/benedicteb/bookmon/archive/refs/tags/v1.0.72.tar.gz"
-  sha256 "9d5cf62b04e44b6063a3aacb963f38d278140ac69f66bcaa8ffc2d7cb8ae0c16"
+  url "https://github.com/benedicteb/bookmon/archive/refs/tags/v1.0.73.tar.gz"
+  sha256 "a5c0d03c390c4ed407b215fda884eab7b61ff264be123d3853ae0acd534442e1"
 
   depends_on "rust" => :build
 
