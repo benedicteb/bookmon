@@ -774,6 +774,7 @@ fn interactive_mode(
 
     if is_started && !is_finished {
         actions.push("Update progress");
+        actions.push("Update progress with notes");
         actions.push("Mark as finished");
     }
 
@@ -943,6 +944,47 @@ fn interactive_mode(
                 "Assigned '{}' to series '{}'{}.",
                 book_title, series_name, pos_label
             );
+        }
+
+        return Ok(());
+    }
+
+    // Handle "Update progress with notes" separately: the note may abort the update
+    if action_selection == "Update progress with notes" {
+        let author_name = storage.author_name_for_book(selected_book);
+        let author_name = if author_name.is_empty() {
+            "Unknown Author"
+        } else {
+            author_name
+        };
+
+        let current_page = Text::new("Enter current page:")
+            .prompt()
+            .map_err(|e| format!("Failed to get current page: {}", e))?
+            .trim()
+            .parse::<i32>()
+            .map_err(|e| format!("Invalid page number: {}", e))?;
+
+        match reading::get_progress_note_from_editor(&selected_book.title, author_name) {
+            Ok(Some(note)) => {
+                let reading_event = storage::Reading::with_progress_note(
+                    selected_book.id.clone(),
+                    current_page,
+                    note,
+                );
+                let mut storage = storage.clone();
+                match reading::store_reading(&mut storage, reading_event) {
+                    Ok(_) => {
+                        storage::write_storage(storage_file, &storage)?;
+                        println!("Progress update saved successfully!");
+                    }
+                    Err(e) => eprintln!("Failed to add reading event: {}", e),
+                }
+            }
+            Ok(None) => {
+                println!("Progress update aborted (empty note).");
+            }
+            Err(e) => eprintln!("Failed to get progress note: {}", e),
         }
 
         return Ok(());

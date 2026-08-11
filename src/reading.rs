@@ -102,6 +102,27 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
     Ok(())
 }
 
+/// Builds the editor template shown when writing a progress note.
+///
+/// Every line is a comment, so an untouched template strips to nothing and
+/// aborts the update.
+pub fn progress_note_template(book_title: &str, author_name: &str) -> String {
+    format!(
+        "\n# Write a note about your progress in \"{}\" by {} above.\n# Lines starting with # will be stripped.\n# An empty note (after stripping comments) will abort the update.\n",
+        book_title, author_name
+    )
+}
+
+/// Opens the user's default editor for writing a progress note.
+///
+/// Returns None if the note is empty after comment-stripping (user aborted).
+pub fn get_progress_note_from_editor(
+    book_title: &str,
+    author_name: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    crate::editor::get_text_from_editor(&progress_note_template(book_title, author_name))
+}
+
 /// Builds the structured table data for currently-reading books.
 ///
 /// Returns `Vec<TableRow>` with series grouping when any book has a series,

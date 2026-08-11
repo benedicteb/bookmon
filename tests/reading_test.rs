@@ -1,4 +1,7 @@
-use bookmon::reading::{group_books_by_series, show_started_books, store_reading, BookEntry};
+use bookmon::editor::strip_editor_text;
+use bookmon::reading::{
+    group_books_by_series, progress_note_template, show_started_books, store_reading, BookEntry,
+};
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::{DateTime, Utc};
 use serde_json;
@@ -713,4 +716,32 @@ fn test_group_books_by_series_book_without_position_sorts_last_in_group() {
         }
         _ => panic!("Should be a SeriesGroup"),
     }
+}
+
+// --- progress note template tests ---
+
+#[test]
+fn test_progress_note_template_mentions_book_and_author() {
+    let template = progress_note_template("The Pragmatic Programmer", "Hunt & Thomas");
+    assert!(template.contains("The Pragmatic Programmer"));
+    assert!(template.contains("Hunt & Thomas"));
+}
+
+#[test]
+fn test_progress_note_template_lines_are_all_comments() {
+    // Every non-empty line must be a comment, so an untouched template strips to nothing.
+    let template = progress_note_template("Some Book", "Some Author");
+    for line in template.lines() {
+        assert!(
+            line.trim().is_empty() || line.starts_with('#'),
+            "template line is not a comment: {:?}",
+            line
+        );
+    }
+}
+
+#[test]
+fn test_untouched_progress_note_template_strips_to_none() {
+    let template = progress_note_template("Some Book", "Some Author");
+    assert_eq!(strip_editor_text(&template), None);
 }
