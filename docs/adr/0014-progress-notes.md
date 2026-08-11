@@ -11,7 +11,11 @@ Reading progress was recorded as `ReadingEvent::Update` events carrying only a c
 ## Decision
 
 1. **The note lives on the metadata, not on the event enum.** `ReadingMetadata` gains `note: Option<String>`. `ReadingEvent` is unchanged.
-2. **Absent metadata is omitted from the JSON, not written as null.** Both `note` and `current_page` carry `skip_serializing_if = "Option::is_none"`. Without it, every existing event — `Started`, `Finished`, `Bought` — would be rewritten with a `"note": null` key the first time the file was saved. Applying the same to `current_page` also drops the `"null"` entries it had been writing. Reads are unaffected: `#[serde(default)]` still maps a missing key to `None`. An event with neither field serializes as `"metadata": {}`.
+2. **Absent metadata is omitted from the JSON, not written as null or `{}`.** Three `skip_serializing_if` attributes, at two levels:
+   - `note` and `current_page` skip when `None`. Without this, adding `note` would have rewritten every existing event — `Started`, `Finished`, `Bought`, `WantToRead` — with a `"note": null` key on the first save. Applying it to `current_page` too drops the `"current_page": null` entries it had always written.
+   - `Reading.metadata` itself skips when `ReadingMetadata::is_empty()`. The field previously serialized unconditionally, so any event loaded from a pre-`metadata` file gained a `metadata` object on the next write. Skipping it keeps non-progress events at their original shape: `{"id":…, "created_on":…, "book_id":…, "event":"WantToRead"}`.
+
+   Reads are unaffected throughout: `#[serde(default)]` still maps a missing key to `None`, and a missing `metadata` object to `ReadingMetadata::default()`.
 3. **New constructor** `Reading::with_progress_note(book_id, current_page, note)` sits beside the existing `with_metadata`, which keeps its signature. `Reading::new` now builds `ReadingMetadata::default()` rather than naming fields, so it does not need editing when the struct grows.
 4. **Interactive entry only.** A new "Update progress with notes" action in the book menu prompts for a page, then opens `$EDITOR`. The page-only "Update progress" action is untouched.
 5. **An empty note aborts the whole update.** Nothing is written to storage, matching how `review-book` handles an empty review. The template is entirely comment lines, so saving an untouched buffer aborts.

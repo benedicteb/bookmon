@@ -133,6 +133,14 @@ pub struct ReadingMetadata {
     pub note: Option<String>,
 }
 
+impl ReadingMetadata {
+    /// True when no metadata is set. Lets `Reading` omit the whole object for
+    /// events that carry none, rather than writing an empty `{}`.
+    pub fn is_empty(&self) -> bool {
+        self.current_page.is_none() && self.note.is_none()
+    }
+}
+
 /// A timestamped reading event for a book (event-sourcing pattern).
 ///
 /// Each reading records a single event (Started, Finished, Update, etc.)
@@ -143,7 +151,9 @@ pub struct Reading {
     pub created_on: DateTime<Utc>,
     pub book_id: String,
     pub event: ReadingEvent,
-    #[serde(default)]
+    /// Omitted entirely when empty, so non-progress events (Started, Finished,
+    /// WantToRead, Bought) keep the shape they had before metadata existed.
+    #[serde(default, skip_serializing_if = "ReadingMetadata::is_empty")]
     pub metadata: ReadingMetadata,
 }
 

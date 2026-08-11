@@ -2524,8 +2524,8 @@ fn test_event_without_page_omits_the_key_entirely() {
         "expected no current_page key for a Started event, got: {}",
         json
     );
-    // An event with neither field serializes an empty metadata object.
-    assert!(json.contains("\"metadata\":{}"), "got: {}", json);
+    // An event with neither field omits the metadata object entirely.
+    assert!(!json.contains("metadata"), "got: {}", json);
 
     let reloaded: Reading = serde_json::from_str(&json).expect("key-less JSON must deserialize");
     assert_eq!(reloaded.metadata.current_page, None);
@@ -2540,4 +2540,50 @@ fn test_event_with_page_still_serializes_it() {
 
     let deserialized: Reading = serde_json::from_str(&json).expect("Failed to deserialize");
     assert_eq!(deserialized.metadata.current_page, Some(50));
+}
+
+#[test]
+fn test_non_progress_events_omit_metadata_entirely() {
+    // WantToRead, Bought, Started, Finished carry no metadata, so the object
+    // must not appear at all — matching the shape these events had before
+    // ReadingMetadata was introduced.
+    for event in [
+        ReadingEvent::WantToRead,
+        ReadingEvent::Bought,
+        ReadingEvent::Started,
+        ReadingEvent::Finished,
+        ReadingEvent::UnmarkedAsWantToRead,
+    ] {
+        let reading = Reading::new("book-id".to_string(), event);
+        let json = serde_json::to_string(&reading).expect("Failed to serialize");
+        assert!(
+            !json.contains("metadata"),
+            "expected no metadata key for {:?}, got: {}",
+            event,
+            json
+        );
+
+        // And such JSON must still load, filling in the default.
+        let reloaded: Reading = serde_json::from_str(&json).expect("must deserialize");
+        assert!(reloaded.metadata.is_empty());
+    }
+}
+
+#[test]
+fn test_progress_events_still_carry_metadata() {
+    let page_only = Reading::with_metadata("book-id".to_string(), ReadingEvent::Update, 88);
+    let json = serde_json::to_string(&page_only).expect("Failed to serialize");
+    assert!(
+        json.contains("\"metadata\":{\"current_page\":88}"),
+        "got: {}",
+        json
+    );
+
+    let with_note = Reading::with_progress_note("book-id".to_string(), 143, "Clicked.".to_string());
+    let json = serde_json::to_string(&with_note).expect("Failed to serialize");
+    assert!(
+        json.contains("\"metadata\":{\"current_page\":143,\"note\":\"Clicked.\"}"),
+        "got: {}",
+        json
+    );
 }
