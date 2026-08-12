@@ -57,3 +57,40 @@ fn credit(credits: &mut HashMap<i32, u32>, year: i32, pages: i32) {
         *credits.entry(year).or_insert(0) += pages as u32;
     }
 }
+
+/// Shown in place of a percentage when a goal carries no pages target, which
+/// happens for goals saved before pages were part of a goal.
+const NO_PAGES_TARGET: &str = "Pages: no target set \u{2014} use set-goal <books> <pages>";
+
+/// The pages line under the books block in `print-goal`.
+/// A `target` of 0 means no pages target is set.
+pub fn format_goal_pages_line(pages_read: u32, target: u32) -> String {
+    if target == 0 {
+        return NO_PAGES_TARGET.to_string();
+    }
+    format!(
+        "Pages: {}/{} ({:.0}%)",
+        pages_read,
+        target,
+        percentage(pages_read, target)
+    )
+}
+
+/// The pages line under a year in `print-statistics`, indented to sit beneath
+/// the books line. A `target` of 0 means no pages target is set.
+pub fn format_statistics_pages_line(pages_read: u32, target: u32) -> String {
+    if target == 0 {
+        return format!("      {} pages", pages_read);
+    }
+    format!(
+        "      {} pages (Goal: {} \u{2014} {:.0}% complete)",
+        pages_read,
+        target,
+        percentage(pages_read, target)
+    )
+}
+
+/// Percentage of `target` reached. Callers guarantee `target` is greater than 0.
+fn percentage(pages_read: u32, target: u32) -> f64 {
+    (pages_read as f64 / target as f64) * 100.0
+}

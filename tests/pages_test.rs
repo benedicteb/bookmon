@@ -1,4 +1,6 @@
-use bookmon::pages::pages_credited_by_year;
+use bookmon::pages::{
+    format_goal_pages_line, format_statistics_pages_line, pages_credited_by_year,
+};
 use bookmon::storage::{Reading, ReadingEvent, ReadingMetadata};
 use chrono::{DateTime, TimeZone, Utc};
 use std::collections::HashMap;
@@ -162,4 +164,46 @@ fn test_non_progress_events_are_ignored() {
         Some(&90),
         "Bought/WantToRead events must not disturb the running page position"
     );
+}
+
+#[test]
+fn test_goal_pages_line_shows_progress_and_percentage() {
+    assert_eq!(format_goal_pages_line(4210, 9000), "Pages: 4210/9000 (47%)");
+}
+
+#[test]
+fn test_goal_pages_line_rounds_percentage_to_whole_number() {
+    assert_eq!(format_goal_pages_line(1, 3), "Pages: 1/3 (33%)");
+    assert_eq!(format_goal_pages_line(2, 3), "Pages: 2/3 (67%)");
+}
+
+#[test]
+fn test_goal_pages_line_reports_no_target_instead_of_a_bogus_percentage() {
+    // A goal saved before pages existed migrates to a target of 0. Showing
+    // "4210/0 (100%)" would be nonsense.
+    assert_eq!(
+        format_goal_pages_line(4210, 0),
+        "Pages: no target set \u{2014} use set-goal <books> <pages>"
+    );
+}
+
+#[test]
+fn test_goal_pages_line_handles_exceeded_target() {
+    assert_eq!(
+        format_goal_pages_line(12000, 9000),
+        "Pages: 12000/9000 (133%)"
+    );
+}
+
+#[test]
+fn test_statistics_pages_line_includes_goal_when_set() {
+    assert_eq!(
+        format_statistics_pages_line(4210, 9000),
+        "      4210 pages (Goal: 9000 \u{2014} 47% complete)"
+    );
+}
+
+#[test]
+fn test_statistics_pages_line_omits_goal_clause_without_a_target() {
+    assert_eq!(format_statistics_pages_line(4210, 0), "      4210 pages");
 }
