@@ -126,12 +126,12 @@ bookmon print-backlog -s "Discworld"
 ```
 
 #### Reading Goals
-- `set-goal <number>` - Set a yearly reading goal (number of books to finish)
+- `set-goal <books> <pages>` - Set a yearly reading goal (books to finish and pages to read)
 - `print-goal` - Show progress toward your reading goal
 
 ```bash
-bookmon set-goal 24
-bookmon set-goal 30 --year 2025
+bookmon set-goal 24 8000
+bookmon set-goal 30 9000 --year 2025
 bookmon print-goal
 bookmon print-goal --year 2025
 ```

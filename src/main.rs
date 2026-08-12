@@ -1,7 +1,7 @@
 use bookmon::{
     book, config, goal,
     lookup::http_client,
-    reading, review,
+    pages, reading, review,
     storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
 };
 use chrono::Datelike;
@@ -323,6 +323,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     interactive_mode(&storage, &settings.storage_file, Some(command))?;
                 } else if let Some(earliest_year) = storage.get_earliest_finished_year() {
                     let current_year = chrono::Utc::now().year();
+                    let pages_by_year = storage.pages_read_by_year();
                     println!("\nReading Statistics by Year:");
                     println!("------------------------");
 
@@ -356,6 +357,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 println!("\n{}: {} books", year, books.len());
                             }
+                            let pages_read = pages_by_year.get(&year).copied().unwrap_or(0);
+                            let pages_target = storage.get_goal(year).map(|g| g.pages).unwrap_or(0);
+                            println!(
+                                "{}",
+                                pages::format_statistics_pages_line(pages_read, pages_target)
+                            );
                             for book in books {
                                 let author_name = storage.author_name_for_book(book);
                                 let author_name = if author_name.is_empty() {
@@ -481,6 +488,10 @@ fn print_goal_status(storage: &Storage, year: i32) {
             {
                 println!("{}", motivation);
             }
+            println!(
+                "{}",
+                pages::format_goal_pages_line(storage.pages_read_in_year(year), goal.pages)
+            );
             println!();
         }
         None => {
