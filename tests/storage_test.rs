@@ -1,6 +1,6 @@
 use bookmon::storage::{
     handle_missing_fields, sort_json_value, write_storage, Author, Book, BookRepairInput, Category,
-    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
+    Goal, Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
@@ -2121,10 +2121,16 @@ fn test_set_and_get_goal() {
     let mut storage = Storage::new();
 
     // Set a goal for 2026
-    storage.set_goal(2026, 24);
+    storage.set_goal(2026, 24, 9000);
 
     // Verify the goal was set
-    assert_eq!(storage.get_goal(2026), Some(24));
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 24,
+            pages: 9000
+        })
+    );
 }
 
 #[test]
@@ -2141,23 +2147,46 @@ fn test_set_goal_overwrites_existing() {
     let mut storage = Storage::new();
 
     // Set a goal, then change it
-    storage.set_goal(2026, 12);
-    assert_eq!(storage.get_goal(2026), Some(12));
+    storage.set_goal(2026, 12, 4000);
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 12,
+            pages: 4000
+        })
+    );
 
-    storage.set_goal(2026, 24);
-    assert_eq!(storage.get_goal(2026), Some(24));
+    storage.set_goal(2026, 24, 9000);
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 24,
+            pages: 9000
+        })
+    );
 }
 
 #[test]
 fn test_remove_goal() {
     let mut storage = Storage::new();
 
-    // Set then remove a goal
-    storage.set_goal(2026, 24);
-    assert_eq!(storage.get_goal(2026), Some(24));
+    storage.set_goal(2026, 24, 9000);
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 24,
+            pages: 9000
+        })
+    );
 
     let removed = storage.remove_goal(2026);
-    assert_eq!(removed, Some(24));
+    assert_eq!(
+        removed,
+        Some(Goal {
+            books: 24,
+            pages: 9000
+        })
+    );
     assert_eq!(storage.get_goal(2026), None);
 }
 
@@ -2173,19 +2202,18 @@ fn test_remove_goal_returns_none_for_unset_year() {
 fn test_multiple_year_goals() {
     let mut storage = Storage::new();
 
-    storage.set_goal(2025, 10);
-    storage.set_goal(2026, 24);
-    storage.set_goal(2027, 30);
+    storage.set_goal(2025, 10, 3000);
+    storage.set_goal(2026, 24, 9000);
+    storage.set_goal(2027, 30, 12000);
 
-    assert_eq!(storage.get_goal(2025), Some(10));
-    assert_eq!(storage.get_goal(2026), Some(24));
-    assert_eq!(storage.get_goal(2027), Some(30));
+    assert_eq!(storage.get_goal(2025).unwrap().books, 10);
+    assert_eq!(storage.get_goal(2026).unwrap().books, 24);
+    assert_eq!(storage.get_goal(2027).unwrap().pages, 12000);
 
-    // Removing one doesn't affect others
     storage.remove_goal(2026);
-    assert_eq!(storage.get_goal(2025), Some(10));
+    assert_eq!(storage.get_goal(2025).unwrap().books, 10);
     assert_eq!(storage.get_goal(2026), None);
-    assert_eq!(storage.get_goal(2027), Some(30));
+    assert_eq!(storage.get_goal(2027).unwrap().books, 30);
 }
 
 #[test]
@@ -2193,11 +2221,11 @@ fn test_set_goal_zero_stores_zero() {
     let mut storage = Storage::new();
 
     // Setting a goal of 0 is allowed and stores the value
-    storage.set_goal(2026, 0);
+    storage.set_goal(2026, 0, 0);
     assert_eq!(
         storage.get_goal(2026),
-        Some(0),
-        "Goal of 0 should be stored as Some(0), not treated as None"
+        Some(Goal { books: 0, pages: 0 }),
+        "Goal of 0 should be stored as Some(..), not treated as None"
     );
 }
 
@@ -2227,8 +2255,8 @@ fn test_goals_round_trip() {
 
     // Create storage with goals
     let mut storage = Storage::new();
-    storage.set_goal(2025, 10);
-    storage.set_goal(2026, 24);
+    storage.set_goal(2025, 10, 3000);
+    storage.set_goal(2026, 24, 9000);
 
     // Also add some standard data to ensure goals coexist properly
     let author = Author::new("Test Author".to_string());
@@ -2255,8 +2283,20 @@ fn test_goals_round_trip() {
     let loaded = bookmon::storage::load_storage(&path).unwrap();
 
     // Verify goals round-tripped correctly
-    assert_eq!(loaded.get_goal(2025), Some(10));
-    assert_eq!(loaded.get_goal(2026), Some(24));
+    assert_eq!(
+        loaded.get_goal(2025),
+        Some(Goal {
+            books: 10,
+            pages: 3000
+        })
+    );
+    assert_eq!(
+        loaded.get_goal(2026),
+        Some(Goal {
+            books: 24,
+            pages: 9000
+        })
+    );
     assert_eq!(loaded.get_goal(2027), None);
 
     // Verify other data is also intact
@@ -2268,8 +2308,8 @@ fn test_goals_round_trip() {
 #[test]
 fn test_goals_in_sorted_json() {
     let mut storage = Storage::new();
-    storage.set_goal(2026, 24);
-    storage.set_goal(2025, 12);
+    storage.set_goal(2026, 24, 9000);
+    storage.set_goal(2025, 12, 4000);
 
     let json_string = storage.to_sorted_json_string().unwrap();
     let value: serde_json::Value = serde_json::from_str(&json_string).unwrap();
@@ -2280,10 +2320,14 @@ fn test_goals_in_sorted_json() {
         "Goals should be present in serialized JSON"
     );
 
-    // Verify the goals contain the right values
+    // Each goal serializes as an object with both targets
     let goals = value.get("goals").unwrap().as_object().unwrap();
-    assert_eq!(goals.get("2025").unwrap().as_u64(), Some(12));
-    assert_eq!(goals.get("2026").unwrap().as_u64(), Some(24));
+    let g2025 = goals.get("2025").unwrap();
+    assert_eq!(g2025.get("books").unwrap().as_u64(), Some(12));
+    assert_eq!(g2025.get("pages").unwrap().as_u64(), Some(4000));
+    let g2026 = goals.get("2026").unwrap();
+    assert_eq!(g2026.get("books").unwrap().as_u64(), Some(24));
+    assert_eq!(g2026.get("pages").unwrap().as_u64(), Some(9000));
 }
 
 #[test]
@@ -2295,6 +2339,75 @@ fn test_goals_empty_in_new_storage_json() {
     // Verify goals serializes as empty object
     let goals = value.get("goals").unwrap().as_object().unwrap();
     assert!(goals.is_empty(), "New storage should have empty goals");
+}
+
+#[test]
+fn test_legacy_bare_number_goal_loads_with_zero_pages() {
+    // Goals written before pages existed were stored as a bare number
+    let legacy_json = r#"{
+        "authors": {},
+        "books": {},
+        "categories": {},
+        "readings": {},
+        "reviews": {},
+        "goals": { "2026": 30 }
+    }"#;
+
+    let storage: Storage = serde_json::from_str(legacy_json).unwrap();
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 30,
+            pages: 0
+        }),
+        "A legacy bare-number goal should load as a books target with no pages target"
+    );
+}
+
+#[test]
+fn test_object_shape_goal_loads_both_targets() {
+    let json = r#"{
+        "authors": {},
+        "books": {},
+        "categories": {},
+        "readings": {},
+        "reviews": {},
+        "goals": { "2026": { "books": 30, "pages": 9000 } }
+    }"#;
+
+    let storage: Storage = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        storage.get_goal(2026),
+        Some(Goal {
+            books: 30,
+            pages: 9000
+        })
+    );
+}
+
+#[test]
+fn test_legacy_goal_is_written_back_in_object_shape() {
+    let legacy_json = r#"{
+        "authors": {},
+        "books": {},
+        "categories": {},
+        "readings": {},
+        "reviews": {},
+        "goals": { "2026": 30 }
+    }"#;
+
+    let storage: Storage = serde_json::from_str(legacy_json).unwrap();
+    let json_string = storage.to_sorted_json_string().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json_string).unwrap();
+
+    let goal = value.get("goals").unwrap().get("2026").unwrap();
+    assert!(
+        goal.is_object(),
+        "A legacy goal must be saved back in the object shape, got: {}",
+        goal
+    );
+    assert_eq!(goal.get("books").unwrap().as_u64(), Some(30));
+    assert_eq!(goal.get("pages").unwrap().as_u64(), Some(0));
 }
 
 #[test]

@@ -315,6 +315,37 @@ impl Series {
     }
 }
 
+/// A yearly reading goal: how many books to finish and how many pages to read.
+///
+/// Serialized as `{"books": 30, "pages": 9000}`. Goals written before pages
+/// existed were stored as a bare number; see `Goal`'s `Deserialize` impl.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq)]
+pub struct Goal {
+    pub books: u32,
+    pub pages: u32,
+}
+
+/// The two on-disk shapes a goal can have. Untagged, so serde tries the legacy
+/// bare number first and falls back to the current object form.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum GoalRepr {
+    Legacy(u32),
+    Full { books: u32, pages: u32 },
+}
+
+impl<'de> Deserialize<'de> for Goal {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(match GoalRepr::deserialize(deserializer)? {
+            GoalRepr::Legacy(books) => Goal { books, pages: 0 },
+            GoalRepr::Full { books, pages } => Goal { books, pages },
+        })
+    }
+}
+
 /// The central data store containing all books, readings, authors, categories, and reviews.
 ///
 /// Persisted as a single JSON file. All collections are keyed by UUID string.
@@ -326,10 +357,10 @@ pub struct Storage {
     pub categories: HashMap<String, Category>,
     #[serde(default)]
     pub reviews: HashMap<String, Review>,
-    /// Yearly reading goals: year -> number of books to finish.
+    /// Yearly reading goals: year -> books and pages targets.
     /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
     #[serde(default)]
-    pub goals: HashMap<i32, u32>,
+    pub goals: HashMap<i32, Goal>,
     /// Book series (e.g. "Harry Potter", "A Song of Ice and Fire").
     /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
     #[serde(default)]
@@ -653,18 +684,18 @@ impl Storage {
         self.get_read_books_by_time_period(from, to)
     }
 
-    /// Sets a yearly reading goal (number of books to finish).
-    pub fn set_goal(&mut self, year: i32, target: u32) {
-        self.goals.insert(year, target);
+    /// Sets a yearly reading goal (books to finish and pages to read).
+    pub fn set_goal(&mut self, year: i32, books: u32, pages: u32) {
+        self.goals.insert(year, Goal { books, pages });
     }
 
     /// Returns the reading goal for a given year, or None if no goal is set.
-    pub fn get_goal(&self, year: i32) -> Option<u32> {
+    pub fn get_goal(&self, year: i32) -> Option<Goal> {
         self.goals.get(&year).copied()
     }
 
     /// Removes the reading goal for a given year, returning the previous value if it existed.
-    pub fn remove_goal(&mut self, year: i32) -> Option<u32> {
+    pub fn remove_goal(&mut self, year: i32) -> Option<Goal> {
         self.goals.remove(&year)
     }
 }
