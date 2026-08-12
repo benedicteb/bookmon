@@ -698,6 +698,39 @@ impl Storage {
     pub fn remove_goal(&mut self, year: i32) -> Option<Goal> {
         self.goals.remove(&year)
     }
+
+    /// Total pages credited to each year across every book.
+    ///
+    /// Groups readings by book, sorts each book's events chronologically, and
+    /// folds in that book's per-year credits. Readings whose book is missing
+    /// from storage are skipped, since their page count is unknowable.
+    pub fn pages_read_by_year(&self) -> HashMap<i32, u32> {
+        let mut by_book: HashMap<&str, Vec<&Reading>> = HashMap::new();
+        for reading in self.readings.values() {
+            by_book
+                .entry(reading.book_id.as_str())
+                .or_default()
+                .push(reading);
+        }
+
+        let mut totals: HashMap<i32, u32> = HashMap::new();
+        for (book_id, mut readings) in by_book {
+            let total_pages = match self.books.get(book_id) {
+                Some(book) => book.total_pages,
+                None => continue,
+            };
+            readings.sort_by_key(|r| r.created_on);
+            for (year, pages) in crate::pages::pages_credited_by_year(&readings, total_pages) {
+                *totals.entry(year).or_insert(0) += pages;
+            }
+        }
+        totals
+    }
+
+    /// Total pages read in a single year. Returns 0 for years with no reading.
+    pub fn pages_read_in_year(&self, year: i32) -> u32 {
+        self.pages_read_by_year().get(&year).copied().unwrap_or(0)
+    }
 }
 
 /// Compares two optional position strings for sorting.

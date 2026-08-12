@@ -2735,3 +2735,186 @@ fn test_old_shape_file_is_cleaned_for_every_event_type() {
     // Real progress data survives untouched.
     assert_eq!(v["readings"]["update"]["metadata"]["current_page"], 88);
 }
+
+// Helper: adds a book with the given page count, returning its id.
+fn add_book_with_pages(storage: &mut Storage, title: &str, total_pages: i32) -> String {
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let book = Book::new(
+        title.to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        total_pages,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    book_id
+}
+
+// Helper: adds a reading event on a specific date.
+fn add_event_on(
+    storage: &mut Storage,
+    book_id: &str,
+    event: ReadingEvent,
+    page: Option<i32>,
+    year: i32,
+    month: u32,
+    day: u32,
+) {
+    let reading = Reading {
+        id: format!("{}-{}-{}-{}", book_id, year, month, day),
+        created_on: Utc.with_ymd_and_hms(year, month, day, 12, 0, 0).unwrap(),
+        book_id: book_id.to_string(),
+        event,
+        metadata: ReadingMetadata {
+            current_page: page,
+            note: None,
+        },
+    };
+    storage.add_reading(reading);
+}
+
+#[test]
+fn test_pages_read_in_year_aggregates_across_books() {
+    let mut storage = Storage::new();
+
+    // Book one: finished in 2026 with no progress updates -> full 300 pages
+    let first = add_book_with_pages(&mut storage, "First", 300);
+    add_event_on(
+        &mut storage,
+        &first,
+        ReadingEvent::Started,
+        None,
+        2026,
+        1,
+        5,
+    );
+    add_event_on(
+        &mut storage,
+        &first,
+        ReadingEvent::Finished,
+        None,
+        2026,
+        2,
+        1,
+    );
+
+    // Book two: still in progress at page 120 in 2026
+    let second = add_book_with_pages(&mut storage, "Second", 400);
+    add_event_on(
+        &mut storage,
+        &second,
+        ReadingEvent::Started,
+        None,
+        2026,
+        3,
+        1,
+    );
+    add_event_on(
+        &mut storage,
+        &second,
+        ReadingEvent::Update,
+        Some(120),
+        2026,
+        3,
+        20,
+    );
+
+    // Book three: read entirely in a different year
+    let third = add_book_with_pages(&mut storage, "Third", 200);
+    add_event_on(
+        &mut storage,
+        &third,
+        ReadingEvent::Started,
+        None,
+        2025,
+        5,
+        1,
+    );
+    add_event_on(
+        &mut storage,
+        &third,
+        ReadingEvent::Finished,
+        None,
+        2025,
+        6,
+        1,
+    );
+
+    assert_eq!(storage.pages_read_in_year(2026), 420);
+    assert_eq!(storage.pages_read_in_year(2025), 200);
+}
+
+#[test]
+fn test_pages_read_in_year_returns_zero_for_year_without_readings() {
+    let mut storage = Storage::new();
+    let book = add_book_with_pages(&mut storage, "Only Book", 300);
+    add_event_on(&mut storage, &book, ReadingEvent::Started, None, 2026, 1, 5);
+    add_event_on(
+        &mut storage,
+        &book,
+        ReadingEvent::Finished,
+        None,
+        2026,
+        2,
+        1,
+    );
+
+    assert_eq!(storage.pages_read_in_year(2024), 0);
+}
+
+#[test]
+fn test_pages_read_by_year_sorts_events_regardless_of_map_order() {
+    let mut storage = Storage::new();
+    let book = add_book_with_pages(&mut storage, "Out Of Order", 300);
+
+    // Inserted newest-first; the readings HashMap has no inherent ordering, so
+    // the aggregation must sort by created_on before walking the events.
+    add_event_on(
+        &mut storage,
+        &book,
+        ReadingEvent::Update,
+        Some(250),
+        2026,
+        3,
+        1,
+    );
+    add_event_on(
+        &mut storage,
+        &book,
+        ReadingEvent::Update,
+        Some(100),
+        2026,
+        2,
+        1,
+    );
+    add_event_on(&mut storage, &book, ReadingEvent::Started, None, 2026, 1, 1);
+
+    let by_year = storage.pages_read_by_year();
+    assert_eq!(by_year.get(&2026), Some(&250));
+}
+
+#[test]
+fn test_pages_read_by_year_ignores_readings_for_missing_books() {
+    let mut storage = Storage::new();
+
+    // A reading whose book is not in storage cannot be credited any pages
+    add_event_on(
+        &mut storage,
+        "no-such-book",
+        ReadingEvent::Finished,
+        None,
+        2026,
+        1,
+        1,
+    );
+
+    assert!(storage.pages_read_by_year().is_empty());
+}
