@@ -27,6 +27,12 @@ form, so existing files load without migration. A legacy goal becomes
 save. A pages target of 0 renders as pages read so far with "no target set"
 rather than a bogus 100%.
 
+No display path writes, so a healthy file is never rewritten just to migrate it. The
+migration rides along on whatever write happens next — which includes the pre-existing
+`load_and_repair_storage` pass, since that runs on every invocation and saves after each
+repair it makes. A file needing repair is therefore migrated by any command, including one
+that only reads.
+
 ### Pages are counted from the event ledger
 
 Pages read in a year are computed by walking each book's reading events in order
@@ -50,7 +56,7 @@ repair prompt is the remedy.
 
 - The goal reflects reading volume, not just book count
 - Progress on long, unfinished books is visible during the year
-- Legacy storage files keep working with no migration step
+- Legacy storage files keep working with no explicit migration step
 
 ### More difficult
 

@@ -33,7 +33,11 @@ pub struct Goal {
 - an object loads as-is
 
 Serialization always writes the object form, so a legacy file is upgraded the next time it
-is saved. No read command mutates the file. `to_sorted_json_string` needs no changes.
+is saved. Nothing in the display path writes, so no command rewrites a healthy file just to
+migrate it. Note the pre-existing `load_and_repair_storage` pass runs on every invocation
+and does write when it repairs something — so a file needing repair is migrated as a side
+effect of that write, including via the one silent branch (an orphaned `series_id`). The
+migration is lossless either way. `to_sorted_json_string` needs no changes.
 
 `Storage` API:
 
