@@ -183,7 +183,7 @@ fn test_goal_pages_line_reports_no_target_instead_of_a_bogus_percentage() {
     // "4210/0 (100%)" would be nonsense.
     assert_eq!(
         format_goal_pages_line(4210, 0),
-        "Pages: no target set \u{2014} use set-goal <books> <pages>"
+        "Pages: 4210 read \u{2014} no target set, use set-goal <books> <pages>"
     );
 }
 

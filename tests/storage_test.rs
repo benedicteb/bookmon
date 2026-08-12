@@ -2923,6 +2923,29 @@ fn test_pages_read_by_year_sorts_events_regardless_of_map_order() {
 }
 
 #[test]
+fn test_pages_read_by_year_includes_year_with_no_finished_books() {
+    // Pages logged against an unfinished book in 2024, with nothing finished
+    // that year, must still show up in the aggregation -- callers (like
+    // print-statistics) rely on pages_read_by_year to surface progress even
+    // when get_earliest_finished_year/get_books_finished_in_year see nothing.
+    let mut storage = Storage::new();
+    let book = add_book_with_pages(&mut storage, "In Progress", 800);
+    add_event_on(&mut storage, &book, ReadingEvent::Started, None, 2024, 1, 5);
+    add_event_on(
+        &mut storage,
+        &book,
+        ReadingEvent::Update,
+        Some(640),
+        2024,
+        6,
+        1,
+    );
+
+    assert!(storage.get_books_finished_in_year(2024).is_empty());
+    assert_eq!(storage.pages_read_by_year().get(&2024), Some(&640));
+}
+
+#[test]
 fn test_pages_read_by_year_ignores_readings_for_missing_books() {
     let mut storage = Storage::new();
 

@@ -45,10 +45,10 @@ is saved. No read command mutates the file. `to_sorted_json_string` needs no cha
 
 A migrated legacy goal has `pages: 0`. `goal_percentage` returns 100% when the target is 0,
 which would render as `Pages: 4210/0 (100%)`. The display therefore treats a pages target of
-0 as *no pages target set*:
+0 as *no pages target set*, while still showing the pages read so far:
 
 ```
-Pages: no target set — use set-goal <books> <pages>
+Pages: 4210 read — no target set, use set-goal <books> <pages>
 ```
 
 Storage still migrates to `pages: 0`; this guard applies only at render time. The same guard

@@ -58,15 +58,14 @@ fn credit(credits: &mut HashMap<i32, u32>, year: i32, pages: i32) {
     }
 }
 
-/// Shown in place of a percentage when a goal carries no pages target, which
-/// happens for goals saved before pages were part of a goal.
-const NO_PAGES_TARGET: &str = "Pages: no target set \u{2014} use set-goal <books> <pages>";
-
 /// The pages line under the books block in `print-goal`.
 /// A `target` of 0 means no pages target is set.
 pub fn format_goal_pages_line(pages_read: u32, target: u32) -> String {
     if target == 0 {
-        return NO_PAGES_TARGET.to_string();
+        return format!(
+            "Pages: {} read \u{2014} no target set, use set-goal <books> <pages>",
+            pages_read
+        );
     }
     format!(
         "Pages: {}/{} ({:.0}%)",

@@ -116,7 +116,7 @@ Available commands:
 - `print-finished` - Show books that have been finished
 - `print-backlog` - Show books that have not been started yet
 - `print-want-to-read` - Show books in the want-to-read list
-- `print-statistics` - Show reading statistics by year
+- `print-statistics` - Show reading statistics by year, including books finished and pages read (with progress toward that year's goal, if one is set)
 
 The print commands `print-finished`, `print-backlog`, and `print-want-to-read` support filtering by series:
 
@@ -136,7 +136,7 @@ bookmon print-goal
 bookmon print-goal --year 2025
 ```
 
-When a goal is set for the current year, running `bookmon` with no command will also display your goal progress with a progress bar and motivational pace text.
+When a goal is set for the current year, running `bookmon` with no command will also display your goal progress with a progress bar, motivational pace text, and a pages-read line.
 
 #### Reviews
 - `review-book` - Write a review for a book (opens your `$EDITOR`)

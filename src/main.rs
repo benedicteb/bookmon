@@ -321,17 +321,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Commands::PrintStatistics => {
                 if cli.interactive {
                     interactive_mode(&storage, &settings.storage_file, Some(command))?;
-                } else if let Some(earliest_year) = storage.get_earliest_finished_year() {
-                    let current_year = chrono::Utc::now().year();
+                } else {
                     let pages_by_year = storage.pages_read_by_year();
-                    println!("\nReading Statistics by Year:");
-                    println!("------------------------");
+                    // The years to show are the union of years with finished
+                    // books and years with pages credited, since pages read is
+                    // a statistic worth showing even for an unfinished book.
+                    let earliest_year = [
+                        storage.get_earliest_finished_year(),
+                        pages_by_year.keys().min().copied(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .min();
 
-                    for year in earliest_year..=current_year {
-                        let books = storage.get_books_finished_in_year(year);
-                        if !books.is_empty() {
+                    if let Some(earliest_year) = earliest_year {
+                        let current_year = chrono::Utc::now().year();
+                        println!("\nReading Statistics by Year:");
+                        println!("------------------------");
+
+                        for year in earliest_year..=current_year {
+                            let books = storage.get_books_finished_in_year(year);
+                            let pages_read = pages_by_year.get(&year).copied().unwrap_or(0);
+                            if books.is_empty() && pages_read == 0 {
+                                continue;
+                            }
+
+                            let goal = storage.get_goal(year);
                             // Show goal progress if a goal is set for this year
-                            if let Some(goal) = storage.get_goal(year) {
+                            if let Some(goal) = goal {
                                 let target = goal.books;
                                 let finished = books.len() as u32;
                                 let pct = goal_percentage(finished, target);
@@ -357,8 +374,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 println!("\n{}: {} books", year, books.len());
                             }
-                            let pages_read = pages_by_year.get(&year).copied().unwrap_or(0);
-                            let pages_target = storage.get_goal(year).map(|g| g.pages).unwrap_or(0);
+                            let pages_target = goal.map(|g| g.pages).unwrap_or(0);
                             println!(
                                 "{}",
                                 pages::format_statistics_pages_line(pages_read, pages_target)
@@ -373,9 +389,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 println!("  - \"{}\" by {}", book.title, author_name);
                             }
                         }
+                    } else {
+                        println!("No finished books found in your reading history.");
                     }
-                } else {
-                    println!("No finished books found in your reading history.");
                 }
             }
             Commands::GetConfigPath => {

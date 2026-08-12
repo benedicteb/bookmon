@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. Partly superseded by ADR 0015: the "Metric: Books finished only" decision below was
+reversed, and the `set-goal` CLI signature in "CLI integration" below is out of date.
 
 ## Context
 
@@ -30,7 +31,8 @@ Only the number of finished books is tracked, not pages read. The `total_pages` 
 
 ### CLI integration
 
-- `set-goal <target> [--year <year>]` — sets a goal (defaults to current year)
+- `set-goal <books> <pages> [--year <year>]` — sets a goal (defaults to current year); as of
+  ADR 0015 both a books target and a pages target are required
 - `print-goal [--year <year>]` — shows goal progress with a progress bar
 - Default `bookmon` command (no subcommand) — shows current year goal status above the currently-reading table, only when a goal is set
 - `print-statistics` — shows per-year goal progress inline with book counts

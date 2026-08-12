@@ -24,7 +24,8 @@ breaking CLI change: `bookmon set-goal 30` now fails with a usage error.
 `Goal`'s `Deserialize` accepts both the legacy bare number and the current object
 form, so existing files load without migration. A legacy goal becomes
 `{ books: N, pages: 0 }` and is written back in the object shape on the next
-save. A pages target of 0 renders as "no target set" rather than a bogus 100%.
+save. A pages target of 0 renders as pages read so far with "no target set"
+rather than a bogus 100%.
 
 ### Pages are counted from the event ledger
 
