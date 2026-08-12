@@ -4,6 +4,7 @@ pub mod category;
 pub mod config;
 pub mod editor;
 pub mod goal;
+pub mod pages;
 pub mod reading;
 pub mod review;
 pub mod series;
