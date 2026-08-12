@@ -11,7 +11,8 @@
 ## Global Constraints
 
 - Storage files written before this change must keep loading. A goal stored as a bare number loads as `{ books: N, pages: 0 }`. No read command may rewrite the file.
-- Run `cargo fmt` and `cargo clippy` before every commit. Both must be clean.
+- Run `cargo fmt` before every commit; it must produce no changes.
+- Run `cargo clippy --all-targets` before every commit. The repo has ~39 pre-existing clippy warnings (mostly `src/book.rs`, plus `unnecessary_sort_by` at `src/storage.rs:486` and `:587`). Your gate is that your change adds no new ones — do not fix the pre-existing ones, they are outside every task's scope.
 - Run `cargo test` before every commit. All tests must pass.
 - Tests are integration tests in `tests/`, not `#[cfg(test)]` modules in `src/`. Follow the existing layout.
 - Do not add dependencies. Everything needed is already in `Cargo.toml`.
