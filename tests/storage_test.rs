@@ -2875,15 +2875,26 @@ fn test_pages_read_by_year_sorts_events_regardless_of_map_order() {
     let mut storage = Storage::new();
     let book = add_book_with_pages(&mut storage, "Out Of Order", 300);
 
-    // Inserted newest-first; the readings HashMap has no inherent ordering, so
-    // the aggregation must sort by created_on before walking the events.
+    // Inserted out of chronological order; the readings HashMap has no
+    // inherent ordering, so the aggregation must sort by created_on before
+    // walking the events. One event per year, with page values that only
+    // yield the correct 100/100/100 per-year split when processed ascending
+    // 2024 -> 2025 -> 2026. Unlike a plain pair of updates -- where the
+    // "furthest page reached" clamp in pages_credited_by_year makes every
+    // processing order telescope to the same total -- spreading the events
+    // across three years means the clamp instead redistributes credit
+    // between years. Hand-checking all 3! = 6 possible processing orders
+    // confirms the other 5 each produce a different, wrong per-year split
+    // (a year drops out or gains another year's share), so this assertion
+    // cannot pass by accident of iteration order the way a same-year,
+    // two-value pair could.
     add_event_on(
         &mut storage,
         &book,
         ReadingEvent::Update,
-        Some(250),
+        Some(300),
         2026,
-        3,
+        1,
         1,
     );
     add_event_on(
@@ -2891,14 +2902,24 @@ fn test_pages_read_by_year_sorts_events_regardless_of_map_order() {
         &book,
         ReadingEvent::Update,
         Some(100),
-        2026,
-        2,
+        2024,
+        1,
         1,
     );
-    add_event_on(&mut storage, &book, ReadingEvent::Started, None, 2026, 1, 1);
+    add_event_on(
+        &mut storage,
+        &book,
+        ReadingEvent::Update,
+        Some(200),
+        2025,
+        1,
+        1,
+    );
 
     let by_year = storage.pages_read_by_year();
-    assert_eq!(by_year.get(&2026), Some(&250));
+    assert_eq!(by_year.get(&2024), Some(&100));
+    assert_eq!(by_year.get(&2025), Some(&100));
+    assert_eq!(by_year.get(&2026), Some(&100));
 }
 
 #[test]
