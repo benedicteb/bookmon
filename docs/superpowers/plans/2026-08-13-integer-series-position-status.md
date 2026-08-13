@@ -16,7 +16,7 @@ feature branch, or main, and explicitly chose main.
 
 ---
 
-## Status: 5 of 6 tasks complete
+## Status: all 6 tasks written; Task 5's fix is unverified — no Rust toolchain
 
 | # | Task | Commits | Status |
 |---|---|---|---|
@@ -25,22 +25,37 @@ feature branch, or main, and explicitly chose main.
 | 2 | `shift_positions_from` / `swap_positions` helpers | `39c8de4` | complete, review clean |
 | 3 | Scan raw JSON for invalid positions | `ea91c43` | complete, review clean |
 | 4 | Interactive migration on load | `4a02c58`, `b8a1b1d`, `3db6c84` | complete after 2 fix rounds |
-| 5 | `edit-series` command | `33d1c35` | **implemented; review returned "Needs fixes" — fix round 1 not yet dispatched** |
-| 6 | JSON schema + README | — | **not started** |
+| 5 | `edit-series` command | `33d1c35` + **uncommitted fix in the working tree** | fix round 1 applied, **not compiled, not tested, not committed** |
+| 6 | JSON schema + README | `01fa5c0` | complete (JSON well-formedness verified with `node`) |
 
-**Resume point:** dispatch Task 5 fix round 1 for the finding below, re-review it, then
-run Task 6, then the final whole-branch review.
+### Blocker: no Rust toolchain in the current environment
 
-### Task 5's open finding (Important, plan-mandated)
+The session that resumed this work has no `cargo`, `rustc` or `rustup` on `PATH`, and no
+`~/.cargo` anywhere on the box — `python3` is absent too (the schema was validated with
+`node` instead). So `cargo fmt`, `cargo test` and `cargo clippy` could not be run for
+Task 5's fix. The edit is mechanical and hand-checked, but it is unverified by the plan's
+own gates, which is why it was left uncommitted rather than committed on faith.
 
-`src/main.rs:833, 843, 877, 942` — the confirmation messages print the internal list
-label instead of the book's title. `picked` is bound to the `Select` result over
-`labels`, which are built as `format!("{} {}", position_prefix, title)`, so a successful
-edit prints `Moved '#3 Novella' to #4.` and clearing prints
-`Removed the position from '— Some Book'.` This is on every success path (assign, insert,
+**Resume point:** in an environment with cargo, run `cargo fmt`, `cargo test`, and
+`cargo clippy 2>&1 | grep -c "^warning"` (must be ≤ 44) against the working-tree change to
+`src/main.rs`, commit it as `fix: report book titles in edit-series confirmations`, then
+re-review Task 5, then run the final whole-branch review and the Verification section's
+manual migration check.
+
+### Task 5's finding — fix applied in the working tree, unverified
+
+`src/main.rs:833, 843, 877, 942` (pre-fix line numbers) — the confirmation messages
+printed the internal list label instead of the book's title. `picked` was bound to the
+`Select` result over `labels`, which are built as `format!("{} {}", position_prefix,
+title)`, so a successful edit printed `Moved '#3 Novella' to #4.` and clearing printed
+`Removed the position from '— Some Book'.` This was on every success path (assign, insert,
 swap). It came verbatim from the plan's own Step 4 sample code, so it is a plan defect,
-not an implementer deviation. Fix: carry `(id, title, label)` triples and use the plain
-title in the two `println!`s.
+not an implementer deviation.
+
+Applied fix: `books` is now a `Vec<(String, String, String)>` of `(id, title, label)`; the
+`Select` still shows `label`, and the destructuring `let (book_id, book_title) = ...` feeds
+the plain title to both `println!`s. The plan's Task 5 Step 4 sample code still carries the
+defect — anyone re-running that step from the plan will reintroduce it.
 
 ---
 
@@ -131,6 +146,11 @@ None of these block merge; the final whole-branch review should triage them.
   because it never deserialized. The reviewer confirmed the fix is additive.
 - Mid-run the user restricted subagents to the project directory — no reading or searching
   the home directory, `~/.cargo`, or dependency sources. Carried into all later dispatches.
+- Task 6 deviated from the plan's pointer, not its intent: the plan located the series
+  documentation at `README.md:165`, but that line is inside the **ISBN lookup** section
+  ("Series information (name and position)"), describing lookup-provider data — which
+  Task 1 deliberately left as a `String`. The real target is the `#### Series Management`
+  section at `:145`. Edited there; `:165` left alone on purpose.
 - The user's stored note about this repo's clippy baseline said ~39; that figure came from
   `cargo clippy --all-targets -- -D warnings`. Plain `cargo clippy | grep -c "^warning"` is
   44. Different commands, not a moved baseline — pick one and use it consistently.
