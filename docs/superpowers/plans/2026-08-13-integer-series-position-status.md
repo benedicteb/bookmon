@@ -16,7 +16,7 @@ feature branch, or main, and explicitly chose main.
 
 ---
 
-## Status: all 6 tasks written; Task 5's fix is unverified — no Rust toolchain
+## Status: all 6 tasks complete and verified
 
 | # | Task | Commits | Status |
 |---|---|---|---|
@@ -25,22 +25,36 @@ feature branch, or main, and explicitly chose main.
 | 2 | `shift_positions_from` / `swap_positions` helpers | `39c8de4` | complete, review clean |
 | 3 | Scan raw JSON for invalid positions | `ea91c43` | complete, review clean |
 | 4 | Interactive migration on load | `4a02c58`, `b8a1b1d`, `3db6c84` | complete after 2 fix rounds |
-| 5 | `edit-series` command | `33d1c35` + **uncommitted fix in the working tree** | fix round 1 applied, **not compiled, not tested, not committed** |
-| 6 | JSON schema + README | `01fa5c0` | complete (JSON well-formedness verified with `node`) |
+| 5 | `edit-series` command | `33d1c35`, `d0413a1` | complete after fix round 1 |
+| 6 | JSON schema + README | `01fa5c0` | complete |
 
-### Blocker: no Rust toolchain in the current environment
+### Final verification — all green
 
-The session that resumed this work has no `cargo`, `rustc` or `rustup` on `PATH`, and no
-`~/.cargo` anywhere on the box — `python3` is absent too (the schema was validated with
-`node` instead). So `cargo fmt`, `cargo test` and `cargo clippy` could not be run for
-Task 5's fix. The edit is mechanical and hand-checked, but it is unverified by the plan's
-own gates, which is why it was left uncommitted rather than committed on faith.
+Run at `d0413a1`:
 
-**Resume point:** in an environment with cargo, run `cargo fmt`, `cargo test`, and
-`cargo clippy 2>&1 | grep -c "^warning"` (must be ≤ 44) against the working-tree change to
-`src/main.rs`, commit it as `fix: report book titles in edit-series confirmations`, then
-re-review Task 5, then run the final whole-branch review and the Verification section's
-manual migration check.
+- `cargo test` — **0 failures** across every suite (97 + 62 + 21 + 19×2 + 16 + 15 + …), 2 pre-existing ignored.
+- `cargo clippy 2>&1 | grep -c "^warning"` — **44**, exactly the baseline.
+- `cargo fmt --check` — clean.
+- `cargo run -- --help` — `edit-series  Edit book positions within a series` present.
+- **Manual migration check (the plan's last Verification item) — passed end to end.** A
+  fixture with `"position_in_series": "2.5"` on a novella between books 2 and 3 was driven
+  through the real binary. The prompt read `New position (Enter for 3, or "none" to leave
+  it unnumbered): (3)` and listed `Positions already used in this series: 1, 2, 3`; Enter
+  accepted the suggested `3`; the collision menu offered insert-first. Afterwards the file
+  held `3` as a **JSON integer** (not a string) and `The Hero of Ages` had shifted 3 → 4. A
+  second run prompted nothing and printed the series in order. `edit-series` was then driven
+  through the swap path and the clear path; the clear removed the `position_in_series` key
+  entirely (not nulled) and kept `series_id`.
+
+The one hitch was in the hand-written fixture, not the code: `Author` and `Category` also
+require `created_on`, so the first load after migrating failed with `missing field
+created_on`. Same class of fixture defect Task 4's implementer hit on `Series.created_on`.
+
+**How the run was sandboxed:** `dirs::config_dir()` honours `XDG_CONFIG_HOME`, so pointing
+it at a temp dir holding `bookmon/config.yml` runs the real binary without touching the
+user's config. `inquire` needs a TTY — pipe answers through `script -qec "<cmd>" /dev/null`
+to allocate a pty. Worth reusing; `< /dev/null` only ever yields
+`Failed to get position: The input device is not a TTY`.
 
 ### Task 5's finding — fix applied in the working tree, unverified
 
@@ -131,6 +145,15 @@ None of these block merge; the final whole-branch review should triage them.
 - Dead defensive branch at `src/storage.rs:1176-1179`: a failed book lookup returns *after* the shift was applied, persisting a shift with no placement. Unreachable today, but the wrong shape for a function whose partial application corrupts positions.
 
 **Task 5**
+- **Enter means the opposite thing in the feature's two position prompts.** Found while
+  driving both through a pty at `d0413a1`, so this is observed, not theorised. In the
+  *migration* prompt Enter accepts the suggested slot and you type `none` to unnumber a
+  book (that is ruling 6, deliberately chosen). In *`edit-series`* Enter unnumbers the book,
+  and typing `none` is rejected with `Position must be a whole number of 0 or more.` Each
+  prompt's own wording is accurate, and neither loses data, but a user who has just learned
+  `none` from the migration will hit an error with it minutes later in `edit-series`.
+  Reconciling them means accepting `none` in `edit-series` too, which the plan never
+  specified — hence deferred rather than fixed here.
 - Series and book selection match on formatted display strings rather than stable ids. Mirrors the existing `rename_series_flow` / `delete_series_flow` pattern, but `edit-series` is specifically the tool for repairing collapsed series, which is the case most likely to produce colliding labels.
 - "Insert here" can leave a gap at the moved book's old position. No contiguity requirement exists in the spec, so this is a UX quirk rather than a bug.
 - `src/main.rs` is now 1469 lines and the repeated `*_series_flow` boilerplate is accumulating. A `src/cli/series.rs` extraction would help; out of scope here.
