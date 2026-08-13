@@ -235,6 +235,57 @@ pub fn format_series_filter_empty_message(storage: &Storage, filter: &str) -> St
     }
 }
 
+/// Increments the position of every book in `series_id` whose position is `>= from`,
+/// making room for a book being inserted at `from`.
+///
+/// `except` is the id of the book being placed; it is skipped so it is not shifted
+/// out of the slot it was just given. Pass `""` when no book is exempt. Books with
+/// no position are untouched.
+pub fn shift_positions_from(storage: &mut Storage, series_id: &str, from: i32, except: &str) {
+    for (book_id, book) in storage.books.iter_mut() {
+        if book.series_id.as_deref() != Some(series_id) || book_id == except {
+            continue;
+        }
+        if let Some(pos) = book.position_in_series {
+            if pos >= from {
+                book.position_in_series = Some(pos + 1);
+            }
+        }
+    }
+}
+
+/// Exchanges the positions of two books in the same series.
+/// Returns an error if either book is missing or does not belong to `series_id`.
+pub fn swap_positions(
+    storage: &mut Storage,
+    series_id: &str,
+    book_a: &str,
+    book_b: &str,
+) -> Result<(), String> {
+    let pos_of = |id: &str| -> Result<Option<i32>, String> {
+        let book = storage
+            .books
+            .get(id)
+            .ok_or_else(|| format!("Book {} not found.", id))?;
+        if book.series_id.as_deref() != Some(series_id) {
+            return Err(format!("Book '{}' is not in this series.", book.title));
+        }
+        Ok(book.position_in_series)
+    };
+
+    // Read both positions before writing either, so a failure leaves storage untouched.
+    let a_pos = pos_of(book_a)?;
+    let b_pos = pos_of(book_b)?;
+
+    if let Some(book) = storage.books.get_mut(book_a) {
+        book.position_in_series = b_pos;
+    }
+    if let Some(book) = storage.books.get_mut(book_b) {
+        book.position_in_series = a_pos;
+    }
+    Ok(())
+}
+
 /// Renames a series. Returns an error if the series does not exist, if the new
 /// name is empty, or if another series with the new name already exists (case-insensitive).
 pub fn rename_series(storage: &mut Storage, series_id: &str, new_name: &str) -> Result<(), String> {

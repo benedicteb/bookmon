@@ -1,9 +1,53 @@
 use bookmon::series::{
     delete_series, format_position_prefix, format_series_display, format_series_label,
-    get_or_create_series, is_position_occupied, parse_position_input, rename_series, store_series,
+    get_or_create_series, is_position_occupied, parse_position_input, rename_series,
+    shift_positions_from, store_series, swap_positions,
 };
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, Series, Storage};
 use chrono::Utc;
+
+/// Creates a series with one book per position and returns (series_id, book_ids in order).
+fn seed_series_with_positions(
+    storage: &mut Storage,
+    series_name: &str,
+    positions: &[i32],
+) -> (String, Vec<String>) {
+    let series_id = get_or_create_series(storage, series_name);
+    let ids = positions
+        .iter()
+        .map(|p| add_book_to_series(storage, &series_id, &format!("Book {}", p), Some(*p)))
+        .collect();
+    (series_id, ids)
+}
+
+/// Adds one book to a series at the given position and returns its id.
+fn add_book_to_series(
+    storage: &mut Storage,
+    series_id: &str,
+    title: &str,
+    position: Option<i32>,
+) -> String {
+    let author = Author::new("Author".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let category = Category::new("Fantasy".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let mut book = Book::new(
+        title.to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    book.series_id = Some(series_id.to_string());
+    book.position_in_series = position;
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    book_id
+}
 
 #[test]
 fn test_series_creation() {
@@ -1203,4 +1247,82 @@ fn test_format_position_prefix_with_zero() {
 #[test]
 fn test_format_position_prefix_none() {
     assert_eq!(format_position_prefix(None), "");
+}
+
+// ── Position mutation helpers ─────────────────────────────────────
+
+#[test]
+fn test_shift_positions_from_moves_only_positions_at_or_after() {
+    let mut storage = Storage::new();
+    let (series_id, ids) = seed_series_with_positions(&mut storage, "Mistborn", &[1, 2, 3]);
+
+    // Insert at 2: books at 2 and 3 move up, book at 1 stays.
+    shift_positions_from(&mut storage, &series_id, 2, "");
+
+    assert_eq!(storage.books[&ids[0]].position_in_series, Some(1));
+    assert_eq!(storage.books[&ids[1]].position_in_series, Some(3));
+    assert_eq!(storage.books[&ids[2]].position_in_series, Some(4));
+}
+
+#[test]
+fn test_shift_positions_from_skips_the_excepted_book() {
+    let mut storage = Storage::new();
+    let (series_id, ids) = seed_series_with_positions(&mut storage, "Mistborn", &[1, 2, 3]);
+
+    // The book just placed at 2 must not shift itself out of its own slot.
+    shift_positions_from(&mut storage, &series_id, 2, &ids[1]);
+
+    assert_eq!(storage.books[&ids[1]].position_in_series, Some(2));
+    assert_eq!(storage.books[&ids[2]].position_in_series, Some(4));
+}
+
+#[test]
+fn test_shift_positions_from_leaves_other_series_alone() {
+    let mut storage = Storage::new();
+    let (series_a, ids_a) = seed_series_with_positions(&mut storage, "Mistborn", &[1, 2]);
+    let (_series_b, ids_b) = seed_series_with_positions(&mut storage, "Stormlight", &[1, 2]);
+
+    shift_positions_from(&mut storage, &series_a, 1, "");
+
+    assert_eq!(storage.books[&ids_a[0]].position_in_series, Some(2));
+    assert_eq!(storage.books[&ids_b[0]].position_in_series, Some(1));
+}
+
+#[test]
+fn test_shift_positions_from_ignores_books_without_a_position() {
+    let mut storage = Storage::new();
+    let (series_id, ids) = seed_series_with_positions(&mut storage, "Mistborn", &[1]);
+    let unplaced = add_book_to_series(&mut storage, &series_id, "Unplaced", None);
+
+    shift_positions_from(&mut storage, &series_id, 0, "");
+
+    assert_eq!(storage.books[&ids[0]].position_in_series, Some(2));
+    assert_eq!(storage.books[&unplaced].position_in_series, None);
+}
+
+#[test]
+fn test_swap_positions_exchanges_two_books() {
+    let mut storage = Storage::new();
+    let (series_id, ids) = seed_series_with_positions(&mut storage, "Mistborn", &[1, 2]);
+
+    swap_positions(&mut storage, &series_id, &ids[0], &ids[1]).unwrap();
+
+    assert_eq!(storage.books[&ids[0]].position_in_series, Some(2));
+    assert_eq!(storage.books[&ids[1]].position_in_series, Some(1));
+}
+
+#[test]
+fn test_swap_positions_errors_when_a_book_is_not_in_the_series() {
+    let mut storage = Storage::new();
+    let (series_id, ids) = seed_series_with_positions(&mut storage, "Mistborn", &[1, 2]);
+    let (_other, other_ids) = seed_series_with_positions(&mut storage, "Stormlight", &[1]);
+
+    let result = swap_positions(&mut storage, &series_id, &ids[0], &other_ids[0]);
+
+    assert!(result.is_err());
+    assert_eq!(
+        storage.books[&ids[0]].position_in_series,
+        Some(1),
+        "unchanged on error"
+    );
 }
