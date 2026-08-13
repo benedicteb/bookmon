@@ -107,34 +107,36 @@ impl RepairPrompter for InquirePrompter {
             println!("Positions already used in this series: {}", list.join(", "));
         }
 
-        // An unparseable non-empty answer is never silently turned into Clear: the
-        // user gets told why and asked again, up to a small bound so a
-        // non-interactive stdin can't spin forever. Only an explicitly empty
-        // answer clears the position — both branches below say so, honestly:
-        // a suggestion is offered as a placeholder, not auto-submitted on Enter.
+        // A suggestion is a true default: Enter accepts it, exactly like any other
+        // default prompt in this app. Because Enter is the natural keystroke on a
+        // prompt that just showed a suggested value, clearing the position while one
+        // is offered instead requires typing "none" explicitly — otherwise that
+        // keystroke would silently discard it. With no suggestion, Enter has nothing
+        // to accept, so it clears directly, and the prompt says so either way. An
+        // unparseable non-empty answer that isn't "none" is never silently turned
+        // into Clear: the user is told why and asked again, bounded so a
+        // non-interactive stdin can't spin forever.
         const MAX_ATTEMPTS: u32 = 3;
-        let suggested_text = suggested.map(|s| s.to_string());
+        let default_text = suggested.map(|s| s.to_string());
         let mut position = None;
         for attempt in 0..MAX_ATTEMPTS {
             let message = match suggested {
-                Some(suggested) => {
-                    format!(
-                        "New position (suggested {}; Enter to leave it unnumbered):",
-                        suggested
-                    )
-                }
+                Some(suggested) => format!(
+                    "New position (Enter for {}, or \"none\" to leave it unnumbered):",
+                    suggested
+                ),
                 None => "New position (Enter to leave it unnumbered):".to_string(),
             };
             let mut prompt = Text::new(&message);
-            if let Some(ref suggested_text) = suggested_text {
-                prompt = prompt.with_placeholder(suggested_text);
+            if let Some(ref default_text) = default_text {
+                prompt = prompt.with_default(default_text);
             }
             let input = prompt
                 .prompt()
                 .map_err(|e| format!("Failed to get position: {}", e))?;
 
             let trimmed = input.trim();
-            if trimmed.is_empty() {
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("none") {
                 return Ok(PositionChoice::Clear);
             }
 
@@ -146,7 +148,7 @@ impl RepairPrompter for InquirePrompter {
                 None if attempt + 1 < MAX_ATTEMPTS => {
                     println!(
                         "\"{}\" isn't a whole number — positions must be 0 or a positive \
-                         integer. Try again.",
+                         integer, or \"none\". Try again.",
                         trimmed
                     );
                 }
