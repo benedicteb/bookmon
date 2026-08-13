@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kodeklang/bookmon/docs/storage-schema.json",
+  "title": "bookmon storage file",
+  "description": "The complete on-disk format of a bookmon storage file: a single JSON object holding every book, reading event, author, category, review, series and yearly goal. All collections are objects keyed by the entity's own id (a UUID v4 string), except `goals`, which is keyed by year. Reading status is not stored directly; it is derived from the most recent reading event for a book (event sourcing). This schema describes what bookmon writes and is strict about it; bookmon's own reader is more lenient (it ignores unknown fields and accepts the legacy shapes noted below), so treat this as the target format for writers and the superset notes as compatibility hints for readers.",
+  "type": "object",
+  "required": ["books", "readings", "authors", "categories"],
+  "additionalProperties": false,
+  "properties": {
+    "books": {
+      "description": "All books, keyed by book id. The key MUST equal the `id` field of its value.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/book" }
+    },
+    "readings": {
+      "description": "All reading events, keyed by reading id. The key MUST equal the `id` field of its value.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/reading" }
+    },
+    "authors": {
+      "description": "All authors, keyed by author id. The key MUST equal the `id` field of its value.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/author" }
+    },
+    "categories": {
+      "description": "All categories, keyed by category id. The key MUST equal the `id` field of its value.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/category" }
+    },
+    "reviews": {
+      "description": "All book reviews, keyed by review id. The key MUST equal the `id` field of its value. Optional: a missing `reviews` object is read as empty.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/review" }
+    },
+    "series": {
+      "description": "All book series, keyed by series id. The key MUST equal the `id` field of its value. Optional: a missing `series` object is read as empty.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/uuidKey" },
+      "additionalProperties": { "$ref": "#/$defs/series" }
+    },
+    "goals": {
+      "description": "Yearly reading goals, keyed by calendar year rendered as a decimal string (e.g. \"2026\"). Optional: a missing `goals` object is read as empty. At most one goal per year.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^-?[0-9]+$",
+        "description": "A year, as a decimal string. Fits in a signed 32-bit integer."
+      },
+      "additionalProperties": { "$ref": "#/$defs/goal" }
+    }
+  },
+  "$defs": {
+    "uuidKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A collection key. bookmon always generates UUID v4 strings (lowercase, hyphenated); readers should treat keys as opaque non-empty strings."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique id of the entity, duplicating the key it is stored under. bookmon generates UUID v4 strings, but treats ids as opaque non-empty strings when reading."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "An RFC 3339 / ISO 8601 timestamp in UTC, as written by chrono, e.g. \"2026-08-13T09:39:13.123456789Z\". Writers should emit UTC with a `Z` suffix.",
+      "examples": ["2026-08-13T09:39:13.123456789Z"]
+    },
+    "author": {
+      "type": "object",
+      "description": "A book author. Referenced by `Book.author_id`.",
+      "required": ["id", "name", "created_on"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": {
+          "type": "string",
+          "description": "Display name of the author, e.g. \"Ursula K. Le Guin\"."
+        },
+        "created_on": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "category": {
+      "type": "object",
+      "description": "A book category, e.g. \"Fiction\" or \"Science\". Referenced by `Book.category_id`.",
+      "required": ["id", "name", "description", "created_on"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Optional free-text description. Always written, as `null` when absent."
+        },
+        "created_on": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "series": {
+      "type": "object",
+      "description": "A book series, e.g. \"Harry Potter\". Books link to it via `Book.series_id` and order themselves with `Book.position_in_series`.",
+      "required": ["id", "name", "created_on"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "created_on": { "$ref": "#/$defs/timestamp" },
+        "status": {
+          "description": "Publication status. Omitted entirely when unknown (never written as null).",
+          "enum": ["Ongoing", "Completed", "Abandoned"]
+        },
+        "total_books": {
+          "description": "Known total number of books in the series. Omitted entirely when unknown (never written as null).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "book": {
+      "type": "object",
+      "description": "A book in the collection.",
+      "required": ["id", "title", "added_on", "isbn", "category_id", "author_id", "total_pages"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string" },
+        "added_on": { "$ref": "#/$defs/timestamp" },
+        "isbn": {
+          "type": "string",
+          "description": "ISBN as entered by the user. Not validated or normalised; may be an empty string."
+        },
+        "category_id": {
+          "type": "string",
+          "description": "Foreign key -> a key of `categories`. bookmon prompts to repair the file on load if the id is missing from `categories`."
+        },
+        "author_id": {
+          "type": "string",
+          "description": "Foreign key -> a key of `authors`. bookmon prompts to repair the file on load if the id is missing from `authors`."
+        },
+        "total_pages": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "description": "Total page count. Signed 32-bit for backwards compatibility; values <= 0 mean \"unknown\" and make bookmon prompt for a real value on load. Defaults to 0 when the field is absent."
+        },
+        "series_id": {
+          "type": "string",
+          "description": "Optional foreign key -> a key of `series`. Omitted entirely for standalone books (never written as null)."
+        },
+        "position_in_series": {
+          "type": ["string", "number"],
+          "description": "Position within the series. Written as a string so fractional numbering (\"2.5\" for novellas), zero-numbered prequels (\"0\") and non-numeric labels are all expressible. Sorted numerically when parseable as a number, lexicographically otherwise, with unpositioned books last. Omitted entirely when absent (never written as null). A JSON number is the legacy shape and is read as its string form; an empty string is read as absent. Readers must accept both; writers should emit a non-empty string.",
+          "examples": ["1", "2.5", "0"]
+        }
+      }
+    },
+    "reading": {
+      "type": "object",
+      "description": "A single timestamped reading event for a book. Events are append-only; a book's current status is derived from its most recent event by `created_on`. `Update` and `Bought` do not change started/finished status.",
+      "required": ["id", "created_on", "book_id", "event"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "created_on": { "$ref": "#/$defs/timestamp" },
+        "book_id": {
+          "type": "string",
+          "description": "Foreign key -> a key of `books`. bookmon prompts to recreate the book on load if the id is missing from `books`."
+        },
+        "event": {
+          "description": "Started: began reading. Finished: completed the book. Update: progress report, carries `metadata.current_page`. Bought: acquired the book. WantToRead / UnmarkedAsWantToRead: added to / removed from the want-to-read list.",
+          "enum": [
+            "Started",
+            "Finished",
+            "Update",
+            "Bought",
+            "WantToRead",
+            "UnmarkedAsWantToRead"
+          ]
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Extra data for the event. Omitted entirely when it would be empty, which is the case for every event except `Update`.",
+          "additionalProperties": false,
+          "properties": {
+            "current_page": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647,
+              "description": "Page reached at this event. Omitted entirely when absent (never written as null)."
+            },
+            "note": {
+              "type": "string",
+              "description": "Free-text note the reader wrote about this progress, may span multiple lines. Omitted entirely when absent (never written as null)."
+            }
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "description": "A free-text review of a book. A book may have several; they are shown newest first.",
+      "required": ["id", "created_on", "book_id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "created_on": { "$ref": "#/$defs/timestamp" },
+        "book_id": {
+          "type": "string",
+          "description": "Foreign key -> a key of `books`."
+        },
+        "text": {
+          "type": "string",
+          "description": "The review body, may span multiple lines."
+        }
+      }
+    },
+    "goal": {
+      "description": "A yearly reading goal. Written as an object; a bare number is the legacy shape and is read as that many books with a pages target of 0. A target of 0 means \"no target\" for that dimension.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["books", "pages"],
+          "additionalProperties": false,
+          "properties": {
+            "books": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295,
+              "description": "Number of books to finish during the year."
+            },
+            "pages": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295,
+              "description": "Number of pages to read during the year."
+            }
+          }
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Legacy shape: a bare book target, equivalent to {\"books\": n, \"pages\": 0}. Readers must accept it; writers should not produce it."
+        }
+      ]
+    }
+  }
+}
