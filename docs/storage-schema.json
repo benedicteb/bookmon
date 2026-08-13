@@ -153,9 +153,10 @@
           "description": "Optional foreign key -> a key of `series`. Omitted entirely for standalone books (never written as null)."
         },
         "position_in_series": {
-          "type": ["string", "number"],
-          "description": "Position within the series. Written as a string so fractional numbering (\"2.5\" for novellas), zero-numbered prequels (\"0\") and non-numeric labels are all expressible. Sorted numerically when parseable as a number, lexicographically otherwise, with unpositioned books last. Omitted entirely when absent (never written as null). A JSON number is the legacy shape and is read as its string form; an empty string is read as absent. Readers must accept both; writers should emit a non-empty string.",
-          "examples": ["1", "2.5", "0"]
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional non-negative position within the series; 0 marks a prequel. Omitted entirely when absent (never written as null). Books without a position sort after those with one. Legacy files may hold this as a string (\"3\") or a non-integer value (\"2.5\"); integral strings are read as numbers, and non-integer values are migrated interactively on load and then rewritten in this form.",
+          "examples": [0, 1, 3]
         }
       }
     },

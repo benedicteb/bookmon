@@ -146,8 +146,25 @@ When a goal is set for the current year, running `bookmon` with no command will 
 - `print-series` - Show all book series and their books
 - `delete-series` - Delete a series (books are kept but unlinked)
 - `rename-series` - Rename an existing series
+- `edit-series` - Move a book to a different position within its series
 
 Series can also be assigned to books through interactive mode.
+
+A book's position in a series is a whole number: `1`, `2`, `3`, and `0` for a prequel.
+Books without a position are listed after those with one.
+
+`edit-series` asks which series to edit, which book to move, and the new position. If
+another book already holds that position, it offers to insert the book there (moving
+later books up one) or to swap the two books. Entering nothing leaves the book in the
+series without a position.
+
+Older storage files allowed fractional positions such as `2.5` for novellas, as well as
+negative and non-numeric values. The first time `bookmon` runs against such a file it
+migrates each of those values interactively: it shows the old value and the positions
+already used in that series, suggests a whole-numbered slot, and asks what to do. Nothing
+is rounded or discarded without asking, and the answers are saved as you go, so an
+interrupted migration resumes where it left off. Use `edit-series` afterwards to tidy up
+any ordering the migration left behind.
 
 #### ISBN Lookup
 - `get-isbn <isbn>` - Fetch detailed book information using an ISBN
