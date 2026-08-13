@@ -1,10 +1,12 @@
 use bookmon::storage::{
-    compare_positions, handle_missing_fields, parse_integral_position, scan_invalid_positions,
-    sort_json_value, taken_positions, write_storage, Author, Book, BookRepairInput, Category, Goal,
-    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
+    compare_positions, handle_missing_fields, load_storage, migrate_positions,
+    parse_integral_position, scan_invalid_positions, sort_json_value, taken_positions,
+    write_storage, Author, Book, BookRepairInput, Category, Goal, PositionChoice, Reading,
+    ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
+use std::cell::RefCell;
 use uuid::Uuid;
 
 /// A test prompter that returns predefined values
@@ -51,6 +53,17 @@ impl RepairPrompter for TestPrompter {
             author_name: self.author_name.clone(),
             category_name: self.category_name.clone(),
         })
+    }
+
+    fn prompt_series_position(
+        &self,
+        _book_title: &str,
+        _series_name: &str,
+        _old_value: &str,
+        _suggested: Option<i32>,
+        _taken: &[i32],
+    ) -> Result<PositionChoice, Box<dyn std::error::Error>> {
+        panic!("TestPrompter should not be asked about series positions")
     }
 }
 
@@ -3085,7 +3098,7 @@ fn storage_json_with_positions(entries: &[(&str, &str, &str)]) -> serde_json::Va
         r#"{{
             "books": {{{books}}},
             "readings": {{}}, "authors": {{}}, "categories": {{}},
-            "series": {{ "s1": {{ "id": "s1", "name": "Mistborn" }} }}
+            "series": {{ "s1": {{ "id": "s1", "name": "Mistborn", "created_on": "2024-01-01T00:00:00Z" }} }}
         }}"#
     ))
     .unwrap()
@@ -3181,4 +3194,200 @@ fn test_taken_positions_lists_valid_positions_in_the_series() {
     taken.sort();
 
     assert_eq!(taken, vec![1, 3]);
+}
+
+// --- migrate_positions tests ---
+
+/// Replays a scripted answer per prompt and records the (title, suggested, taken)
+/// it was called with, so tests can assert on what the user was actually shown.
+struct ScriptedPositionPrompter {
+    answers: RefCell<Vec<PositionChoice>>,
+    seen: RefCell<Vec<(String, Option<i32>, Vec<i32>)>>,
+}
+
+impl ScriptedPositionPrompter {
+    fn new(answers: Vec<PositionChoice>) -> Self {
+        Self {
+            answers: RefCell::new(answers.into_iter().rev().collect()),
+            seen: RefCell::new(Vec::new()),
+        }
+    }
+}
+
+impl RepairPrompter for ScriptedPositionPrompter {
+    fn prompt_author_name(&self, _: &str) -> Result<String, Box<dyn std::error::Error>> {
+        Ok("Author".to_string())
+    }
+    fn prompt_category_name(&self, _: &str) -> Result<String, Box<dyn std::error::Error>> {
+        Ok("Fantasy".to_string())
+    }
+    fn prompt_total_pages(&self, _: &str) -> Result<i32, Box<dyn std::error::Error>> {
+        Ok(100)
+    }
+    fn prompt_book_details(&self, _: &str) -> Result<BookRepairInput, Box<dyn std::error::Error>> {
+        Ok(BookRepairInput {
+            title: "Repaired Book".to_string(),
+            isbn: "000".to_string(),
+            total_pages: 100,
+            author_name: "Author".to_string(),
+            category_name: "Fantasy".to_string(),
+        })
+    }
+    fn prompt_series_position(
+        &self,
+        book_title: &str,
+        _series_name: &str,
+        _old_value: &str,
+        suggested: Option<i32>,
+        taken: &[i32],
+    ) -> Result<PositionChoice, Box<dyn std::error::Error>> {
+        self.seen
+            .borrow_mut()
+            .push((book_title.to_string(), suggested, taken.to_vec()));
+        Ok(self
+            .answers
+            .borrow_mut()
+            .pop()
+            .expect("prompted more times than the test scripted"))
+    }
+}
+
+/// Writes raw JSON to a temp file and returns (dir, path). Keep `dir` alive.
+fn write_raw_storage(json: &serde_json::Value) -> (tempfile::TempDir, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("storage.json");
+    std::fs::write(&path, serde_json::to_string_pretty(json).unwrap()).unwrap();
+    (dir, path.to_string_lossy().to_string())
+}
+
+#[test]
+fn test_migrate_positions_insert_shifts_later_books() {
+    let value = storage_json_with_positions(&[
+        ("b1", r#""s1""#, "1"),
+        ("b2", r#""s1""#, "2"),
+        ("novella", r#""s1""#, r#""2.5""#),
+        ("b3", r#""s1""#, "3"),
+    ]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Insert(3)]);
+
+    let migrated = migrate_positions(&path, &prompter).unwrap();
+    assert!(migrated);
+
+    let storage = load_storage(&path).unwrap();
+    assert_eq!(storage.books["b1"].position_in_series, Some(1));
+    assert_eq!(storage.books["b2"].position_in_series, Some(2));
+    assert_eq!(storage.books["novella"].position_in_series, Some(3));
+    assert_eq!(
+        storage.books["b3"].position_in_series,
+        Some(4),
+        "shifted up"
+    );
+}
+
+#[test]
+fn test_migrate_positions_set_leaves_other_books_alone() {
+    let value =
+        storage_json_with_positions(&[("b3", r#""s1""#, "3"), ("novella", r#""s1""#, r#""2.5""#)]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Set(3)]);
+
+    migrate_positions(&path, &prompter).unwrap();
+
+    let storage = load_storage(&path).unwrap();
+    // Duplicates are permitted — is_position_occupied only ever warned.
+    assert_eq!(storage.books["novella"].position_in_series, Some(3));
+    assert_eq!(storage.books["b3"].position_in_series, Some(3));
+}
+
+#[test]
+fn test_migrate_positions_clear_drops_the_position() {
+    let value = storage_json_with_positions(&[("novella", r#""s1""#, r#""2.5""#)]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Clear]);
+
+    migrate_positions(&path, &prompter).unwrap();
+
+    let storage = load_storage(&path).unwrap();
+    assert_eq!(storage.books["novella"].position_in_series, None);
+    assert_eq!(
+        storage.books["novella"].series_id,
+        Some("s1".to_string()),
+        "still in the series, just unnumbered"
+    );
+}
+
+#[test]
+fn test_migrate_positions_clears_orphaned_books_without_prompting() {
+    let value = storage_json_with_positions(&[
+        ("orphan", r#""missing""#, r#""2.5""#),
+        ("no_series", "null", r#""2.5""#),
+    ]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![]); // panics if prompted
+
+    migrate_positions(&path, &prompter).unwrap();
+
+    assert!(prompter.seen.borrow().is_empty(), "must not prompt");
+    let storage = load_storage(&path).unwrap();
+    assert_eq!(storage.books["orphan"].position_in_series, None);
+    assert_eq!(storage.books["no_series"].position_in_series, None);
+}
+
+#[test]
+fn test_migrate_positions_migrates_legacy_negative() {
+    // Integral but invalid: skipped by a "is it fractional" check, and the
+    // deserializer would then reject the file forever.
+    let value = storage_json_with_positions(&[("b1", r#""s1""#, "-1")]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Set(0)]);
+
+    migrate_positions(&path, &prompter).unwrap();
+
+    assert_eq!(prompter.seen.borrow()[0].1, Some(0), "suggests 0");
+    let storage = load_storage(&path).unwrap();
+    assert_eq!(storage.books["b1"].position_in_series, Some(0));
+}
+
+#[test]
+fn test_migrate_positions_shows_currently_taken_positions() {
+    let value = storage_json_with_positions(&[
+        ("b1", r#""s1""#, "1"),
+        ("b3", r#""s1""#, "3"),
+        ("novella", r#""s1""#, r#""2.5""#),
+    ]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Insert(3)]);
+
+    migrate_positions(&path, &prompter).unwrap();
+
+    let mut taken = prompter.seen.borrow()[0].2.clone();
+    taken.sort();
+    assert_eq!(taken, vec![1, 3]);
+}
+
+#[test]
+fn test_migrate_positions_is_a_noop_on_a_clean_file() {
+    let value = storage_json_with_positions(&[("b1", r#""s1""#, "1")]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![]);
+
+    assert!(!migrate_positions(&path, &prompter).unwrap());
+    assert!(prompter.seen.borrow().is_empty());
+}
+
+#[test]
+fn test_migrate_positions_second_run_prompts_nothing() {
+    let value =
+        storage_json_with_positions(&[("b2", r#""s1""#, "2"), ("novella", r#""s1""#, r#""2.5""#)]);
+    let (_dir, path) = write_raw_storage(&value);
+
+    let first = ScriptedPositionPrompter::new(vec![PositionChoice::Insert(3)]);
+    assert!(migrate_positions(&path, &first).unwrap());
+
+    let second = ScriptedPositionPrompter::new(vec![]);
+    assert!(
+        !migrate_positions(&path, &second).unwrap(),
+        "already migrated"
+    );
 }

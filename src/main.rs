@@ -2,7 +2,7 @@ use bookmon::{
     book, config, goal,
     lookup::http_client,
     pages, reading, review,
-    storage::{self, Book, BookRepairInput, RepairPrompter, Storage},
+    storage::{self, Book, BookRepairInput, PositionChoice, RepairPrompter, Storage},
 };
 use chrono::Datelike;
 use clap::{Parser, Subcommand};
@@ -84,6 +84,64 @@ impl RepairPrompter for InquirePrompter {
             total_pages,
             author_name,
             category_name,
+        })
+    }
+
+    fn prompt_series_position(
+        &self,
+        book_title: &str,
+        series_name: &str,
+        old_value: &str,
+        suggested: Option<i32>,
+        taken: &[i32],
+    ) -> Result<PositionChoice, Box<dyn std::error::Error>> {
+        println!(
+            "\n'{}' in '{}' has the position \"{}\", which is no longer supported \
+             — positions must be whole numbers.",
+            book_title, series_name, old_value
+        );
+        if !taken.is_empty() {
+            let mut sorted = taken.to_vec();
+            sorted.sort_unstable();
+            let list: Vec<String> = sorted.iter().map(|p| p.to_string()).collect();
+            println!("Positions already used in this series: {}", list.join(", "));
+        }
+
+        let position = match suggested {
+            Some(suggested) => Text::new("New position:")
+                .with_default(&suggested.to_string())
+                .prompt()
+                .map_err(|e| format!("Failed to get position: {}", e))?,
+            None => Text::new("New position (or Enter to leave it unnumbered):")
+                .prompt()
+                .map_err(|e| format!("Failed to get position: {}", e))?,
+        };
+
+        let position = match bookmon::series::parse_position_input(&position) {
+            Some(position) => position,
+            None => return Ok(PositionChoice::Clear),
+        };
+
+        if !taken.contains(&position) {
+            return Ok(PositionChoice::Set(position));
+        }
+
+        let options = vec![
+            "Insert here (move later books up one)",
+            "Put it here anyway (two books share the position)",
+            "Leave it unnumbered",
+        ];
+        let choice = Select::new(
+            &format!("Position {} is taken. What should happen?", position),
+            options,
+        )
+        .prompt()
+        .map_err(|e| format!("Failed to get choice: {}", e))?;
+
+        Ok(match choice {
+            "Insert here (move later books up one)" => PositionChoice::Insert(position),
+            "Put it here anyway (two books share the position)" => PositionChoice::Set(position),
+            _ => PositionChoice::Clear,
         })
     }
 }

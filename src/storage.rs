@@ -919,6 +919,18 @@ pub fn initialize_storage_file(storage_path: &str) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+/// What to do with a book whose stored position could not be migrated automatically.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PositionChoice {
+    /// Place the book here, shifting occupants at or after this position up by one.
+    Insert(i32),
+    /// Place the book here, leaving other books alone. May leave two books sharing
+    /// a position — permitted, matching `is_position_occupied`, which only warns.
+    Set(i32),
+    /// Drop the position. The book stays in the series and sorts last.
+    Clear,
+}
+
 /// A trait for providing user input during storage repair operations.
 /// This separates the UI concern from the data layer, making it testable.
 pub trait RepairPrompter {
@@ -929,6 +941,20 @@ pub trait RepairPrompter {
         &self,
         reading_id: &str,
     ) -> Result<BookRepairInput, Box<dyn std::error::Error>>;
+
+    /// Asks where a book with an unmigratable position should go.
+    ///
+    /// `old_value` is the value as written in the file, `suggested` is the
+    /// proposed slot (`None` when the old value was non-numeric and offers no
+    /// anchor), and `taken` lists positions currently occupied in the series.
+    fn prompt_series_position(
+        &self,
+        book_title: &str,
+        series_name: &str,
+        old_value: &str,
+        suggested: Option<i32>,
+        taken: &[i32],
+    ) -> Result<PositionChoice, Box<dyn std::error::Error>>;
 }
 
 /// Input data needed to repair a missing book reference
@@ -1084,11 +1110,139 @@ pub fn load_storage(storage_path: &str) -> Result<Storage, Box<dyn std::error::E
     Ok(storage)
 }
 
-/// Loads storage and repairs any missing references using the given prompter
+/// Interactively migrates any `position_in_series` that is not a valid non-negative
+/// integer. Returns `true` if the file was changed.
+///
+/// Runs on raw JSON and before deserialization, because once the field is `i32` a
+/// file holding "2.5" cannot be loaded at all. The file is rewritten after every
+/// answer, so an interrupted migration keeps the answers already given and
+/// re-running resumes with the rest.
+pub fn migrate_positions(
+    storage_path: &str,
+    prompter: &dyn RepairPrompter,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(storage_path)?;
+    let mut value: serde_json::Value = serde_json::from_str(&contents)?;
+
+    let pending = scan_invalid_positions(&value);
+    if pending.is_empty() {
+        return Ok(false);
+    }
+
+    for fix in pending {
+        let choice = match &fix.series_id {
+            // No usable series: clear without asking. handle_missing_fields would
+            // discard any answer we collected here moments later.
+            None => PositionChoice::Clear,
+            Some(series_id) => {
+                // Recompute what is taken each time — an earlier Insert may have
+                // shifted books since the scan.
+                let taken = taken_positions(&value, series_id);
+                prompter.prompt_series_position(
+                    &fix.title,
+                    &fix.series_name,
+                    &fix.raw,
+                    fix.suggested,
+                    &taken,
+                )?
+            }
+        };
+
+        apply_position_choice(&mut value, &fix.book_id, fix.series_id.as_deref(), choice);
+        write_json_value(storage_path, &value)?;
+    }
+
+    Ok(true)
+}
+
+/// Applies one migration answer to the raw JSON tree.
+fn apply_position_choice(
+    value: &mut serde_json::Value,
+    book_id: &str,
+    series_id: Option<&str>,
+    choice: PositionChoice,
+) {
+    // Shift first, while the book being placed still holds its old invalid value —
+    // that value never parses as an integer, so it is never shifted by accident.
+    if let (PositionChoice::Insert(position), Some(series_id)) = (choice, series_id) {
+        shift_json_positions_from(value, series_id, position, book_id);
+    }
+
+    let book = match value
+        .get_mut("books")
+        .and_then(|books| books.get_mut(book_id))
+        .and_then(|book| book.as_object_mut())
+    {
+        Some(book) => book,
+        None => return,
+    };
+
+    match choice {
+        PositionChoice::Clear => {
+            // Removed rather than nulled: the field is skip_serializing_if = is_none.
+            book.remove("position_in_series");
+        }
+        PositionChoice::Insert(position) | PositionChoice::Set(position) => {
+            book.insert(
+                "position_in_series".to_string(),
+                serde_json::Value::from(position),
+            );
+        }
+    }
+}
+
+/// Raw-JSON counterpart of `series::shift_positions_from`, for use before
+/// deserialization. Increments every valid position `>= from` in the series,
+/// skipping `except`.
+fn shift_json_positions_from(
+    value: &mut serde_json::Value,
+    series_id: &str,
+    from: i32,
+    except: &str,
+) {
+    let books = match value.get_mut("books").and_then(|b| b.as_object_mut()) {
+        Some(books) => books,
+        None => return,
+    };
+
+    for (book_id, book) in books.iter_mut() {
+        if book_id == except || book.get("series_id").and_then(|s| s.as_str()) != Some(series_id) {
+            continue;
+        }
+        let current = match book.get("position_in_series") {
+            Some(position) => parse_integral_position(&raw_position_text(position)),
+            None => None,
+        };
+        if let (Some(position), Some(book)) = (current, book.as_object_mut()) {
+            if position >= from {
+                book.insert(
+                    "position_in_series".to_string(),
+                    serde_json::Value::from(position + 1),
+                );
+            }
+        }
+    }
+}
+
+/// Writes a raw JSON tree using the same sorted-key, pretty formatting as
+/// `write_storage`, so a migrated file is byte-identical to a normally saved one.
+fn write_json_value(
+    storage_path: &str,
+    value: &serde_json::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sorted = sort_json_value(value.clone());
+    fs::write(storage_path, serde_json::to_string_pretty(&sorted)?)?;
+    Ok(())
+}
+
+/// Loads storage, migrating legacy series positions and repairing any missing
+/// references, using the given prompter.
 pub fn load_and_repair_storage(
     storage_path: &str,
     prompter: &dyn RepairPrompter,
 ) -> Result<Storage, Box<dyn std::error::Error>> {
+    // Must precede load_storage: an unmigrated position cannot be deserialized.
+    migrate_positions(storage_path, prompter)?;
     let mut storage = load_storage(storage_path)?;
     handle_missing_fields(&mut storage, storage_path, prompter)?;
     Ok(storage)
