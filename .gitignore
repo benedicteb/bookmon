@@ -1,2 +1,5 @@
 /target
 /books.json
+
+# Subagent-driven development scratch workspace
+.superpowers/
