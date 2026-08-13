@@ -1,7 +1,7 @@
 use bookmon::storage::{
-    compare_positions, handle_missing_fields, parse_integral_position, sort_json_value,
-    write_storage, Author, Book, BookRepairInput, Category, Goal, Reading, ReadingEvent,
-    ReadingMetadata, RepairPrompter, Storage,
+    compare_positions, handle_missing_fields, parse_integral_position, scan_invalid_positions,
+    sort_json_value, taken_positions, write_storage, Author, Book, BookRepairInput, Category, Goal,
+    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
@@ -3060,4 +3060,125 @@ fn test_deserialize_position_error_mentions_value_and_migration() {
         "error should say how to fix it: {}",
         err
     );
+}
+
+// --- scan_invalid_positions / taken_positions tests ---
+
+fn storage_json_with_positions(entries: &[(&str, &str, &str)]) -> serde_json::Value {
+    // entries: (book_id, series_id_json, position_json) — raw JSON fragments.
+    let books: String = entries
+        .iter()
+        .map(|(id, series, position)| {
+            format!(
+                r#""{id}": {{
+                    "id": "{id}", "title": "Title {id}", "isbn": "1",
+                    "added_on": "2024-01-01T00:00:00Z",
+                    "category_id": "c1", "author_id": "a1", "total_pages": 100,
+                    "series_id": {series}, "position_in_series": {position}
+                }}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    serde_json::from_str(&format!(
+        r#"{{
+            "books": {{{books}}},
+            "readings": {{}}, "authors": {{}}, "categories": {{}},
+            "series": {{ "s1": {{ "id": "s1", "name": "Mistborn" }} }}
+        }}"#
+    ))
+    .unwrap()
+}
+
+#[test]
+fn test_scan_invalid_positions_finds_only_invalid_values() {
+    let value = storage_json_with_positions(&[
+        ("b1", r#""s1""#, "1"),               // valid integer — skipped
+        ("b2", r#""s1""#, r#""2""#),          // valid integral string — skipped
+        ("b3", r#""s1""#, r#""2.5""#),        // fractional — found
+        ("b4", r#""s1""#, "-1"),              // negative — found
+        ("b5", r#""s1""#, r#""Book Three""#), // non-numeric — found
+        ("b6", r#""s1""#, "null"),            // absent — skipped
+    ]);
+
+    let mut found: Vec<String> = scan_invalid_positions(&value)
+        .into_iter()
+        .map(|f| f.book_id)
+        .collect();
+    found.sort();
+
+    assert_eq!(found, vec!["b3", "b4", "b5"]);
+}
+
+#[test]
+fn test_scan_invalid_positions_suggests_ceiling_clamped_to_zero() {
+    let value = storage_json_with_positions(&[
+        ("b1", r#""s1""#, r#""2.5""#),
+        ("b2", r#""s1""#, r#""0.5""#),
+        ("b3", r#""s1""#, "-1"),
+        ("b4", r#""s1""#, r#""Book Three""#),
+    ]);
+
+    let fixes = scan_invalid_positions(&value);
+    let suggestion = |id: &str| fixes.iter().find(|f| f.book_id == id).unwrap().suggested;
+
+    // Ceiling, because 2.5 sorts AFTER book 2 — slot 3 preserves reading order.
+    assert_eq!(suggestion("b1"), Some(3));
+    assert_eq!(suggestion("b2"), Some(1));
+    assert_eq!(suggestion("b3"), Some(0), "negatives clamp to 0");
+    assert_eq!(
+        suggestion("b4"),
+        None,
+        "non-numeric has no anchor to suggest from"
+    );
+}
+
+#[test]
+fn test_scan_invalid_positions_marks_books_with_no_usable_series() {
+    let value = storage_json_with_positions(&[
+        ("b1", "null", r#""2.5""#),         // no series at all
+        ("b2", r#""missing""#, r#""2.5""#), // dangling series_id
+        ("b3", r#""s1""#, r#""2.5""#),      // real series
+    ]);
+
+    let fixes = scan_invalid_positions(&value);
+    let series_of = |id: &str| {
+        fixes
+            .iter()
+            .find(|f| f.book_id == id)
+            .unwrap()
+            .series_id
+            .clone()
+    };
+
+    // These get cleared silently — handle_missing_fields would discard the answer anyway.
+    assert_eq!(series_of("b1"), None);
+    assert_eq!(series_of("b2"), None);
+    assert_eq!(series_of("b3"), Some("s1".to_string()));
+}
+
+#[test]
+fn test_scan_invalid_positions_carries_title_and_series_name() {
+    let value = storage_json_with_positions(&[("b1", r#""s1""#, r#""2.5""#)]);
+    let fixes = scan_invalid_positions(&value);
+
+    assert_eq!(fixes[0].title, "Title b1");
+    assert_eq!(fixes[0].series_name, "Mistborn");
+    assert_eq!(fixes[0].raw, "2.5", "raw value shown to the user, unquoted");
+}
+
+#[test]
+fn test_taken_positions_lists_valid_positions_in_the_series() {
+    let value = storage_json_with_positions(&[
+        ("b1", r#""s1""#, "1"),
+        ("b2", r#""s1""#, "3"),
+        ("b3", r#""s1""#, r#""2.5""#), // invalid — not "taken"
+        ("b4", "null", "9"),           // not in this series — excluded
+    ]);
+
+    let mut taken = taken_positions(&value, "s1");
+    taken.sort();
+
+    assert_eq!(taken, vec![1, 3]);
 }

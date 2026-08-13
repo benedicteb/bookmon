@@ -129,6 +129,121 @@ where
     })
 }
 
+/// One book whose stored position is not a valid non-negative integer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingPositionFix {
+    pub book_id: String,
+    pub title: String,
+    /// `None` when the book has no series, or a `series_id` that does not resolve.
+    /// Such a book is cleared silently rather than prompted about, because
+    /// `handle_missing_fields` clears the positions of orphaned books anyway.
+    pub series_id: Option<String>,
+    pub series_name: String,
+    /// The offending value as written in the file, shown to the user.
+    pub raw: String,
+    pub suggested: Option<i32>,
+}
+
+/// Renders a JSON position value the way it should be shown to a user:
+/// strings without their quotes, everything else as written.
+fn raw_position_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// Suggests an integer slot for a legacy position.
+///
+/// Uses the ceiling, clamped at 0: a `2.5` sorts after book 2, so slot 3 (with
+/// everything from 3 up shifted by one) preserves the original reading order.
+/// Non-numeric values have no anchor, so they get no suggestion.
+fn suggest_position(raw: &str) -> Option<i32> {
+    let value: f64 = raw.trim().parse().ok()?;
+    if !value.is_finite() {
+        return None;
+    }
+    let ceiling = value.ceil().max(0.0);
+    if ceiling > i32::MAX as f64 {
+        return None;
+    }
+    Some(ceiling as i32)
+}
+
+/// Finds every book whose `position_in_series` is not a valid non-negative integer.
+///
+/// Operates on raw JSON because these values cannot be deserialized into `Book` —
+/// that is the whole reason the migration runs before deserialization ever happens.
+/// The "needs fixing" predicate here must exactly match the deserializer's reject
+/// set (`parse_integral_position`), or a file could end up permanently unloadable
+/// with no in-app way to fix it.
+pub fn scan_invalid_positions(value: &serde_json::Value) -> Vec<PendingPositionFix> {
+    let series = value.get("series");
+    let books = match value.get("books").and_then(|b| b.as_object()) {
+        Some(books) => books,
+        None => return Vec::new(),
+    };
+
+    let mut fixes = Vec::new();
+    for (book_id, book) in books {
+        let position = match book.get("position_in_series") {
+            None | Some(serde_json::Value::Null) => continue,
+            Some(position) => position,
+        };
+
+        let raw = raw_position_text(position);
+        if raw.trim().is_empty() || parse_integral_position(&raw).is_some() {
+            continue;
+        }
+
+        // Resolve the series; an absent or dangling id means "clear, don't ask".
+        let series_id = book.get("series_id").and_then(|s| s.as_str());
+        let resolved = series_id.zip(series_id.and_then(|sid| series.and_then(|s| s.get(sid))));
+
+        fixes.push(PendingPositionFix {
+            book_id: book_id.clone(),
+            title: book
+                .get("title")
+                .and_then(|t| t.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            series_id: resolved.map(|(sid, _)| sid.to_string()),
+            series_name: resolved
+                .and_then(|(_, s)| s.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            suggested: suggest_position(&raw),
+            raw,
+        });
+    }
+
+    // Group by series, then by suggested slot, so the user is asked about a series'
+    // books in reading order rather than in HashMap order.
+    fixes.sort_by(|a, b| {
+        a.series_name
+            .cmp(&b.series_name)
+            .then(a.suggested.cmp(&b.suggested))
+            .then(a.book_id.cmp(&b.book_id))
+    });
+    fixes
+}
+
+/// Returns the positions already validly occupied in a series, read from raw JSON.
+pub fn taken_positions(value: &serde_json::Value, series_id: &str) -> Vec<i32> {
+    let books = match value.get("books").and_then(|b| b.as_object()) {
+        Some(books) => books,
+        None => return Vec::new(),
+    };
+
+    books
+        .values()
+        .filter(|book| book.get("series_id").and_then(|s| s.as_str()) == Some(series_id))
+        .filter_map(|book| book.get("position_in_series"))
+        .filter_map(|position| parse_integral_position(&raw_position_text(position)))
+        .collect()
+}
+
 /// The type of reading event recorded for a book.
 ///
 /// The most recent event determines the book's current status.
