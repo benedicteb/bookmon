@@ -7,7 +7,7 @@ pub fn store_series(storage: &mut Storage, series: Series) -> Result<(), String>
 }
 
 /// Formats a series label for display, e.g. "Harry Potter #3" or "Harry Potter" (if no position).
-pub fn format_series_label(series: &Series, position: Option<&str>) -> String {
+pub fn format_series_label(series: &Series, position: Option<i32>) -> String {
     match position {
         Some(pos) => format!("{} #{}", series.name, pos),
         None => series.name.clone(),
@@ -16,28 +16,21 @@ pub fn format_series_label(series: &Series, position: Option<&str>) -> String {
 
 /// Formats a position prefix for a book title within a grouped series display.
 ///
-/// Returns e.g. `"#3 "` for position "3", or `""` if no position is set.
+/// Returns e.g. `"#3 "` for position 3, or `""` if no position is set.
 /// Used in table rows where the series name is shown in a group header,
 /// so only the position number is needed next to the title.
-pub fn format_position_prefix(position: Option<&str>) -> String {
+pub fn format_position_prefix(position: Option<i32>) -> String {
     match position {
         Some(pos) => format!("#{} ", pos),
         None => String::new(),
     }
 }
 
-/// Parses a position-in-series input string. Returns `Some(position)` for valid
-/// non-negative numbers (integers like "1", "0" or decimals like "2.5").
-/// Returns `None` for empty/whitespace, negative numbers, or non-numeric input.
-pub fn parse_position_input(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    match trimmed.parse::<f64>() {
-        Ok(val) if val >= 0.0 => Some(trimmed.to_string()),
-        _ => None,
-    }
+/// Parses a position-in-series input string. Returns `Some(position)` for
+/// non-negative whole numbers ("0", "1", "3"). Returns `None` for empty or
+/// whitespace input, negatives, fractions, and non-numeric input.
+pub fn parse_position_input(input: &str) -> Option<i32> {
+    crate::storage::parse_integral_position(input)
 }
 
 /// Formats a rich display of a series with reading status indicators.
@@ -119,7 +112,6 @@ pub fn format_series_display(storage: &Storage, series_id: &str) -> String {
 
         let pos = book
             .position_in_series
-            .as_deref()
             .map(|p| format!("#{} ", p))
             .unwrap_or_default();
 
@@ -134,13 +126,12 @@ pub fn format_series_display(storage: &Storage, series_id: &str) -> String {
 
 /// Checks if a position is already occupied by another book in the series.
 /// Returns the title of the book at that position, or None if the position is free.
-pub fn is_position_occupied(storage: &Storage, series_id: &str, position: &str) -> Option<String> {
+pub fn is_position_occupied(storage: &Storage, series_id: &str, position: i32) -> Option<String> {
     storage
         .books
         .values()
         .find(|b| {
-            b.series_id.as_deref() == Some(series_id)
-                && b.position_in_series.as_deref() == Some(position)
+            b.series_id.as_deref() == Some(series_id) && b.position_in_series == Some(position)
         })
         .map(|b| b.title.clone())
 }

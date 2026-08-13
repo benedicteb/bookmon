@@ -71,38 +71,62 @@ pub struct Book {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_id: Option<String>,
-    /// Optional position within the series (e.g. "1", "2.5", "0" for prequels).
-    /// Stored as a string to support fractional numbering (novellas), zero-numbered
-    /// prequels, and non-standard ordering. Sorted numerically when possible.
+    /// Optional position within the series (e.g. 1, 2, or 0 for a prequel).
+    /// Non-negative whole numbers only; books without a position sort last.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "deserialize_position")]
-    pub position_in_series: Option<String>,
+    pub position_in_series: Option<i32>,
 }
 
-/// Custom deserializer for `position_in_series` that accepts both JSON numbers
-/// (from old i32 format) and strings (new format) for backward compatibility.
-fn deserialize_position<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+/// Parses a position value that must be a non-negative integer.
+///
+/// Accepts `"3"` and the lossless decimal form `"3.0"`. Rejects fractional
+/// values, negatives, non-finite values and anything non-numeric — these are
+/// exactly the values the interactive migration prompts about, and the two
+/// must not disagree.
+pub fn parse_integral_position(raw: &str) -> Option<i32> {
+    let value: f64 = raw.trim().parse().ok()?;
+    if !value.is_finite() || value.fract() != 0.0 || value < 0.0 {
+        return None;
+    }
+    if value > i32::MAX as f64 {
+        return None;
+    }
+    Some(value as i32)
+}
+
+/// Custom deserializer for `position_in_series`.
+///
+/// Absent, `null` and `""` all mean "no position". A JSON number and a numeric
+/// string are both accepted when integral — the number form is the pre-`efca310`
+/// legacy shape, the string form is the shape written between then and the move
+/// to `i32`. Anything else is an error rather than a silent coercion, so that no
+/// unmigrated value can reach the program as an altered integer.
+fn deserialize_position<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
-    match value {
-        None => Ok(None),
+    let raw = match value {
+        None | Some(serde_json::Value::Null) => return Ok(None),
         Some(serde_json::Value::String(s)) => {
-            if s.is_empty() {
-                Ok(None)
-            } else {
-                Ok(Some(s))
+            if s.trim().is_empty() {
+                return Ok(None);
             }
+            s
         }
-        Some(serde_json::Value::Number(n)) => Ok(Some(n.to_string())),
-        Some(serde_json::Value::Null) => Ok(None),
-        Some(other) => Err(serde::de::Error::custom(format!(
-            "unexpected type for position_in_series: {}",
-            other
-        ))),
-    }
+        Some(serde_json::Value::Number(n)) => n.to_string(),
+        Some(other) => other.to_string(),
+    };
+
+    parse_integral_position(&raw).map(Some).ok_or_else(|| {
+        serde::de::Error::custom(format!(
+            "invalid position_in_series {:?}: must be a non-negative whole number. \
+             Run `bookmon` to migrate this file interactively.",
+            raw
+        ))
+    })
 }
 
 /// The type of reading event recorded for a book.
@@ -418,20 +442,14 @@ impl Storage {
     }
 
     /// Returns all books that belong to a given series, sorted by position_in_series.
-    /// Positions are parsed as f64 for numeric sorting (supports "1", "2.5", "0", etc.).
-    /// Non-numeric positions are sorted lexicographically after numeric ones.
-    /// Books without a position are placed at the end.
+    /// Positions are ordered numerically; books without a position are placed at the end.
     pub fn get_books_in_series(&self, series_id: &str) -> Vec<&Book> {
         let mut books: Vec<&Book> = self
             .books
             .values()
             .filter(|b| b.series_id.as_deref() == Some(series_id))
             .collect();
-        books.sort_by(|a, b| {
-            let a_pos = a.position_in_series.as_deref();
-            let b_pos = b.position_in_series.as_deref();
-            compare_positions(a_pos, b_pos)
-        });
+        books.sort_by(|a, b| compare_positions(a.position_in_series, b.position_in_series));
         books
     }
 
@@ -733,27 +751,13 @@ impl Storage {
     }
 }
 
-/// Compares two optional position strings for sorting.
-/// Numeric positions (e.g. "1", "2.5") are sorted numerically.
-/// Non-numeric positions are sorted lexicographically after all numeric ones.
-/// `None` is sorted last.
-pub fn compare_positions(a: Option<&str>, b: Option<&str>) -> std::cmp::Ordering {
+/// Orders two series positions, placing books without a position last.
+pub fn compare_positions(a: Option<i32>, b: Option<i32>) -> std::cmp::Ordering {
     match (a, b) {
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (Some(_), None) => std::cmp::Ordering::Less,
-        (Some(a_str), Some(b_str)) => {
-            let a_num = a_str.parse::<f64>().ok();
-            let b_num = b_str.parse::<f64>().ok();
-            match (a_num, b_num) {
-                (Some(a_val), Some(b_val)) => a_val
-                    .partial_cmp(&b_val)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => a_str.cmp(b_str),
-            }
-        }
+        (Some(a_pos), Some(b_pos)) => a_pos.cmp(&b_pos),
     }
 }
 

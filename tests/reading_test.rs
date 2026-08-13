@@ -401,7 +401,7 @@ fn test_group_header_present_when_books_have_series() {
         200,
     );
     book.series_id = Some(series_id);
-    book.position_in_series = Some("1".to_string());
+    book.position_in_series = Some(1);
     let book_id = book.id.clone();
     storage.add_book(book);
     storage.add_reading(Reading::new(book_id, ReadingEvent::Started));
@@ -507,7 +507,7 @@ fn test_group_books_by_series_groups_and_standalone() {
         650,
     );
     book1.series_id = Some(series_id.clone());
-    book1.position_in_series = Some("1".to_string());
+    book1.position_in_series = Some(1);
 
     let mut book2 = Book::new(
         "The Well of Ascension".to_string(),
@@ -517,7 +517,7 @@ fn test_group_books_by_series_groups_and_standalone() {
         700,
     );
     book2.series_id = Some(series_id);
-    book2.position_in_series = Some("2".to_string());
+    book2.position_in_series = Some(2);
 
     // Standalone book by same author
     let book3 = Book::new(
@@ -590,7 +590,7 @@ fn test_group_books_by_series_multiple_authors() {
         200,
     );
     series_book.series_id = Some(series_id);
-    series_book.position_in_series = Some("1".to_string());
+    series_book.position_in_series = Some(1);
 
     // Standalone book by Author A (should sort first by author name)
     let standalone_book = Book::new(
@@ -645,7 +645,7 @@ fn test_group_books_by_series_orphaned_series_id_treated_as_standalone() {
         200,
     );
     book.series_id = Some("nonexistent-series-id".to_string());
-    book.position_in_series = Some("1".to_string());
+    book.position_in_series = Some(1);
     storage.add_book(book);
 
     let all_books: Vec<&Book> = storage.books.values().collect();
@@ -685,7 +685,7 @@ fn test_group_books_by_series_book_without_position_sorts_last_in_group() {
         200,
     );
     book1.series_id = Some(series_id.clone());
-    book1.position_in_series = Some("1".to_string());
+    book1.position_in_series = Some(1);
 
     // Book without position (should sort last)
     let mut book2 = Book::new(

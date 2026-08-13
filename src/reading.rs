@@ -43,12 +43,7 @@ pub fn group_books_by_series<'a>(storage: &'a Storage, books: &[&'a Book]) -> Ve
 
     // Sort books within each series group by position
     for group_books in series_map.values_mut() {
-        group_books.sort_by(|a, b| {
-            compare_positions(
-                a.position_in_series.as_deref(),
-                b.position_in_series.as_deref(),
-            )
-        });
+        group_books.sort_by(|a, b| compare_positions(a.position_in_series, b.position_in_series));
     }
 
     // Build entries with sort keys
@@ -155,7 +150,7 @@ pub fn build_started_books_table(storage: &Storage) -> io::Result<Vec<TableRow>>
                     for book in books {
                         let title = format!(
                             "  {}{}",
-                            format_position_prefix(book.position_in_series.as_deref()),
+                            format_position_prefix(book.position_in_series),
                             book.title
                         );
                         let row = build_started_book_row(storage, book, title)?;
@@ -292,7 +287,7 @@ pub fn show_finished_books_list(
                     for book in books {
                         let title = format!(
                             "  {}{}",
-                            format_position_prefix(book.position_in_series.as_deref()),
+                            format_position_prefix(book.position_in_series),
                             book.title
                         );
                         let author_name = storage.author_name_for_book(book);
@@ -414,7 +409,7 @@ pub fn print_book_list_table(
                     for book in books {
                         let title = format!(
                             "  {}{}",
-                            format_position_prefix(book.position_in_series.as_deref()),
+                            format_position_prefix(book.position_in_series),
                             book.title
                         );
                         let row = build_book_list_row(storage, book, title, &want_to_read_ids)?;

@@ -1,6 +1,7 @@
 use bookmon::storage::{
-    handle_missing_fields, sort_json_value, write_storage, Author, Book, BookRepairInput, Category,
-    Goal, Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
+    compare_positions, handle_missing_fields, parse_integral_position, sort_json_value,
+    write_storage, Author, Book, BookRepairInput, Category, Goal, Reading, ReadingEvent,
+    ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
@@ -2433,7 +2434,7 @@ fn test_handle_missing_fields_clears_orphaned_series_id() {
         author_id,
         total_pages: 200,
         series_id: Some("nonexistent-series-id".to_string()),
-        position_in_series: Some("3".to_string()),
+        position_in_series: Some(3),
     };
     let book_id = book.id.clone();
     storage.add_book(book);
@@ -2483,7 +2484,7 @@ fn test_handle_missing_fields_preserves_valid_series_id() {
         author_id,
         total_pages: 300,
         series_id: Some(series_id.clone()),
-        position_in_series: Some("1".to_string()),
+        position_in_series: Some(1),
     };
     let book_id = book.id.clone();
     storage.add_book(book);
@@ -2502,7 +2503,7 @@ fn test_handle_missing_fields_preserves_valid_series_id() {
     );
     assert_eq!(
         repaired_book.position_in_series,
-        Some("1".to_string()),
+        Some(1),
         "position_in_series should be preserved for valid series_id"
     );
 }
@@ -2961,4 +2962,102 @@ fn test_pages_read_by_year_ignores_readings_for_missing_books() {
     );
 
     assert!(storage.pages_read_by_year().is_empty());
+}
+
+// --- parse_integral_position / compare_positions tests ---
+
+#[test]
+fn test_parse_integral_position_accepts_non_negative_integers() {
+    assert_eq!(parse_integral_position("3"), Some(3));
+    assert_eq!(parse_integral_position("0"), Some(0));
+    // A whole number written with a decimal point is lossless, so accept it.
+    assert_eq!(parse_integral_position("3.0"), Some(3));
+}
+
+#[test]
+fn test_parse_integral_position_rejects_invalid() {
+    assert_eq!(parse_integral_position("2.5"), None, "fractional");
+    assert_eq!(parse_integral_position("-1"), None, "negative");
+    assert_eq!(parse_integral_position("abc"), None, "non-numeric");
+    assert_eq!(parse_integral_position(""), None, "empty");
+    assert_eq!(parse_integral_position("inf"), None, "non-finite");
+    assert_eq!(parse_integral_position("NaN"), None, "non-finite");
+}
+
+#[test]
+fn test_compare_positions_orders_numerically_with_none_last() {
+    use std::cmp::Ordering;
+    assert_eq!(compare_positions(Some(2), Some(10)), Ordering::Less);
+    assert_eq!(compare_positions(Some(0), Some(1)), Ordering::Less);
+    assert_eq!(compare_positions(Some(3), Some(3)), Ordering::Equal);
+    assert_eq!(compare_positions(None, Some(1)), Ordering::Greater);
+    assert_eq!(compare_positions(Some(1), None), Ordering::Less);
+    assert_eq!(compare_positions(None, None), Ordering::Equal);
+}
+
+// --- deserialize_position accept/reject matrix tests ---
+
+fn book_json(position_field: &str) -> String {
+    format!(
+        r#"{{
+            "id": "b1",
+            "title": "T",
+            "isbn": "1",
+            "added_on": "2024-01-01T00:00:00Z",
+            "category_id": "c1",
+            "author_id": "a1",
+            "total_pages": 100,
+            "series_id": "s1"
+            {}
+        }}"#,
+        position_field
+    )
+}
+
+#[test]
+fn test_deserialize_position_accepts_integral_shapes() {
+    let cases = [
+        ("", None),
+        (r#", "position_in_series": null"#, None),
+        (r#", "position_in_series": """#, None),
+        (r#", "position_in_series": 3"#, Some(3)),
+        (r#", "position_in_series": "3""#, Some(3)),
+        (r#", "position_in_series": 3.0"#, Some(3)),
+        (r#", "position_in_series": "3.0""#, Some(3)),
+        (r#", "position_in_series": 0"#, Some(0)),
+    ];
+    for (field, expected) in cases {
+        let book: Book = serde_json::from_str(&book_json(field))
+            .unwrap_or_else(|e| panic!("should accept {:?}: {}", field, e));
+        assert_eq!(book.position_in_series, expected, "for {:?}", field);
+    }
+}
+
+#[test]
+fn test_deserialize_position_rejects_non_integral_shapes() {
+    let cases = [
+        r#", "position_in_series": 2.5"#,
+        r#", "position_in_series": "2.5""#,
+        r#", "position_in_series": "Book Three""#,
+        r#", "position_in_series": -1"#,
+        r#", "position_in_series": "-1""#,
+        r#", "position_in_series": true"#,
+    ];
+    for field in cases {
+        let result: Result<Book, _> = serde_json::from_str(&book_json(field));
+        assert!(result.is_err(), "should reject {:?}", field);
+    }
+}
+
+#[test]
+fn test_deserialize_position_error_mentions_value_and_migration() {
+    let err = serde_json::from_str::<Book>(&book_json(r#", "position_in_series": "2.5""#))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("2.5"), "error should name the value: {}", err);
+    assert!(
+        err.contains("bookmon"),
+        "error should say how to fix it: {}",
+        err
+    );
 }

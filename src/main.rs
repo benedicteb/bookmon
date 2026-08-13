@@ -940,7 +940,7 @@ fn interactive_mode(
             let position = bookmon::series::parse_position_input(&position_str);
 
             // Warn if the position is already occupied by another book
-            if let Some(ref pos) = position {
+            if let Some(pos) = position {
                 if let Some(existing_title) =
                     bookmon::series::is_position_occupied(&storage, &series_id, pos)
                 {
@@ -964,10 +964,7 @@ fn interactive_mode(
                 .get(&series_id)
                 .map(|s| s.name.clone())
                 .unwrap_or_default();
-            let pos_label = position
-                .as_deref()
-                .map(|p| format!(" #{}", p))
-                .unwrap_or_default();
+            let pos_label = position.map(|p| format!(" #{}", p)).unwrap_or_default();
 
             if let Some(book) = storage.books.get_mut(selected_book_id) {
                 book.series_id = Some(series_id);

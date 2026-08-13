@@ -296,7 +296,7 @@ pub fn get_book_input(storage: &mut Storage) -> io::Result<(Book, Vec<ReadingEve
 fn select_series(
     storage: &mut Storage,
     book_info: &BookLookupDTO,
-) -> io::Result<(Option<String>, Option<String>)> {
+) -> io::Result<(Option<String>, Option<i32>)> {
     // Build the options list
     let existing_series: Vec<(String, String)> = storage
         .series
@@ -389,7 +389,7 @@ fn select_series(
     let position = crate::series::parse_position_input(&position_str);
 
     // Warn if the position is already occupied by another book
-    if let Some(ref pos) = position {
+    if let Some(pos) = position {
         if let Some(existing_title) = crate::series::is_position_occupied(storage, &series_id, pos)
         {
             println!(
