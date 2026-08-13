@@ -1326,3 +1326,29 @@ fn test_swap_positions_errors_when_a_book_is_not_in_the_series() {
         "unchanged on error"
     );
 }
+
+#[test]
+fn test_insert_repairs_a_series_collapsed_by_migration() {
+    // After migration, the novella and book 3 both sit at 3.
+    let mut storage = Storage::new();
+    let series_id = get_or_create_series(&mut storage, "Mistborn");
+    let b1 = add_book_to_series(&mut storage, &series_id, "Book 1", Some(1));
+    let b2 = add_book_to_series(&mut storage, &series_id, "Book 2", Some(2));
+    let novella = add_book_to_series(&mut storage, &series_id, "Novella", Some(3));
+    let b3 = add_book_to_series(&mut storage, &series_id, "Book 3", Some(3));
+
+    // Insert the novella at 3, pushing everything else at or after 3 up.
+    shift_positions_from(&mut storage, &series_id, 3, &novella);
+
+    assert_eq!(storage.books[&b1].position_in_series, Some(1));
+    assert_eq!(storage.books[&b2].position_in_series, Some(2));
+    assert_eq!(storage.books[&novella].position_in_series, Some(3));
+    assert_eq!(storage.books[&b3].position_in_series, Some(4));
+
+    let ordered: Vec<&str> = storage
+        .get_books_in_series(&series_id)
+        .iter()
+        .map(|b| b.title.as_str())
+        .collect();
+    assert_eq!(ordered, vec!["Book 1", "Book 2", "Novella", "Book 3"]);
+}

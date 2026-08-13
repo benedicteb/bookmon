@@ -263,6 +263,8 @@ enum Commands {
     DeleteSeries,
     /// Rename an existing series
     RenameSeries,
+    /// Edit book positions within a series
+    EditSeries,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -539,6 +541,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Commands::RenameSeries => {
                 rename_series_flow(&mut storage, &settings.storage_file)?;
             }
+            Commands::EditSeries => {
+                edit_series_flow(&mut storage, &settings.storage_file)?;
+            }
             Commands::ChangeStoragePath { .. } => unreachable!(),
         }
     } else {
@@ -785,6 +790,156 @@ fn rename_series_flow(
         Err(e) => eprintln!("Failed to rename series: {}", e),
     }
 
+    Ok(())
+}
+
+/// Interactively moves a book to a different position within its series.
+fn edit_series_flow(
+    storage: &mut Storage,
+    storage_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if storage.series.is_empty() {
+        println!("No series to edit.");
+        return Ok(());
+    }
+
+    let mut series_list: Vec<(&String, &storage::Series)> = storage.series.iter().collect();
+    series_list.sort_by_key(|(_, s)| s.name.to_lowercase());
+    let names: Vec<&str> = series_list.iter().map(|(_, s)| s.name.as_str()).collect();
+
+    let selection = match Select::new("Select series to edit:", names).prompt() {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let idx = series_list
+        .iter()
+        .position(|(_, s)| s.name.as_str() == selection)
+        .expect("selection from prompt must exist in series list");
+    let series_id = series_list[idx].0.clone();
+
+    // Snapshot id + label before mutating, so the borrow on storage ends here.
+    let books: Vec<(String, String)> = storage
+        .get_books_in_series(&series_id)
+        .iter()
+        .map(|b| {
+            let position = b
+                .position_in_series
+                .map(|p| format!("#{}", p))
+                .unwrap_or_else(|| "—".to_string());
+            (b.id.clone(), format!("{} {}", position, b.title))
+        })
+        .collect();
+
+    if books.is_empty() {
+        println!("'{}' has no books.", selection);
+        return Ok(());
+    }
+
+    let labels: Vec<&str> = books.iter().map(|(_, label)| label.as_str()).collect();
+    let picked = match Select::new("Select book to move:", labels).prompt() {
+        Ok(p) => p,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let book_id = books
+        .iter()
+        .find(|(_, label)| label.as_str() == picked)
+        .map(|(id, _)| id.clone())
+        .expect("selection from prompt must exist in book list");
+
+    let position_input = match Text::new("New position (or Enter to leave it unnumbered):").prompt()
+    {
+        Ok(p) => p,
+        Err(_) => {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    };
+
+    let position = match bookmon::series::parse_position_input(&position_input) {
+        Some(position) => position,
+        None => {
+            if !position_input.trim().is_empty() {
+                println!("Position must be a whole number of 0 or more.");
+                return Ok(());
+            }
+            if let Some(book) = storage.books.get_mut(&book_id) {
+                book.position_in_series = None;
+            }
+            storage::write_storage(storage_file, storage)?;
+            println!("Removed the position from '{}'.", picked);
+            return Ok(());
+        }
+    };
+
+    // Find an occupant other than the book being moved.
+    let occupant = storage
+        .books
+        .values()
+        .find(|b| {
+            b.series_id.as_deref() == Some(series_id.as_str())
+                && b.position_in_series == Some(position)
+                && b.id != book_id
+        })
+        .map(|b| (b.id.clone(), b.title.clone()));
+
+    if let Some((occupant_id, occupant_title)) = occupant {
+        let options = vec![
+            "Insert here (move later books up one)",
+            "Swap the two books",
+            "Cancel",
+        ];
+        let choice = match Select::new(
+            &format!(
+                "#{} is taken by '{}'. What should happen?",
+                position, occupant_title
+            ),
+            options,
+        )
+        .prompt()
+        {
+            Ok(c) => c,
+            Err(_) => {
+                println!("Operation cancelled.");
+                return Ok(());
+            }
+        };
+
+        match choice {
+            "Insert here (move later books up one)" => {
+                bookmon::series::shift_positions_from(storage, &series_id, position, &book_id);
+                if let Some(book) = storage.books.get_mut(&book_id) {
+                    book.position_in_series = Some(position);
+                }
+            }
+            "Swap the two books" => {
+                // swap_positions already exchanges the two — do NOT pre-assign
+                // `position` to the moved book first, or both books end up on it.
+                if let Err(e) =
+                    bookmon::series::swap_positions(storage, &series_id, &book_id, &occupant_id)
+                {
+                    eprintln!("Failed to swap: {}", e);
+                    return Ok(());
+                }
+            }
+            _ => {
+                println!("Operation cancelled.");
+                return Ok(());
+            }
+        }
+    } else if let Some(book) = storage.books.get_mut(&book_id) {
+        book.position_in_series = Some(position);
+    }
+
+    storage::write_storage(storage_file, storage)?;
+    println!("Moved '{}' to #{}.", picked, position);
     Ok(())
 }
 
