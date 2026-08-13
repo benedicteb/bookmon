@@ -821,8 +821,10 @@ fn edit_series_flow(
         .expect("selection from prompt must exist in series list");
     let series_id = series_list[idx].0.clone();
 
-    // Snapshot id + label before mutating, so the borrow on storage ends here.
-    let books: Vec<(String, String)> = storage
+    // Snapshot id + title + label before mutating, so the borrow on storage ends here.
+    // The label carries the position prefix for the picker; the plain title is what
+    // the confirmation messages report back to the user.
+    let books: Vec<(String, String, String)> = storage
         .get_books_in_series(&series_id)
         .iter()
         .map(|b| {
@@ -830,7 +832,11 @@ fn edit_series_flow(
                 .position_in_series
                 .map(|p| format!("#{}", p))
                 .unwrap_or_else(|| "—".to_string());
-            (b.id.clone(), format!("{} {}", position, b.title))
+            (
+                b.id.clone(),
+                b.title.clone(),
+                format!("{} {}", position, b.title),
+            )
         })
         .collect();
 
@@ -839,7 +845,7 @@ fn edit_series_flow(
         return Ok(());
     }
 
-    let labels: Vec<&str> = books.iter().map(|(_, label)| label.as_str()).collect();
+    let labels: Vec<&str> = books.iter().map(|(_, _, label)| label.as_str()).collect();
     let picked = match Select::new("Select book to move:", labels).prompt() {
         Ok(p) => p,
         Err(_) => {
@@ -848,10 +854,10 @@ fn edit_series_flow(
         }
     };
 
-    let book_id = books
+    let (book_id, book_title) = books
         .iter()
-        .find(|(_, label)| label.as_str() == picked)
-        .map(|(id, _)| id.clone())
+        .find(|(_, _, label)| label.as_str() == picked)
+        .map(|(id, title, _)| (id.clone(), title.clone()))
         .expect("selection from prompt must exist in book list");
 
     let position_input = match Text::new("New position (or Enter to leave it unnumbered):").prompt()
@@ -874,7 +880,7 @@ fn edit_series_flow(
                 book.position_in_series = None;
             }
             storage::write_storage(storage_file, storage)?;
-            println!("Removed the position from '{}'.", picked);
+            println!("Removed the position from '{}'.", book_title);
             return Ok(());
         }
     };
@@ -939,7 +945,7 @@ fn edit_series_flow(
     }
 
     storage::write_storage(storage_file, storage)?;
-    println!("Moved '{}' to #{}.", picked, position);
+    println!("Moved '{}' to #{}.", book_title, position);
     Ok(())
 }
 
