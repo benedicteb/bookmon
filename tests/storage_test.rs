@@ -1,8 +1,8 @@
 use bookmon::storage::{
-    compare_positions, handle_missing_fields, load_storage, migrate_positions,
-    parse_integral_position, scan_invalid_positions, sort_json_value, taken_positions,
-    write_storage, Author, Book, BookRepairInput, Category, Goal, PositionChoice, Reading,
-    ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
+    compare_positions, handle_missing_fields, load_and_repair_storage, load_storage,
+    migrate_positions, parse_integral_position, scan_invalid_positions, sort_json_value,
+    taken_positions, write_storage, Author, Book, BookRepairInput, Category, Goal, PositionChoice,
+    Reading, ReadingEvent, ReadingMetadata, RepairPrompter, Storage,
 };
 use chrono::{Duration, TimeZone, Utc};
 use serde_json::value::Value;
@@ -3308,6 +3308,18 @@ fn test_migrate_positions_clear_drops_the_position() {
 
     migrate_positions(&path, &prompter).unwrap();
 
+    // Assert on the raw JSON too: the key must be removed, not nulled, or a
+    // deserialized `None` here would pass just as well with either shape.
+    let raw: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(
+        !raw["books"]["novella"]
+            .as_object()
+            .unwrap()
+            .contains_key("position_in_series"),
+        "key must be removed, not written as null"
+    );
+
     let storage = load_storage(&path).unwrap();
     assert_eq!(storage.books["novella"].position_in_series, None);
     assert_eq!(
@@ -3390,4 +3402,18 @@ fn test_migrate_positions_second_run_prompts_nothing() {
         !migrate_positions(&path, &second).unwrap(),
         "already migrated"
     );
+}
+
+#[test]
+fn test_load_and_repair_storage_migrates_before_loading() {
+    // A file holding "2.5" cannot be deserialized at all — load_and_repair_storage
+    // must run the migration before load_storage, or this never gets the chance
+    // to be fixed. This test would fail if that ordering were ever reversed.
+    let value = storage_json_with_positions(&[("novella", r#""s1""#, r#""2.5""#)]);
+    let (_dir, path) = write_raw_storage(&value);
+    let prompter = ScriptedPositionPrompter::new(vec![PositionChoice::Set(3)]);
+
+    let storage = load_and_repair_storage(&path, &prompter).unwrap();
+
+    assert_eq!(storage.books["novella"].position_in_series, Some(3));
 }

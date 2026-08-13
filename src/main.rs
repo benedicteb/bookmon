@@ -107,17 +107,60 @@ impl RepairPrompter for InquirePrompter {
             println!("Positions already used in this series: {}", list.join(", "));
         }
 
-        let position = match suggested {
-            Some(suggested) => Text::new("New position:")
-                .with_default(&suggested.to_string())
+        // An unparseable non-empty answer is never silently turned into Clear: the
+        // user gets told why and asked again, up to a small bound so a
+        // non-interactive stdin can't spin forever. Only an explicitly empty
+        // answer clears the position — both branches below say so, honestly:
+        // a suggestion is offered as a placeholder, not auto-submitted on Enter.
+        const MAX_ATTEMPTS: u32 = 3;
+        let suggested_text = suggested.map(|s| s.to_string());
+        let mut position = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            let message = match suggested {
+                Some(suggested) => {
+                    format!(
+                        "New position (suggested {}; Enter to leave it unnumbered):",
+                        suggested
+                    )
+                }
+                None => "New position (Enter to leave it unnumbered):".to_string(),
+            };
+            let mut prompt = Text::new(&message);
+            if let Some(ref suggested_text) = suggested_text {
+                prompt = prompt.with_placeholder(suggested_text);
+            }
+            let input = prompt
                 .prompt()
-                .map_err(|e| format!("Failed to get position: {}", e))?,
-            None => Text::new("New position (or Enter to leave it unnumbered):")
-                .prompt()
-                .map_err(|e| format!("Failed to get position: {}", e))?,
-        };
+                .map_err(|e| format!("Failed to get position: {}", e))?;
 
-        let position = match bookmon::series::parse_position_input(&position) {
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                return Ok(PositionChoice::Clear);
+            }
+
+            match bookmon::series::parse_position_input(trimmed) {
+                Some(parsed) => {
+                    position = Some(parsed);
+                    break;
+                }
+                None if attempt + 1 < MAX_ATTEMPTS => {
+                    println!(
+                        "\"{}\" isn't a whole number — positions must be 0 or a positive \
+                         integer. Try again.",
+                        trimmed
+                    );
+                }
+                None => {
+                    println!(
+                        "\"{}\" still isn't a whole number after {} attempts — leaving it \
+                         unnumbered.",
+                        trimmed, MAX_ATTEMPTS
+                    );
+                }
+            }
+        }
+
+        let position = match position {
             Some(position) => position,
             None => return Ok(PositionChoice::Clear),
         };
