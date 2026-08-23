@@ -246,8 +246,9 @@ pub fn taken_positions(value: &serde_json::Value, series_id: &str) -> Vec<i32> {
 
 /// The type of reading event recorded for a book.
 ///
-/// The most recent event determines the book's current status.
-/// `Update` and `Bought` are non-status events that don't affect started/finished determination.
+/// The most recent status-bearing event determines the book's current status.
+/// Progress updates (`Update`) don't participate in status determination — they record
+/// how far the reader got but don't change whether the book is started, finished, or owned.
 /// `Abandoned` ends a read-through without finishing: the book is no longer
 /// being read, but a later `Started` begins a fresh attempt.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
@@ -259,6 +260,25 @@ pub enum ReadingEvent {
     WantToRead,
     UnmarkedAsWantToRead,
     Abandoned,
+}
+
+impl ReadingEvent {
+    /// Whether this event participates in determining a book's current status.
+    ///
+    /// Progress updates say how far the reader got, not whether the book is
+    /// started or finished, so they must not displace the last real status
+    /// event when the most recent event is looked up.
+    pub fn affects_status(self) -> bool {
+        match self {
+            ReadingEvent::Started
+            | ReadingEvent::Finished
+            | ReadingEvent::WantToRead
+            | ReadingEvent::UnmarkedAsWantToRead
+            | ReadingEvent::Bought
+            | ReadingEvent::Abandoned => true,
+            ReadingEvent::Update => false,
+        }
+    }
 }
 
 /// Optional metadata attached to a reading event.
@@ -646,11 +666,15 @@ impl Storage {
             .collect()
     }
 
-    /// Returns the most recent reading event for a given book, or None if no readings exist
+    /// The most recent status-bearing event for a book.
+    ///
+    /// Non-status events (progress updates, review activity) are skipped, so
+    /// they never displace the book's actual status.
     pub fn most_recent_reading_event(&self, book_id: &str) -> Option<ReadingEvent> {
         self.readings
             .values()
             .filter(|r| r.book_id == book_id)
+            .filter(|r| r.event.affects_status())
             .max_by_key(|r| r.created_on)
             .map(|r| r.event)
     }
@@ -662,7 +686,10 @@ impl Storage {
             .collect()
     }
 
-    /// Helper method to get books with a specific event as their most recent reading
+    /// Returns books whose most recent status-bearing event matches the target.
+    ///
+    /// Only status-bearing events (see [`ReadingEvent::affects_status`]) can be matched.
+    /// Passing a non-status event like `Update` always returns an empty vector.
     pub fn get_books_by_most_recent_event(&self, target_event: ReadingEvent) -> Vec<&Book> {
         self.books
             .values()

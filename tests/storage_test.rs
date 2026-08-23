@@ -1344,24 +1344,26 @@ fn test_get_books_by_most_recent_event() {
         "Book 2 should have Bought as most recent event"
     );
 
-    // Test getting books with Update as most recent event
+    // Test getting books with Update as most recent event (should be none)
+    // Update is not a status-bearing event, so it can never be a book's most recent status
     let update_books = storage.get_books_by_most_recent_event(ReadingEvent::Update);
     assert_eq!(
         update_books.len(),
-        1,
-        "Should have 1 book with Update as most recent event"
-    );
-    assert_eq!(
-        update_books[0].id, book3_id,
-        "Book 3 should have Update as most recent event"
+        0,
+        "Non-status events like Update can never be a book's most recent status"
     );
 
-    // Test getting books with Started as most recent event (should be none)
+    // Test getting books with Started as most recent event
+    // Book 3 has WantToRead -> Started -> Update; the most recent status-bearing event is Started
     let started_books = storage.get_books_by_most_recent_event(ReadingEvent::Started);
     assert_eq!(
         started_books.len(),
-        0,
-        "Should have 0 books with Started as most recent event"
+        1,
+        "Should have 1 book with Started as most recent event"
+    );
+    assert_eq!(
+        started_books[0].id, book3_id,
+        "Book 3 should have Started as most recent status-bearing event (Update is skipped)"
     );
 
     // Test getting books with WantToRead as most recent event (should be none)
@@ -3506,4 +3508,65 @@ fn test_load_and_repair_storage_migrates_before_loading() {
     let storage = load_and_repair_storage(&path, &prompter).unwrap();
 
     assert_eq!(storage.books["novella"].position_in_series, Some(3));
+}
+
+#[test]
+fn test_progress_update_after_finished_keeps_book_finished() {
+    let mut storage = Storage::new();
+    let book_id = Uuid::new_v4().to_string();
+
+    let mut started = Reading::new(book_id.clone(), ReadingEvent::Started);
+    started.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+    storage.add_reading(started);
+
+    let mut finished = Reading::new(book_id.clone(), ReadingEvent::Finished);
+    finished.created_on = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
+    storage.add_reading(finished);
+
+    let mut update = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 120);
+    update.created_on = Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap();
+    storage.add_reading(update);
+
+    assert!(
+        storage.is_book_finished(&book_id),
+        "a progress update must not un-finish a book"
+    );
+}
+
+#[test]
+fn test_bought_remains_status_bearing() {
+    let mut storage = Storage::new();
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+    let author = Author::new("Someone".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let book = Book::new(
+        "Bought Book".to_string(),
+        "111".to_string(),
+        category_id,
+        author_id,
+        100,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    let bought = Reading::new(book_id.clone(), ReadingEvent::Bought);
+    storage.add_reading(bought);
+
+    let bought_books = storage.get_bought_books();
+    assert_eq!(bought_books.len(), 1);
+    assert_eq!(bought_books[0].id, book_id);
+}
+
+#[test]
+fn test_affects_status_classification() {
+    assert!(ReadingEvent::Started.affects_status());
+    assert!(ReadingEvent::Finished.affects_status());
+    assert!(ReadingEvent::WantToRead.affects_status());
+    assert!(ReadingEvent::UnmarkedAsWantToRead.affects_status());
+    assert!(ReadingEvent::Bought.affects_status());
+    assert!(!ReadingEvent::Update.affects_status());
 }
