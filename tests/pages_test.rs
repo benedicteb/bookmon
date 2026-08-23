@@ -167,6 +167,36 @@ fn test_non_progress_events_are_ignored() {
 }
 
 #[test]
+fn test_abandoning_keeps_logged_pages_but_credits_no_more() {
+    let readings = vec![
+        event(ReadingEvent::Started, None, at(2026, 1, 3)),
+        event(ReadingEvent::Update, Some(120), at(2026, 1, 10)),
+        event(ReadingEvent::Abandoned, None, at(2026, 1, 12)),
+    ];
+
+    assert_eq!(
+        credits(&readings, 400).get(&2026),
+        Some(&120),
+        "Abandoned must not credit the unread remainder the way Finished does"
+    );
+}
+
+#[test]
+fn test_second_attempt_after_abandoning_earns_its_pages_again() {
+    let readings = vec![
+        event(ReadingEvent::Started, None, at(2025, 11, 1)),
+        event(ReadingEvent::Update, Some(100), at(2025, 11, 10)),
+        event(ReadingEvent::Abandoned, None, at(2025, 11, 12)),
+        event(ReadingEvent::Started, None, at(2026, 2, 1)),
+        event(ReadingEvent::Update, Some(60), at(2026, 2, 10)),
+    ];
+
+    let c = credits(&readings, 400);
+    assert_eq!(c.get(&2025), Some(&100));
+    assert_eq!(c.get(&2026), Some(&60));
+}
+
+#[test]
 fn test_goal_pages_line_shows_progress_and_percentage() {
     assert_eq!(format_goal_pages_line(4210, 9000), "Pages: 4210/9000 (47%)");
 }

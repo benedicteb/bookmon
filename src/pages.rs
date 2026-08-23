@@ -42,10 +42,13 @@ pub fn pages_credited_by_year(readings: &[&Reading], total_pages: i32) -> HashMa
                 }
                 last_page = 0;
             }
+            // Abandoning keeps the progress already logged but, unlike
+            // Finished, credits nothing for the unread remainder. The next
+            // Started resets the position, so no reset is needed here.
+            ReadingEvent::Abandoned => {}
             ReadingEvent::Bought
             | ReadingEvent::WantToRead
-            | ReadingEvent::UnmarkedAsWantToRead
-            | ReadingEvent::Abandoned => {}
+            | ReadingEvent::UnmarkedAsWantToRead => {}
         }
     }
 
