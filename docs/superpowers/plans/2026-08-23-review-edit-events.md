@@ -47,15 +47,15 @@ fn test_progress_update_after_finished_keeps_book_finished() {
 
     let mut started = Reading::new(book_id.clone(), ReadingEvent::Started);
     started.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
-    storage.readings.insert(started.id.clone(), started);
+    storage.add_reading(started);
 
     let mut finished = Reading::new(book_id.clone(), ReadingEvent::Finished);
     finished.created_on = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
-    storage.readings.insert(finished.id.clone(), finished);
+    storage.add_reading(finished);
 
     let mut update = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 120);
     update.created_on = Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap();
-    storage.readings.insert(update.id.clone(), update);
+    storage.add_reading(update);
 
     assert!(
         storage.is_book_finished(&book_id),
@@ -84,7 +84,7 @@ fn test_bought_remains_status_bearing() {
     storage.add_book(book);
 
     let bought = Reading::new(book_id.clone(), ReadingEvent::Bought);
-    storage.readings.insert(bought.id.clone(), bought);
+    storage.add_reading(bought);
 
     let bought_books = storage.get_bought_books();
     assert_eq!(bought_books.len(), 1);
@@ -155,7 +155,9 @@ Replace the body at `src/storage.rs:647`:
 - [ ] **Step 5: Run the full suite**
 
 Run: `cargo test`
-Expected: PASS. If a pre-existing test asserted the buggy behaviour (a book being un-finished by an `Update`), that test encoded the bug — update it to the corrected expectation and note the change in the commit body.
+Expected: PASS.
+
+The controller checked the three existing tests that touch this logic — `test_most_recent_reading_event_returns_latest_event`, `test_most_recent_reading_event_skips_non_status_events_for_started_check`, and `test_get_finished_books` — and none of them encodes the old behaviour. So nothing should need changing. If some test does fail, do **not** rewrite its assertion to match the new behaviour: report it as a concern and stop, because it means the bug analysis is incomplete.
 
 - [ ] **Step 6: Commit**
 
@@ -198,7 +200,7 @@ fn test_review_event_does_not_change_book_status() {
 
     let mut finished = Reading::new(book_id.clone(), ReadingEvent::Finished);
     finished.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
-    storage.readings.insert(finished.id.clone(), finished);
+    storage.add_reading(finished);
 
     let mut review = Reading::with_review(
         book_id.clone(),
@@ -206,7 +208,7 @@ fn test_review_event_does_not_change_book_status() {
         "Excellent.".to_string(),
     );
     review.created_on = Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap();
-    storage.readings.insert(review.id.clone(), review);
+    storage.add_reading(review);
 
     assert!(
         storage.is_book_finished(&book_id),
@@ -673,14 +675,17 @@ pub fn get_review_text_from_editor(
     current: Option<&str>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     let verb = if current.is_some() { "Edit" } else { "Write" };
+    // Bound to a let, not inlined: an array literal must have one element
+    // type, and `&format!(..)` is a `&String` beside the `&str` literals.
+    let heading = format!(
+        "{} your review of \"{}\" by {} above.",
+        verb, book_title, author_name
+    );
     let template = format!(
         "{}\n\n{}",
         current.unwrap_or(""),
         crate::editor::instruction_block(&[
-            &format!(
-                "{} your review of \"{}\" by {} above.",
-                verb, book_title, author_name
-            ),
+            heading.as_str(),
             "Everything below this line is ignored.",
             "An empty review aborts. Unchanged text records no edit.",
         ])
@@ -693,13 +698,16 @@ In `src/reading.rs`, replace `progress_note_template`:
 
 ```rust
 pub fn progress_note_template(book_title: &str, author_name: &str) -> String {
+    // Bound to a let for the same reason as the review template: one element
+    // type per array literal.
+    let heading = format!(
+        "Write a note about your progress in \"{}\" by {} above.",
+        book_title, author_name
+    );
     format!(
         "\n\n{}",
         crate::editor::instruction_block(&[
-            &format!(
-                "Write a note about your progress in \"{}\" by {} above.",
-                book_title, author_name
-            ),
+            heading.as_str(),
             "Everything below this line is ignored.",
             "An empty note aborts the update.",
         ])
