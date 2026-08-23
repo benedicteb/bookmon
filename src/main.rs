@@ -223,7 +223,7 @@ enum Commands {
         #[arg(short, long)]
         series: Option<String>,
     },
-    /// Show books that were abandoned before being finished
+    /// Show books you gave up on before finishing
     PrintAbandoned {
         /// Filter by series name (case-insensitive substring match)
         #[arg(short, long)]
@@ -439,12 +439,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             bookmon::series::filter_books_by_series(&storage, &books, filter);
                         let empty_msg =
                             bookmon::series::format_series_filter_empty_message(&storage, filter);
-                        match reading::print_book_list_table(&storage, filtered, &empty_msg) {
+                        match reading::show_abandoned_books_list(&storage, filtered, &empty_msg) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show abandoned books: {}", e),
                         }
                     } else {
-                        match reading::print_book_list_table(
+                        match reading::show_abandoned_books_list(
                             &storage,
                             books,
                             "No abandoned books found.",

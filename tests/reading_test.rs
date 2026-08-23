@@ -745,3 +745,104 @@ fn test_untouched_progress_note_template_strips_to_none() {
     let template = progress_note_template("Some Book", "Some Author");
     assert_eq!(strip_editor_text(&template), None);
 }
+
+/// One book with Started -> Update(page) -> Abandoned, for abandoned-table tests.
+fn storage_with_abandoned_book(total_pages: i32, page: Option<i32>) -> Storage {
+    use chrono::TimeZone;
+
+    let mut storage = Storage::new();
+
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.add_category(category);
+
+    let author = Author::new("Ursula K. Le Guin".to_string());
+    let author_id = author.id.clone();
+    storage.add_author(author);
+
+    let book = Book::new(
+        "The Dispossessed".to_string(),
+        "123".to_string(),
+        category_id,
+        author_id,
+        total_pages,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+
+    let day = |d: u32| Utc.with_ymd_and_hms(2026, 2, d, 12, 0, 0).unwrap();
+
+    let mut started = Reading::new(book_id.clone(), ReadingEvent::Started);
+    started.created_on = day(1);
+    storage.add_reading(started);
+
+    if let Some(page) = page {
+        let mut update = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, page);
+        update.created_on = day(5);
+        storage.add_reading(update);
+    }
+
+    let mut abandoned = Reading::new(book_id, ReadingEvent::Abandoned);
+    abandoned.created_on = day(10);
+    storage.add_reading(abandoned);
+
+    storage
+}
+
+#[test]
+fn test_build_abandoned_books_table_is_empty_without_books() {
+    use bookmon::reading::build_abandoned_books_table;
+
+    let storage = Storage::new();
+    let table = build_abandoned_books_table(&storage, vec![]).unwrap();
+    assert!(table.is_empty());
+}
+
+#[test]
+fn test_build_abandoned_books_table_shows_abandon_date_and_progress() {
+    use bookmon::reading::build_abandoned_books_table;
+    use bookmon::table::TableRow;
+
+    let storage = storage_with_abandoned_book(400, Some(100));
+    let table = build_abandoned_books_table(&storage, storage.get_abandoned_books()).unwrap();
+
+    assert_eq!(table.len(), 2, "header plus one data row");
+    match &table[0] {
+        TableRow::Header(header) => assert_eq!(
+            header,
+            &[
+                "Title".to_string(),
+                "Author".to_string(),
+                "Abandoned on".to_string(),
+                "Progress".to_string()
+            ]
+        ),
+        other => panic!("expected header, got {:?}", other),
+    }
+    match &table[1] {
+        TableRow::Data(row) => assert_eq!(
+            row,
+            &[
+                "The Dispossessed".to_string(),
+                "Ursula K. Le Guin".to_string(),
+                "2026-02-10".to_string(),
+                "25.0%".to_string()
+            ]
+        ),
+        other => panic!("expected data row, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_build_abandoned_books_table_leaves_progress_blank_without_updates() {
+    use bookmon::reading::build_abandoned_books_table;
+    use bookmon::table::TableRow;
+
+    let storage = storage_with_abandoned_book(400, None);
+    let table = build_abandoned_books_table(&storage, storage.get_abandoned_books()).unwrap();
+
+    match &table[1] {
+        TableRow::Data(row) => assert_eq!(row[3], ""),
+        other => panic!("expected data row, got {:?}", other),
+    }
+}
