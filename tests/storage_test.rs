@@ -1462,6 +1462,96 @@ fn test_remarked_as_want_to_read() {
     assert_eq!(want_to_read_books[0].title, "Test Book");
 }
 
+/// Builds a storage holding one book and returns its id, for reading-status tests.
+fn storage_with_one_book() -> (Storage, String) {
+    let mut storage = Storage::new();
+    let category = Category::new("Fiction".to_string(), None);
+    let category_id = category.id.clone();
+    storage.categories.insert(category.id.clone(), category);
+    let author = Author::new("Test Author".to_string());
+    let author_id = author.id.clone();
+    storage.authors.insert(author.id.clone(), author);
+    let book = Book::new(
+        "Test Book".to_string(),
+        "1234567890".to_string(),
+        category_id,
+        author_id,
+        300,
+    );
+    let book_id = book.id.clone();
+    storage.add_book(book);
+    (storage, book_id)
+}
+
+/// Adds a reading event `days` days after the epoch, so ordering is explicit.
+fn add_event_on_day(storage: &mut Storage, book_id: &str, event: ReadingEvent, days: i64) {
+    let mut reading = Reading::new(book_id.to_string(), event);
+    reading.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap() + Duration::days(days);
+    storage.add_reading(reading);
+}
+
+#[test]
+fn test_abandoned_book_is_no_longer_started() {
+    let (mut storage, book_id) = storage_with_one_book();
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 0);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Abandoned, 1);
+
+    assert!(!storage.is_book_started(&book_id));
+    assert!(storage.get_started_books().is_empty());
+}
+
+#[test]
+fn test_abandoned_book_is_not_finished() {
+    let (mut storage, book_id) = storage_with_one_book();
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 0);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Abandoned, 1);
+
+    assert!(!storage.is_book_finished(&book_id));
+    assert!(storage.get_finished_books().is_empty());
+}
+
+#[test]
+fn test_abandoned_book_is_not_in_backlog() {
+    let (mut storage, book_id) = storage_with_one_book();
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 0);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Abandoned, 1);
+
+    assert!(storage.get_unstarted_books().is_empty());
+}
+
+#[test]
+fn test_get_abandoned_books_lists_book_whose_newest_event_is_abandoned() {
+    let (mut storage, book_id) = storage_with_one_book();
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 0);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Abandoned, 1);
+
+    let abandoned = storage.get_abandoned_books();
+    assert_eq!(abandoned.len(), 1);
+    assert_eq!(abandoned[0].id, book_id);
+}
+
+#[test]
+fn test_restarting_an_abandoned_book_makes_it_started_again() {
+    let (mut storage, book_id) = storage_with_one_book();
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 0);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Abandoned, 1);
+    add_event_on_day(&mut storage, &book_id, ReadingEvent::Started, 2);
+
+    assert!(storage.is_book_started(&book_id));
+    assert!(storage.get_abandoned_books().is_empty());
+}
+
+#[test]
+fn test_abandoned_event_round_trips_through_json() {
+    let reading = Reading::new("book-id".to_string(), ReadingEvent::Abandoned);
+    let json = serde_json::to_string(&reading).expect("Failed to serialize");
+    assert!(json.contains("\"event\":\"Abandoned\""), "got: {}", json);
+    assert!(!json.contains("metadata"), "got: {}", json);
+
+    let reloaded: Reading = serde_json::from_str(&json).expect("must deserialize");
+    assert_eq!(reloaded.event, ReadingEvent::Abandoned);
+}
+
 #[test]
 fn test_get_read_books_by_time_period() {
     let mut storage = Storage::new();

@@ -44,7 +44,8 @@ pub fn pages_credited_by_year(readings: &[&Reading], total_pages: i32) -> HashMa
             }
             ReadingEvent::Bought
             | ReadingEvent::WantToRead
-            | ReadingEvent::UnmarkedAsWantToRead => {}
+            | ReadingEvent::UnmarkedAsWantToRead
+            | ReadingEvent::Abandoned => {}
         }
     }
 
