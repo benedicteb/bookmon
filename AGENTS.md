@@ -38,7 +38,7 @@ src/
 ### Key Concepts
 
 - **Storage:** All data persists in a single JSON file. The `Storage` struct holds `HashMap`s of `Book`, `Author`, `Category`, `Reading`, `Series`, and `Review`.
-- **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`. The most recent event determines current status.
+- **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`, `Abandoned`. The most recent event determines current status.
 - **Providers:** ISBN lookup uses a `BookProvider` trait with multiple implementations (OpenLibrary, Bibsok). `ProviderManager` tries each provider in order.
 - **CLI:** Built with `clap` (derive). Supports both command mode and interactive mode (`-i` flag) using `inquire` for prompts.
 

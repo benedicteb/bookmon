@@ -116,9 +116,10 @@ Available commands:
 - `print-finished` - Show books that have been finished
 - `print-backlog` - Show books that have not been started yet
 - `print-want-to-read` - Show books in the want-to-read list
+- `print-abandoned` - Show books you gave up on before finishing
 - `print-statistics` - Show reading statistics by year, including books finished and pages read (with progress toward that year's goal, if one is set)
 
-The print commands `print-finished`, `print-backlog`, and `print-want-to-read` support filtering by series:
+The print commands `print-finished`, `print-backlog`, `print-want-to-read`, and `print-abandoned` support filtering by series:
 
 ```bash
 bookmon print-finished --series "Lord of the Rings"
@@ -201,6 +202,7 @@ bookmon -i                    # Currently reading + want to read
 bookmon print-finished -i
 bookmon print-backlog -i
 bookmon print-want-to-read -i
+bookmon print-abandoned -i
 bookmon print-reviews -i
 ```
 
@@ -217,6 +219,7 @@ In interactive mode, you can:
    - Start reading a book
    - Update reading progress (with page number)
    - Mark a book as finished
+   - Mark a book as abandoned (stop reading without finishing; it can be started again later)
    - Mark a book as want to read / unmark
    - Mark a book as bought
    - Assign a book to a series (or change/remove series assignment)
