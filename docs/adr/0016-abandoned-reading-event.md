@@ -12,7 +12,7 @@ Once a book was marked as started, the only way out of "currently reading" was t
 
 1. **A new `ReadingEvent::Abandoned` variant.** It ends a read-through without finishing. `is_book_started` treats it like `Finished` (returns false); `is_book_finished` is unaffected, so an abandoned book is neither reading nor finished. A later `Started` begins a fresh attempt — event sourcing (ADR 0002) gives re-reads for free.
 2. **Abandoned is its own status, not backlog.** `print-backlog` lists books with no `Started`/`Finished` event; an abandoned book has been started, so it stays out. This is deliberate: backlog implies intent to read, and abandoning is an explicit signal the other way.
-3. **A `print-abandoned` command** (with `--series` and `-i` like the other list commands) and `Storage::get_abandoned_books`. Without it, abandoned books would be unreachable interactively: the default interactive list shows only currently-reading and want-to-read books, and the backlog excludes them. `print-abandoned -i` is also how a reader restarts one.
+3. **A `print-abandoned` command** (with `--series` and `-i` like the other list commands) and `Storage::get_abandoned_books`. Without it, abandoned books would be unreachable interactively: the default interactive list shows only currently-reading and want-to-read books, and the backlog excludes them. `print-abandoned -i` is also how a reader restarts one. The table has its own columns — Title, Author, Abandoned on, Progress — rather than reusing the backlog table, whose Bought/Want to read columns are always blank for a book that has been started.
 4. **Interactive entry only.** A "Mark as abandoned" action sits directly after "Mark as finished" in the book menu, offered only while the book is being read. No confirmation prompt — consistent with "Mark as finished", and nothing is lost since the event is appended, never overwriting history.
 5. **Pages ledger.** In `pages_credited_by_year`, `Abandoned` keeps the pages already logged through `Update` events but, unlike `Finished`, credits nothing for the unread remainder.
 6. **No metadata.** The event carries no "page stopped at" or reason. Progress is already in `Update` events; a reason would be presentational. Can be added later if asked for.
@@ -28,7 +28,8 @@ Would silently resurface a book the reader deliberately walked away from.
 ## Subagent Input
 
 - **@book-domain-expert:** Recommended `Abandoned` over "DNF"-style names; advised a distinct status excluded from both currently-reading and backlog, and no metadata under YAGNI.
-- **@ux-designer:** Recommended the label "Mark as abandoned" to match the existing "Mark as X" pattern, placed right after "Mark as finished", with no confirmation prompt. Also suggested a specific success message ("Book marked as abandoned."); the generic "Reading event added successfully!" was kept for consistency with every other event — a specific-message pass for all events would be a separate change.
+- **@ux-designer:** Recommended the label "Mark as abandoned" to match the existing "Mark as X" pattern, placed right after "Mark as finished", with no confirmation prompt. Also suggested a specific success message ("Book marked as abandoned."); the generic "Reading event added successfully!" was kept for consistency with every other event — a specific-message pass for all events would be a separate change. On reviewing the output, flagged that the borrowed backlog table's Bought/Want to read columns were misleading for abandoned books, which led to the dedicated table in decision 3.
+- **@reviewer:** Passed the diff with no findings; confirmed every other `ReadingEvent` match site was checked.
 
 ## Consequences
 
