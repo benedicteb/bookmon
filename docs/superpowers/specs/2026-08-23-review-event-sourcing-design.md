@@ -106,8 +106,12 @@ actions menu (`src/main.rs:1050`).
 So the variants get classified explicitly:
 
 - **Status-bearing:** `Started`, `Finished`, `WantToRead`,
-  `UnmarkedAsWantToRead`, `Bought`
+  `UnmarkedAsWantToRead`, `Bought`, `Abandoned`
 - **Non-status:** `Update`, `CreateReview`, `EditReview`
+
+`Abandoned` (ADR 0016) is status-bearing for the same reason `Bought` is:
+`get_abandoned_books` is built on `get_books_by_most_recent_event(Abandoned)`
+and would return nothing otherwise.
 
 ```rust
 impl ReadingEvent {
@@ -122,9 +126,9 @@ impl ReadingEvent {
 existing skip-list (`src/storage.rs:726`) gains the two review variants; its
 match is exhaustive, so the compiler enforces the classification.
 
-`Bought` must stay status-bearing: `get_bought_books` (`src/storage.rs:675`) is
-built on `get_books_by_most_recent_event(Bought)` and would return nothing
-otherwise.
+`Bought` and `Abandoned` must stay status-bearing: `get_bought_books` and
+`get_abandoned_books` are built on `get_books_by_most_recent_event` and would
+return nothing otherwise.
 
 **This fixes a pre-existing bug.** Today, `Started -> Finished -> Update` leaves
 `is_book_finished` returning `false`, because `is_book_started` skips `Update`

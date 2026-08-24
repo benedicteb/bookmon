@@ -124,7 +124,8 @@ impl ReadingEvent {
             | ReadingEvent::Finished
             | ReadingEvent::WantToRead
             | ReadingEvent::UnmarkedAsWantToRead
-            | ReadingEvent::Bought => true,
+            | ReadingEvent::Bought
+            | ReadingEvent::Abandoned => true,
             ReadingEvent::Update => false,
         }
     }
@@ -289,7 +290,7 @@ pub struct ReadingMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     /// The complete review text as of this event, for `CreateReview` and
-    /// `EditReview`. A full snapshot, not a patch — see ADR 0016.
+    /// `EditReview`. A full snapshot, not a patch — see ADR 0017.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_text: Option<String>,
 }
@@ -332,9 +333,13 @@ Inside `impl Reading`, after `with_progress_note`:
 
 Run: `cargo build`
 
-`is_book_started` (`src/storage.rs:722`) will fail to compile. Add the two variants to its skip list:
+Two exhaustive matches will fail to compile.
+
+`is_book_started` in `src/storage.rs` — add the two variants to its skip list (note `Abandoned` already shares the `Finished` arm; leave that alone):
 
 ```rust
+                ReadingEvent::Started => return true,
+                ReadingEvent::Finished | ReadingEvent::Abandoned => return false,
                 ReadingEvent::Update
                 | ReadingEvent::Bought
                 | ReadingEvent::WantToRead
@@ -343,7 +348,17 @@ Run: `cargo build`
                 | ReadingEvent::EditReview => continue,
 ```
 
-Fix any other flagged match the same way: review events are never a reading status. Keep repeating `cargo build` until it is clean.
+`pages_credited_by_year` in `src/pages.rs` — review events credit no pages, so they join the do-nothing arm:
+
+```rust
+            ReadingEvent::Bought
+            | ReadingEvent::WantToRead
+            | ReadingEvent::UnmarkedAsWantToRead
+            | ReadingEvent::CreateReview
+            | ReadingEvent::EditReview => {}
+```
+
+Fix any other flagged match the same way: review events are never a reading status and never credit pages. Keep repeating `cargo build` until it is clean.
 
 - [ ] **Step 7: Run the full suite**
 
@@ -925,7 +940,7 @@ Add to `src/storage.rs`, near `migrate_positions`:
 /// every review without a word.
 ///
 /// Each book keeps only its oldest review; later ones are reported and
-/// discarded (ADR 0016). A backup is written first, since this loses data.
+/// discarded (ADR 0017). A backup is written first, since this loses data.
 ///
 /// Returns `Ok(false)` when there was nothing to migrate, having touched
 /// nothing.
@@ -1613,8 +1628,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 In the "Key Concepts" section, the reading-events line currently lists six events. Replace it with:
 
 ```markdown
-- **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`, `CreateReview`, `EditReview`. The most recent *status-bearing* event determines current status — `Update`, `CreateReview` and `EditReview` are non-status events, see `ReadingEvent::affects_status`.
-- **Reviews:** A book has at most one review, derived by replaying its `CreateReview`/`EditReview` events. Each event stores a full text snapshot; diffs are computed at display time. See ADR 0016.
+- **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`, `Abandoned`, `CreateReview`, `EditReview`. The most recent *status-bearing* event determines current status — `Update`, `CreateReview` and `EditReview` are non-status events, see `ReadingEvent::affects_status`.
+- **Reviews:** A book has at most one review, derived by replaying its `CreateReview`/`EditReview` events. Each event stores a full text snapshot; diffs are computed at display time. See ADR 0017.
 ```
 
 Add `diff.rs` to the source layout listing, after `config.rs`:

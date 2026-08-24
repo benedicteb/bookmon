@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. The "Multiple reviews per book" and "Storage model" decisions are
-superseded by ADR 0016; the editor workflow and review navigation stand.
+superseded by ADR 0017; the editor workflow and review navigation stand.
 
 ## Context
 
