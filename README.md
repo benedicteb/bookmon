@@ -143,6 +143,11 @@ When a goal is set for the current year, running `bookmon` with no command will 
 - `review-book` - Write a review for a book (opens your `$EDITOR`)
 - `print-reviews` - Show all book reviews
 
+A book has at most one review. Running `review-book` again for a book that
+already has one edits it rather than adding a second review; the interactive
+review browser (`print-reviews -i`) shows the edit history alongside the
+current text.
+
 #### Series Management
 - `print-series` - Show all book series and their books
 - `delete-series` - Delete a series (books are kept but unlinked)
