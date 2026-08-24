@@ -1,6 +1,22 @@
-use bookmon::review::{show_review_detail, show_reviews, store_review};
+use bookmon::editor::strip_editor_text;
+use bookmon::review::{review_template, show_review_detail, show_reviews, store_review};
 use bookmon::storage::{Author, Book, Category, Review, Storage};
 use chrono::DateTime;
+
+// --- review template abort/round-trip tests ---
+
+#[test]
+fn test_untouched_create_review_template_strips_to_none() {
+    let template = review_template("1984", "George Orwell", None);
+    assert_eq!(strip_editor_text(&template), None);
+}
+
+#[test]
+fn test_untouched_edit_review_template_strips_back_to_current() {
+    let current = "Some review text.";
+    let template = review_template("1984", "George Orwell", Some(current));
+    assert_eq!(strip_editor_text(&template), Some(current.to_string()));
+}
 
 // --- Helper to create a storage with one book ---
 

@@ -49,6 +49,24 @@ fn test_trims_surrounding_but_not_internal_whitespace() {
 }
 
 #[test]
+fn test_body_containing_a_scissors_line_is_kept_up_to_the_last_one() {
+    // A review that happens to quote the scissors marker in its own text
+    // must not be truncated there: only the LAST scissors line (the real
+    // separator, appended by the template) discards anything.
+    let input = format!(
+        "My review.\n\n{}\nMore of my review after a scissors-looking line.\n\n{}\n# Instructions.\n",
+        SCISSORS, SCISSORS
+    );
+    assert_eq!(
+        strip_editor_text(&input),
+        Some(format!(
+            "My review.\n\n{}\nMore of my review after a scissors-looking line.",
+            SCISSORS
+        ))
+    );
+}
+
+#[test]
 fn test_instruction_block_comments_every_line_and_leads_with_scissors() {
     let block = instruction_block(&["First instruction.", "Second instruction."]);
     let lines: Vec<&str> = block.lines().collect();

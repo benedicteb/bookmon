@@ -18,12 +18,18 @@ pub fn instruction_block(lines: &[&str]) -> String {
     block
 }
 
-/// Keeps everything above the scissors line, trimmed.
+/// Keeps everything above the LAST scissors line, trimmed.
+///
+/// The separator is always the last occurrence, not the first: a template
+/// appends its instruction block after the body, so the real separator is
+/// whichever scissors line comes last. A user editing a review whose own
+/// text happens to contain a line that looks like the scissors marker must
+/// not have their trailing text truncated at that line.
 ///
 /// Returns None if nothing is left, which is how the user aborts: saving an
 /// untouched template leaves an empty body.
 pub fn strip_editor_text(text: &str) -> Option<String> {
-    let body = match text.split_once(SCISSORS) {
+    let body = match text.rsplit_once(SCISSORS) {
         Some((above, _)) => above,
         None => text,
     };
@@ -40,8 +46,8 @@ pub fn strip_editor_text(text: &str) -> Option<String> {
 /// Opens the user's default editor on a temp file pre-populated with `template`.
 ///
 /// The editor is determined by checking $EDITOR, then $VISUAL, falling back to "vi".
-/// Returns the edited text with comment lines stripped, or None if the result is
-/// empty (the user aborted).
+/// Returns everything above the last scissors line (see [`strip_editor_text`]),
+/// or None if the remaining body is empty (the user aborted).
 pub fn get_text_from_editor(template: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
     let editor = std::env::var("EDITOR")
         .or_else(|_| std::env::var("VISUAL"))

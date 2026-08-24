@@ -11,6 +11,31 @@ pub fn store_review(storage: &mut Storage, review: Review) -> Result<(), String>
     Ok(())
 }
 
+/// Builds the editor template shown when writing or revising a review.
+///
+/// `current` pre-fills the buffer when revising, and switches the heading
+/// verb from "Write" to "Edit". An untouched template strips to `None`
+/// (create) or back to `current` unchanged (edit), which is how the user
+/// aborts or leaves the review as-is.
+pub fn review_template(book_title: &str, author_name: &str, current: Option<&str>) -> String {
+    let verb = if current.is_some() { "Edit" } else { "Write" };
+    // Bound to a let, not inlined: an array literal must have one element
+    // type, and `&format!(..)` is a `&String` beside the `&str` literals.
+    let heading = format!(
+        "{} your review of \"{}\" by {} above.",
+        verb, book_title, author_name
+    );
+    format!(
+        "{}\n\n{}",
+        current.unwrap_or(""),
+        crate::editor::instruction_block(&[
+            heading.as_str(),
+            "Everything below this line is ignored.",
+            "An empty review aborts. Unchanged text records no edit.",
+        ])
+    )
+}
+
 /// Opens the user's default editor for writing or revising a review.
 ///
 /// `current` pre-fills the buffer when revising. Returns None if the body is
@@ -20,22 +45,7 @@ pub fn get_review_text_from_editor(
     author_name: &str,
     current: Option<&str>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let verb = if current.is_some() { "Edit" } else { "Write" };
-    // Bound to a let, not inlined: an array literal must have one element
-    // type, and `&format!(..)` is a `&String` beside the `&str` literals.
-    let heading = format!(
-        "{} your review of \"{}\" by {} above.",
-        verb, book_title, author_name
-    );
-    let template = format!(
-        "{}\n\n{}",
-        current.unwrap_or(""),
-        crate::editor::instruction_block(&[
-            heading.as_str(),
-            "Everything below this line is ignored.",
-            "An empty review aborts. Unchanged text records no edit.",
-        ])
-    );
+    let template = review_template(book_title, author_name, current);
     crate::editor::get_text_from_editor(&template)
 }
 
