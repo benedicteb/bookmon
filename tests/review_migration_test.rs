@@ -153,3 +153,106 @@ fn test_migration_is_idempotent() {
     assert!(!migrate_reviews(&path).unwrap());
     assert_eq!(fs::read_to_string(&path).unwrap(), after_first);
 }
+
+/// `chrono` serializes `DateTime<Utc>` with `SecondsFormat::AutoSi`, so the
+/// number of fractional-second digits varies with the value. Comparing the
+/// raw RFC 3339 strings therefore does not agree with true chronological
+/// order: "...100500Z" sorts lexically *before* "...100Z" (because '5' <
+/// 'Z'), even though .100500s is later than .100s. The migration must
+/// compare parsed instants, not strings, or it silently keeps the wrong
+/// review as "oldest".
+#[test]
+fn test_oldest_review_survives_fractional_digit_count_mismatch() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-later": {
+            "id": "rev-later",
+            "created_on": "2026-03-04T10:00:00.100500Z",
+            "book_id": "book-1",
+            "text": "Chronologically later, but a string-sort would keep it."
+        },
+        "rev-earlier": {
+            "id": "rev-earlier",
+            "created_on": "2026-03-04T10:00:00.100Z",
+            "book_id": "book-1",
+            "text": "Genuinely the oldest review."
+        }
+    }));
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    let value = read_json(&path);
+    let readings = value["readings"].as_object().unwrap();
+    assert_eq!(readings.len(), 1);
+    assert!(
+        readings.contains_key("rev-earlier"),
+        "the genuinely oldest review (by instant, not by string) must survive"
+    );
+    assert_eq!(
+        readings["rev-earlier"]["metadata"]["review_text"],
+        "Genuinely the oldest review."
+    );
+}
+
+#[test]
+fn test_backup_does_not_clobber_an_existing_one() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-1": {
+            "id": "rev-1",
+            "created_on": "2026-03-04T00:00:00Z",
+            "book_id": "book-1",
+            "text": "Once."
+        }
+    }));
+    let original = fs::read_to_string(&path).unwrap();
+
+    assert!(migrate_reviews(&path).unwrap());
+    let primary_backup = format!("{}.pre-review-migration.bak", path);
+    assert_eq!(fs::read_to_string(&primary_backup).unwrap(), original);
+
+    // Simulate the user restoring their old file over the migrated one, then
+    // running the migration again.
+    fs::write(&path, &original).unwrap();
+    assert!(migrate_reviews(&path).unwrap());
+
+    // The first backup must be untouched, and a second, distinctly named
+    // backup must exist alongside it — both holding the same original
+    // content, since the file was restored before the second run.
+    let fallback_backup = format!("{}.pre-review-migration.2.bak", path);
+    assert_eq!(
+        fs::read_to_string(&primary_backup).unwrap(),
+        original,
+        "the first backup must not be overwritten"
+    );
+    assert_eq!(
+        fs::read_to_string(&fallback_backup).unwrap(),
+        original,
+        "the second run must fall back to a distinctly named backup"
+    );
+}
+
+#[test]
+fn test_orphaned_book_with_multiple_reviews_reports_and_drops_all() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-1": {
+            "id": "rev-1",
+            "created_on": "2026-03-04T00:00:00Z",
+            "book_id": "no-such-book",
+            "text": "First orphan."
+        },
+        "rev-2": {
+            "id": "rev-2",
+            "created_on": "2026-06-01T00:00:00Z",
+            "book_id": "no-such-book",
+            "text": "Second orphan."
+        }
+    }));
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    let value = read_json(&path);
+    assert!(
+        value["readings"].as_object().unwrap().is_empty(),
+        "both reviews for the missing book must be dropped"
+    );
+    assert!(value.get("reviews").is_none());
+}

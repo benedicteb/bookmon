@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, TimeZone, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 use serde_json::Map;
@@ -1295,8 +1295,11 @@ fn shift_json_positions_from(
 /// `Storage` lost its `reviews` field a stale file would load cleanly and drop
 /// every review without a word.
 ///
-/// Each book keeps only its oldest review; later ones are reported and
-/// discarded (ADR 0017). A backup is written first, since this loses data.
+/// Each book keeps only its oldest review, by true chronological instant,
+/// not by string comparison of the timestamp; later ones are reported and
+/// discarded (ADR 0017). A backup is written first, since this loses data,
+/// and an existing backup from an earlier run is never overwritten — see
+/// `next_review_migration_backup_path`.
 ///
 /// Returns `Ok(false)` when there was nothing to migrate, having touched
 /// nothing.
@@ -1312,13 +1315,13 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
         _ => return Ok(false),
     };
 
-    fs::write(
-        format!("{}.pre-review-migration.bak", storage_path),
-        &contents,
-    )?;
+    // Never overwrite a backup already on disk from an earlier run — it may
+    // be the only surviving copy of reviews a previous run discarded.
+    let backup_path = next_review_migration_backup_path(storage_path);
+    fs::write(&backup_path, &contents)?;
+    println!("Backed up the original file to {}", backup_path);
 
-    // Group by book, oldest first. Sorting by the raw RFC 3339 string is safe:
-    // these are all UTC with a fixed shape, so lexical order is chronological.
+    // Group by book, oldest first.
     let mut by_book: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
         std::collections::BTreeMap::new();
     for review in reviews.values() {
@@ -1339,15 +1342,23 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
     let mut events = serde_json::Map::new();
 
     for (book_id, mut group) in by_book {
+        // Sort by the parsed instant, not the raw string: chrono serializes
+        // with `SecondsFormat::AutoSi`, so the number of fractional-second
+        // digits varies with the value, and lexical order does not agree
+        // with chronological order (e.g. "...100500Z" < "...100Z" as
+        // strings, even though .100500s is later than .100s). A review
+        // whose timestamp is missing or fails to parse sorts first — it is
+        // treated as the oldest, so a malformed entry still wins the "keep"
+        // slot instead of silently losing to a well-formed later one.
         group.sort_by(|a, b| {
-            a.get("created_on")
-                .and_then(|c| c.as_str())
-                .unwrap_or_default()
-                .cmp(
-                    b.get("created_on")
-                        .and_then(|c| c.as_str())
-                        .unwrap_or_default(),
-                )
+            let a_instant = review_instant(a);
+            let b_instant = review_instant(b);
+            match (a_instant, b_instant) {
+                (Some(a), Some(b)) => a.cmp(&b),
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
         });
 
         let title = value
@@ -1407,6 +1418,36 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
 
     write_json_value(storage_path, &value)?;
     Ok(true)
+}
+
+/// Parses a raw review's `created_on` as an RFC 3339 instant, for ordering
+/// reviews by true chronology rather than by string. Returns `None` when the
+/// field is missing or fails to parse.
+fn review_instant(review: &serde_json::Value) -> Option<DateTime<FixedOffset>> {
+    review
+        .get("created_on")
+        .and_then(|c| c.as_str())
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+}
+
+/// Returns the first backup path for `storage_path` that does not already
+/// exist, so a second migration run never overwrites a backup left behind by
+/// an earlier one — that backup may be the only remaining copy of reviews an
+/// earlier run discarded. Tries `<path>.pre-review-migration.bak` first,
+/// then `<path>.pre-review-migration.<n>.bak` for increasing `n`.
+fn next_review_migration_backup_path(storage_path: &str) -> String {
+    let primary = format!("{storage_path}.pre-review-migration.bak");
+    if !Path::new(&primary).exists() {
+        return primary;
+    }
+    let mut n = 2;
+    loop {
+        let candidate = format!("{storage_path}.pre-review-migration.{n}.bak");
+        if !Path::new(&candidate).exists() {
+            return candidate;
+        }
+        n += 1;
+    }
 }
 
 /// Writes a raw JSON tree using the same sorted-key, pretty formatting as
