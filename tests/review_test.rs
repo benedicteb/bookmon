@@ -284,6 +284,55 @@ fn test_detail_pluralises_edit_count() {
     assert!(out.contains("(2 edits)"));
 }
 
+/// Three revisions whose texts make mis-pairing detectable: if each edit
+/// were (incorrectly) diffed against the *original* text instead of its
+/// immediate predecessor, the newest edit would render "- One." / "+
+/// Three." and the line "Two." would never appear as a removal at all.
+/// Correct pairing renders "- Two." / "+ Three." for the newest edit and
+/// "- One." / "+ Two." for the older one.
+#[test]
+fn test_detail_diffs_each_edit_against_its_immediate_predecessor() {
+    let (mut storage, book_id) = create_storage_with_book();
+    store_review(&mut storage, &book_id, "One.".to_string()).unwrap();
+    store_review(&mut storage, &book_id, "Two.".to_string()).unwrap();
+    store_review(&mut storage, &book_id, "Three.".to_string()).unwrap();
+
+    let out = format_review_detail(&storage, &book_id).unwrap();
+
+    // Correct pairs are present...
+    assert!(
+        out.contains("  - Two.\n  + Three.\n"),
+        "expected the newest edit to diff against its immediate predecessor \"Two.\", got:\n{out}"
+    );
+    assert!(
+        out.contains("  - One.\n  + Two.\n"),
+        "expected the older edit to diff \"One.\" -> \"Two.\", got:\n{out}"
+    );
+
+    // ...and the mis-pairing signature (diffing the newest edit against the
+    // original instead of its predecessor) is absent.
+    assert!(
+        !out.contains("  - One.\n  + Three.\n"),
+        "the newest edit must not be diffed against the original text, got:\n{out}"
+    );
+
+    // Newest-first ordering: the edit introducing "Three." renders before
+    // the edit introducing "Two.".
+    let three_pos = out.find("+ Three.").expect("Three. edit present");
+    let two_pos = out.find("+ Two.").expect("Two. edit present");
+    assert!(
+        three_pos < two_pos,
+        "expected the newest edit (Three.) to render before the older edit (Two.), got:\n{out}"
+    );
+
+    // The trailing original-text section renders after both edit blocks.
+    let original_pos = out
+        .find("    One.\n")
+        .expect("original text rendered at the end");
+    assert!(original_pos > two_pos);
+    assert!(original_pos > three_pos);
+}
+
 #[test]
 fn test_detail_for_unreviewed_book_is_none() {
     let (storage, book_id) = create_storage_with_book();
