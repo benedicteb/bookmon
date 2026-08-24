@@ -260,6 +260,10 @@ pub enum ReadingEvent {
     WantToRead,
     UnmarkedAsWantToRead,
     Abandoned,
+    /// The first review written for a book. At most one per book.
+    CreateReview,
+    /// A revision of an existing review. Carries the full revised text.
+    EditReview,
 }
 
 impl ReadingEvent {
@@ -276,7 +280,7 @@ impl ReadingEvent {
             | ReadingEvent::UnmarkedAsWantToRead
             | ReadingEvent::Bought
             | ReadingEvent::Abandoned => true,
-            ReadingEvent::Update => false,
+            ReadingEvent::Update | ReadingEvent::CreateReview | ReadingEvent::EditReview => false,
         }
     }
 }
@@ -293,13 +297,17 @@ pub struct ReadingMetadata {
     pub current_page: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The complete review text as of this event, for `CreateReview` and
+    /// `EditReview`. A full snapshot, not a patch — see ADR 0017.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_text: Option<String>,
 }
 
 impl ReadingMetadata {
     /// True when no metadata is set. Lets `Reading` omit the whole object for
     /// events that carry none, rather than writing an empty `{}`.
     pub fn is_empty(&self) -> bool {
-        self.current_page.is_none() && self.note.is_none()
+        self.current_page.is_none() && self.note.is_none() && self.review_text.is_none()
     }
 }
 
@@ -432,6 +440,7 @@ impl Reading {
             metadata: ReadingMetadata {
                 current_page: Some(current_page),
                 note: None,
+                review_text: None,
             },
         }
     }
@@ -447,6 +456,24 @@ impl Reading {
             metadata: ReadingMetadata {
                 current_page: Some(current_page),
                 note: Some(note),
+                review_text: None,
+            },
+        }
+    }
+
+    /// Creates a review event carrying the full review text as of this change.
+    ///
+    /// `event` must be `CreateReview` or `EditReview`.
+    pub fn with_review(book_id: String, event: ReadingEvent, text: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            event,
+            metadata: ReadingMetadata {
+                current_page: None,
+                note: None,
+                review_text: Some(text),
             },
         }
     }
@@ -762,7 +789,9 @@ impl Storage {
                 ReadingEvent::Update
                 | ReadingEvent::Bought
                 | ReadingEvent::WantToRead
-                | ReadingEvent::UnmarkedAsWantToRead => continue,
+                | ReadingEvent::UnmarkedAsWantToRead
+                | ReadingEvent::CreateReview
+                | ReadingEvent::EditReview => continue,
             }
         }
         false

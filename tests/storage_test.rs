@@ -2882,6 +2882,7 @@ fn add_event_on(
         metadata: ReadingMetadata {
             current_page: page,
             note: None,
+            review_text: None,
         },
     };
     storage.add_reading(reading);
@@ -3578,4 +3579,60 @@ fn test_affects_status_classification() {
     assert!(ReadingEvent::Bought.affects_status());
     assert!(ReadingEvent::Abandoned.affects_status());
     assert!(!ReadingEvent::Update.affects_status());
+}
+
+#[test]
+fn test_review_event_does_not_change_book_status() {
+    let mut storage = Storage::new();
+    let book_id = Uuid::new_v4().to_string();
+
+    let mut finished = Reading::new(book_id.clone(), ReadingEvent::Finished);
+    finished.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+    storage.add_reading(finished);
+
+    let mut review = Reading::with_review(
+        book_id.clone(),
+        ReadingEvent::CreateReview,
+        "Excellent.".to_string(),
+    );
+    review.created_on = Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap();
+    storage.add_reading(review);
+
+    assert!(
+        storage.is_book_finished(&book_id),
+        "writing a review must not un-finish a book"
+    );
+    assert!(!storage.is_book_started(&book_id));
+    assert!(!ReadingEvent::CreateReview.affects_status());
+    assert!(!ReadingEvent::EditReview.affects_status());
+}
+
+#[test]
+fn test_with_review_sets_text_and_event() {
+    let book_id = Uuid::new_v4().to_string();
+    let reading = Reading::with_review(
+        book_id.clone(),
+        ReadingEvent::EditReview,
+        "Revised text.".to_string(),
+    );
+
+    assert_eq!(reading.book_id, book_id);
+    assert_eq!(reading.event, ReadingEvent::EditReview);
+    assert_eq!(
+        reading.metadata.review_text,
+        Some("Revised text.".to_string())
+    );
+    assert_eq!(reading.metadata.current_page, None);
+    assert_eq!(reading.metadata.note, None);
+    assert!(!reading.metadata.is_empty());
+}
+
+#[test]
+fn test_review_text_absent_is_omitted_from_json() {
+    let book_id = Uuid::new_v4().to_string();
+    let reading = Reading::new(book_id, ReadingEvent::Started);
+    let json = serde_json::to_string(&reading).unwrap();
+
+    assert!(!json.contains("review_text"));
+    assert!(!json.contains("metadata"));
 }
