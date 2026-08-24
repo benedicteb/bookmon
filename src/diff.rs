@@ -15,6 +15,13 @@ pub enum DiffLine {
 /// Every line of both inputs is represented in the result, in order — this is
 /// a full diff, not a windowed one. Review texts are short enough that context
 /// trimming would cost more clarity than it saves.
+///
+/// Trailing newlines are normalized away before comparison (see
+/// [`ensure_trailing_newline`]), so a difference consisting solely of a
+/// trailing newline is invisible in the returned lines. This is safe for the
+/// current callers because review text is trimmed by `strip_editor_text`
+/// before it is ever stored; a future caller feeding untrimmed text should be
+/// aware that trailing-newline-only changes will not show up here.
 pub fn line_diff(old: &str, new: &str) -> Vec<DiffLine> {
     let old = ensure_trailing_newline(old);
     let new = ensure_trailing_newline(new);

@@ -291,8 +291,10 @@ impl ReadingEvent {
 /// free-text remarks about that progress, written in their editor.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadingMetadata {
-    /// Both fields are omitted from the JSON entirely when absent, so events
-    /// that carry no progress data are not written with null keys.
+    /// `current_page`, `note`, and `review_text` are each omitted from the
+    /// JSON entirely when absent, so an event that doesn't carry a given
+    /// field is not written with a null key for it. This also means adding a
+    /// new optional field here does not rewrite every existing stored event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_page: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
