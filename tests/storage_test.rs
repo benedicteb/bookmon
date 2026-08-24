@@ -3553,12 +3553,20 @@ fn test_bought_remains_status_bearing() {
     let book_id = book.id.clone();
     storage.add_book(book);
 
-    let bought = Reading::new(book_id.clone(), ReadingEvent::Bought);
+    let mut bought = Reading::new(book_id.clone(), ReadingEvent::Bought);
+    bought.created_on = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
     storage.add_reading(bought);
 
+    let mut update = Reading::with_metadata(book_id.clone(), ReadingEvent::Update, 150);
+    update.created_on = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
+    storage.add_reading(update);
+
     let bought_books = storage.get_bought_books();
-    assert_eq!(bought_books.len(), 1);
-    assert_eq!(bought_books[0].id, book_id);
+    assert_eq!(
+        bought_books.len(),
+        1,
+        "a progress update must not remove a book from bought status"
+    );
 }
 
 #[test]
@@ -3568,5 +3576,6 @@ fn test_affects_status_classification() {
     assert!(ReadingEvent::WantToRead.affects_status());
     assert!(ReadingEvent::UnmarkedAsWantToRead.affects_status());
     assert!(ReadingEvent::Bought.affects_status());
+    assert!(ReadingEvent::Abandoned.affects_status());
     assert!(!ReadingEvent::Update.affects_status());
 }
