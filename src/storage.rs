@@ -1374,17 +1374,46 @@ fn shift_json_positions_from(
 ///
 /// Returns `Ok(false)` when there was nothing to migrate, having touched
 /// nothing.
+///
+/// # Errors
+///
+/// Returns `Err` — without writing anything, backup included — if the file's
+/// `reviews` key is present but not a JSON object, or if its `readings` key
+/// is present but not a JSON object. Both shapes are ones this migration
+/// cannot safely handle: proceeding would either silently discard every
+/// review, or silently discard every migrated event while still removing
+/// `reviews`. Also returns `Err` if a migrated review's id collides with an
+/// id already present in `readings`, rather than overwriting it.
 pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(storage_path)?;
     let mut value: serde_json::Value = serde_json::from_str(&contents)?;
 
-    // Absent, null, not an object, or empty: nothing to migrate, and nothing
+    // Absent, null, or an empty object: nothing to migrate, and nothing
     // written. An empty `reviews` key left behind is harmless — serde ignores
     // unknown keys — and leaving it makes a second run a true no-op.
-    let reviews = match value.get("reviews").and_then(|r| r.as_object()) {
-        Some(reviews) if !reviews.is_empty() => reviews.clone(),
-        _ => return Ok(false),
+    let reviews = match value.get("reviews") {
+        None | Some(serde_json::Value::Null) => return Ok(false),
+        Some(serde_json::Value::Object(map)) if map.is_empty() => return Ok(false),
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        Some(_) => {
+            return Err("storage's `reviews` key is present but is not a JSON \
+                         object; refusing to migrate to avoid silently \
+                         losing reviews"
+                .into());
+        }
     };
+
+    // Guard the write target's shape before touching the disk at all: an
+    // existing `readings` key that is not an object would otherwise silently
+    // swallow every migrated event once it is merged in below.
+    if let Some(readings) = value.get("readings") {
+        if !readings.is_object() {
+            return Err("storage's `readings` key is present but is not a \
+                         JSON object; refusing to migrate to avoid silently \
+                         losing reviews"
+                .into());
+        }
+    }
 
     // Never overwrite a backup already on disk from an earlier run — it may
     // be the only surviving copy of reviews a previous run discarded.
@@ -1433,6 +1462,18 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
             }
         });
 
+        if !known_books.contains(&book_id) {
+            // The book is missing from `books`, so a title lookup here would
+            // always fall through to "an unknown book" anyway — book_id is
+            // the only thing left that identifies what was discarded.
+            println!(
+                "Discarded {} review(s) referencing a book that no longer exists (book_id {}).",
+                group.len(),
+                book_id
+            );
+            continue;
+        }
+
         let title = value
             .get("books")
             .and_then(|books| books.get(&book_id))
@@ -1440,14 +1481,6 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
             .and_then(|t| t.as_str())
             .unwrap_or("an unknown book")
             .to_string();
-
-        if !known_books.contains(&book_id) {
-            println!(
-                "Discarded {} review(s) referencing a book that no longer exists.",
-                group.len()
-            );
-            continue;
-        }
 
         let oldest = group.remove(0);
         if !group.is_empty() {
@@ -1472,12 +1505,30 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
             continue;
         }
 
-        let id = oldest
-            .get("id")
-            .and_then(|i| i.as_str())
-            .unwrap_or_default()
-            .to_string();
+        let id = match oldest.get("id").and_then(|i| i.as_str()) {
+            Some(id) if !id.is_empty() => id.to_string(),
+            _ => {
+                // A missing or empty id would otherwise make every id-less
+                // review key on the same "" — later ones silently
+                // overwriting earlier ones, for different books. Minting a
+                // fresh id keeps each book's review distinct instead.
+                let fresh = Uuid::new_v4().to_string();
+                println!(
+                    "Review for \"{}\" had no id; assigned a new one ({}).",
+                    title, fresh
+                );
+                fresh
+            }
+        };
         let text = oldest.get("text").and_then(|t| t.as_str()).unwrap_or("");
+
+        if events.contains_key(&id) {
+            return Err(format!(
+                "migrated review id {id} collides with another migrated \
+                 review's id; refusing to overwrite it"
+            )
+            .into());
+        }
 
         events.insert(
             id.clone(),
@@ -1497,8 +1548,19 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
     let readings = root
         .entry("readings")
         .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-    if let Some(readings) = readings.as_object_mut() {
-        readings.extend(events);
+    // The shape was verified above, before the backup was written.
+    let readings = readings
+        .as_object_mut()
+        .ok_or("storage's `readings` key is present but is not a JSON object")?;
+    for (id, event) in events {
+        if readings.contains_key(&id) {
+            return Err(format!(
+                "migrated review id {id} collides with an existing reading id; \
+                 refusing to overwrite it"
+            )
+            .into());
+        }
+        readings.insert(id, event);
     }
     root.remove("reviews");
 

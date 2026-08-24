@@ -318,6 +318,183 @@ fn test_corrupt_only_review_is_skipped_not_written() {
     assert!(value.get("reviews").is_none());
 }
 
+/// Two different books each have a review with no `id` field at all. Before
+/// the fix, both fell back to the same empty-string key, so the second
+/// silently clobbered the first in the `events` map — no discard message,
+/// one book simply losing its review. Each must now get its own freshly
+/// minted id, and both reviews must survive.
+#[test]
+fn test_two_id_less_reviews_on_different_books_both_survive() {
+    let (_tmp, path) = {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        let contents = json!({
+            "books": {
+                "book-1": {
+                    "id": "book-1", "title": "1984", "added_on": "2026-01-01T00:00:00Z",
+                    "isbn": "978-0451524935", "category_id": "cat-1", "author_id": "auth-1",
+                    "total_pages": 328, "series_id": null, "position_in_series": null
+                },
+                "book-2": {
+                    "id": "book-2", "title": "Animal Farm", "added_on": "2026-01-01T00:00:00Z",
+                    "isbn": "978-0451526342", "category_id": "cat-1", "author_id": "auth-1",
+                    "total_pages": 112, "series_id": null, "position_in_series": null
+                }
+            },
+            "authors": {"auth-1": {"id": "auth-1", "name": "George Orwell", "created_on": "2026-01-01T00:00:00Z"}},
+            "categories": {"cat-1": {"id": "cat-1", "name": "Fiction", "description": null, "created_on": "2026-01-01T00:00:00Z"}},
+            "readings": {},
+            "series": {},
+            "reviews": {
+                "rev-a": {
+                    "created_on": "2026-03-04T00:00:00Z",
+                    "book_id": "book-1",
+                    "text": "First book, no id."
+                },
+                "rev-b": {
+                    "id": "",
+                    "created_on": "2026-03-05T00:00:00Z",
+                    "book_id": "book-2",
+                    "text": "Second book, empty id."
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_string_pretty(&contents).unwrap()).unwrap();
+        (tmp, path)
+    };
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    let value = read_json(&path);
+    let readings = value["readings"].as_object().unwrap();
+    assert_eq!(readings.len(), 2, "both id-less reviews must survive");
+
+    let mut book_ids: Vec<&str> = readings
+        .values()
+        .map(|r| r["book_id"].as_str().unwrap())
+        .collect();
+    book_ids.sort_unstable();
+    assert_eq!(book_ids, vec!["book-1", "book-2"]);
+
+    for (key, event) in readings {
+        assert!(!key.is_empty(), "every migrated event must have a real key");
+        assert_eq!(event["id"], serde_json::Value::String(key.clone()));
+        assert_ne!(event["id"].as_str().unwrap(), "");
+    }
+}
+
+/// `readings` present but not a JSON object (e.g. an array) must be a hard
+/// error rather than a silent no-op: the old code discarded every migrated
+/// event, removed `reviews`, and still wrote the file. Nothing must be
+/// touched here — not the storage file, not a backup.
+#[test]
+fn test_non_object_readings_is_an_error_and_leaves_file_untouched() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+    let contents = json!({
+        "books": {
+            "book-1": {
+                "id": "book-1", "title": "1984", "added_on": "2026-01-01T00:00:00Z",
+                "isbn": "978-0451524935", "category_id": "cat-1", "author_id": "auth-1",
+                "total_pages": 328, "series_id": null, "position_in_series": null
+            }
+        },
+        "authors": {"auth-1": {"id": "auth-1", "name": "George Orwell", "created_on": "2026-01-01T00:00:00Z"}},
+        "categories": {"cat-1": {"id": "cat-1", "name": "Fiction", "description": null, "created_on": "2026-01-01T00:00:00Z"}},
+        "readings": [],
+        "series": {},
+        "reviews": {
+            "rev-1": {
+                "id": "rev-1",
+                "created_on": "2026-03-04T00:00:00Z",
+                "book_id": "book-1",
+                "text": "Should not be migrated."
+            }
+        }
+    });
+    fs::write(&path, serde_json::to_string_pretty(&contents).unwrap()).unwrap();
+    let before = fs::read_to_string(&path).unwrap();
+
+    assert!(migrate_reviews(&path).is_err());
+
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        before,
+        "the file must be untouched when readings has the wrong shape"
+    );
+    assert!(
+        fs::metadata(format!("{}.pre-review-migration.bak", path)).is_err(),
+        "no backup must be written when migration errors out"
+    );
+}
+
+/// `reviews` present but not a JSON object (e.g. an array, as legacy code
+/// could never have produced but a hand-edited file might) must also be a
+/// hard error. Before the fix this returned `Ok(false)` *before* the backup
+/// was written, so `load_storage` would go on to silently drop the unknown
+/// key on the very next save, with no backup anywhere.
+#[test]
+fn test_non_object_reviews_is_an_error_with_no_backup() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+    let contents = json!({
+        "books": {},
+        "authors": {},
+        "categories": {},
+        "readings": {},
+        "series": {},
+        "reviews": [ "not", "an", "object" ]
+    });
+    fs::write(&path, serde_json::to_string_pretty(&contents).unwrap()).unwrap();
+
+    assert!(migrate_reviews(&path).is_err());
+
+    assert!(
+        fs::metadata(format!("{}.pre-review-migration.bak", path)).is_err(),
+        "no backup must be written for a malformed `reviews` key"
+    );
+}
+
+/// A migrated review id that collides with an id already present in
+/// `readings` must be rejected rather than silently overwriting the existing
+/// reading. Astronomically unlikely with real v4 UUIDs, but cheap to guard.
+#[test]
+fn test_colliding_id_with_existing_reading_is_an_error() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap().to_string();
+    let contents = json!({
+        "books": {
+            "book-1": {
+                "id": "book-1", "title": "1984", "added_on": "2026-01-01T00:00:00Z",
+                "isbn": "978-0451524935", "category_id": "cat-1", "author_id": "auth-1",
+                "total_pages": 328, "series_id": null, "position_in_series": null
+            }
+        },
+        "authors": {"auth-1": {"id": "auth-1", "name": "George Orwell", "created_on": "2026-01-01T00:00:00Z"}},
+        "categories": {"cat-1": {"id": "cat-1", "name": "Fiction", "description": null, "created_on": "2026-01-01T00:00:00Z"}},
+        "readings": {
+            "dup-id": {
+                "id": "dup-id",
+                "created_on": "2025-01-01T00:00:00Z",
+                "book_id": "book-1",
+                "event": "Started"
+            }
+        },
+        "series": {},
+        "reviews": {
+            "dup-id": {
+                "id": "dup-id",
+                "created_on": "2026-03-04T00:00:00Z",
+                "book_id": "book-1",
+                "text": "Colliding id."
+            }
+        }
+    });
+    fs::write(&path, serde_json::to_string_pretty(&contents).unwrap()).unwrap();
+
+    assert!(migrate_reviews(&path).is_err());
+}
+
 /// The whole point of skipping an undateable review rather than writing it:
 /// a migrated file must still load. This calls the real `load_storage`, not
 /// just inspecting JSON shape, because the bug this guards against is a
