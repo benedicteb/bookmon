@@ -148,6 +148,13 @@ already has one edits it rather than adding a second review; the interactive
 review browser (`print-reviews -i`) shows the edit history alongside the
 current text.
 
+Older storage files that still have a persisted `reviews` collection are
+migrated automatically the first time `bookmon` loads them. Only the oldest
+review for each book is kept; any additional reviews for that book are
+discarded. A backup of the original file is written first, as
+`<storage-file>.pre-review-migration.bak` (or `.pre-review-migration.2.bak`,
+`.3.bak`, etc. if an earlier backup is already present).
+
 #### Series Management
 - `print-series` - Show all book series and their books
 - `delete-series` - Delete a series (books are kept but unlinked)

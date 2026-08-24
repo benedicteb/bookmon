@@ -38,9 +38,9 @@ src/
 
 ### Key Concepts
 
-- **Storage:** All data persists in a single JSON file. The `Storage` struct holds `HashMap`s of `Book`, `Author`, `Category`, `Reading`, `Series`, and `Review`.
+- **Storage:** All data persists in a single JSON file. The `Storage` struct holds `HashMap`s of `Book`, `Reading`, `Author`, `Category`, `Goal`, and `Series` — there is no `Review` collection; reviews are derived (see below).
 - **Reading events:** Books are tracked via `Reading` entries with events: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`, `Abandoned`, `CreateReview`, `EditReview`. The most recent *status-bearing* event determines current status — `Update`, `CreateReview` and `EditReview` are non-status events, see `ReadingEvent::affects_status`.
-- **Reviews:** A book has at most one review, derived by replaying its `CreateReview`/`EditReview` events. Each event stores a full text snapshot; diffs are computed at display time. See ADR 0017.
+- **Reviews:** A book has at most one review, derived by replaying its `CreateReview`/`EditReview` events. Each event stores a full text snapshot; diffs are computed at display time. See ADR 0017. Storage files still carrying the old persisted `reviews` map are migrated automatically on load (`migrate_reviews`): only the oldest review per book is kept, the rest are discarded, and a `.pre-review-migration.bak` (or numbered variant) is written first.
 - **Providers:** ISBN lookup uses a `BookProvider` trait with multiple implementations (OpenLibrary, Bibsok). `ProviderManager` tries each provider in order.
 - **CLI:** Built with `clap` (derive). Supports both command mode and interactive mode (`-i` flag) using `inquire` for prompts.
 
