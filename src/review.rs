@@ -1,13 +1,28 @@
-use crate::storage::{Review, Storage};
+use crate::storage::{Reading, ReadingEvent, Storage};
 use std::io;
 
-/// Validates and stores a review. Returns an error if the referenced book doesn't exist.
-pub fn store_review(storage: &mut Storage, review: Review) -> Result<(), String> {
-    if !storage.books.contains_key(&review.book_id) {
-        return Err(format!("Book with ID {} does not exist", review.book_id));
+/// Records a review for a book, creating it or revising the existing one.
+///
+/// The first review becomes a `CreateReview` event; every later one becomes an
+/// `EditReview`. Text identical to the current version records nothing, so the
+/// timeline never shows an empty diff.
+///
+/// # Errors
+///
+/// Returns an error if `book_id` does not refer to an existing book.
+pub fn store_review(storage: &mut Storage, book_id: &str, text: String) -> Result<(), String> {
+    if !storage.books.contains_key(book_id) {
+        return Err(format!("Book with ID {} does not exist", book_id));
     }
 
-    storage.add_review(review);
+    let event = match storage.review_for_book(book_id) {
+        Some(existing) if existing.text == text => return Ok(()),
+        Some(_) => ReadingEvent::EditReview,
+        None => ReadingEvent::CreateReview,
+    };
+
+    let reading = Reading::with_review(book_id.to_string(), event, text);
+    storage.readings.insert(reading.id.clone(), reading);
     Ok(())
 }
 
@@ -53,15 +68,12 @@ pub fn get_review_text_from_editor(
 pub fn show_reviews(storage: &Storage) -> io::Result<()> {
     use crate::table::{print_table, Alignment};
 
-    let mut reviews: Vec<&Review> = storage.reviews.values().collect();
+    let reviews = storage.all_reviews();
 
     if reviews.is_empty() {
         println!("No reviews found.");
         return Ok(());
     }
-
-    // Sort by creation date, newest first
-    reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
 
     let mut table_data = vec![vec![
         "Title".to_string(),
@@ -98,10 +110,13 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
 }
 
 /// Displays the full text of a single review.
-pub fn show_review_detail(storage: &Storage, review_id: &str) -> io::Result<()> {
+///
+/// # Errors
+///
+/// Returns an error if the book has never been reviewed.
+pub fn show_review_detail(storage: &Storage, book_id: &str) -> io::Result<()> {
     let review = storage
-        .reviews
-        .get(review_id)
+        .review_for_book(book_id)
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Review not found"))?;
 
     let book = storage.books.get(&review.book_id);

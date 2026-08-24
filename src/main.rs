@@ -1330,9 +1330,9 @@ fn interactive_mode(
 
         match review::get_review_text_from_editor(&selected_book.title, author_name, None) {
             Ok(Some(text)) => {
-                let review_obj = storage::Review::new(selected_book.id.clone(), text);
+                let book_id = selected_book.id.clone();
                 let mut storage = storage.clone();
-                match review::store_review(&mut storage, review_obj) {
+                match review::store_review(&mut storage, &book_id, text) {
                     Ok(_) => {
                         storage::write_storage(storage_file, &storage)?;
                         println!("Review saved successfully!");
@@ -1436,16 +1436,13 @@ fn review_book_flow(
     let book_title = book.title.clone();
 
     match review::get_review_text_from_editor(&book_title, author_name, None) {
-        Ok(Some(text)) => {
-            let review_obj = storage::Review::new(book_id, text);
-            match review::store_review(storage, review_obj) {
-                Ok(_) => {
-                    storage::write_storage(storage_file, storage)?;
-                    println!("Review saved successfully!");
-                }
-                Err(e) => eprintln!("Failed to store review: {}", e),
+        Ok(Some(text)) => match review::store_review(storage, &book_id, text) {
+            Ok(_) => {
+                storage::write_storage(storage_file, storage)?;
+                println!("Review saved successfully!");
             }
-        }
+            Err(e) => eprintln!("Failed to store review: {}", e),
+        },
         Ok(None) => {
             println!("Review aborted (empty text).");
         }
@@ -1458,15 +1455,12 @@ fn review_book_flow(
 /// Interactive mode for browsing reviews: select a review to view full text, loop.
 fn review_interactive_mode(storage: &Storage) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        let mut reviews: Vec<&storage::Review> = storage.reviews.values().collect();
+        let reviews = storage.all_reviews();
 
         if reviews.is_empty() {
             println!("No reviews found.");
             return Ok(());
         }
-
-        // Sort by date, newest first
-        reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
 
         let mut options: Vec<(String, String)> = Vec::new();
         for r in &reviews {
@@ -1484,7 +1478,7 @@ fn review_interactive_mode(storage: &Storage) -> Result<(), Box<dyn std::error::
                 preview
             };
             let display = format!("[{}] \"{}\" by {} - {}", date, title, author, preview);
-            options.push((display, r.id.clone()));
+            options.push((display, r.book_id.clone()));
         }
 
         let display_to_id: std::collections::HashMap<String, String> = options
@@ -1501,10 +1495,10 @@ fn review_interactive_mode(storage: &Storage) -> Result<(), Box<dyn std::error::
                 }
             };
 
-        let review_id = display_to_id
+        let book_id = display_to_id
             .get(&selection)
             .ok_or("Selected review not found")?;
 
-        review::show_review_detail(storage, review_id)?;
+        review::show_review_detail(storage, book_id)?;
     }
 }

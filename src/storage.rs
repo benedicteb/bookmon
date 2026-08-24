@@ -327,28 +327,35 @@ pub struct Reading {
     pub metadata: ReadingMetadata,
 }
 
-/// A user-written review of a book.
-///
-/// Each review is linked to a book by `book_id` and contains free-form text
-/// written via the user's default editor (git-commit style).
-/// A book can have multiple reviews.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Review {
-    pub id: String,
+/// One recorded state of a review, as of a single event.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewRevision {
     pub created_on: DateTime<Utc>,
-    pub book_id: String,
+    pub event: ReadingEvent,
     pub text: String,
 }
 
+/// A book's review, derived by replaying its review events.
+///
+/// Not persisted. A book has at most one, identified by the book itself —
+/// there is no review id. Built by `Storage::review_for_book`.
+#[derive(Debug, Clone)]
+pub struct Review {
+    pub book_id: String,
+    /// When the review was first written.
+    pub created_on: DateTime<Utc>,
+    /// When it was last changed. Equal to `created_on` if never edited.
+    pub updated_on: DateTime<Utc>,
+    /// The current text: the newest snapshot.
+    pub text: String,
+    /// Every revision, oldest first.
+    pub revisions: Vec<ReviewRevision>,
+}
+
 impl Review {
-    /// Creates a new review with a generated UUID and current timestamp.
-    pub fn new(book_id: String, text: String) -> Self {
-        Self {
-            id: Uuid::new_v4().to_string(),
-            created_on: Utc::now(),
-            book_id,
-            text,
-        }
+    /// How many times the review has been revised since it was written.
+    pub fn edit_count(&self) -> usize {
+        self.revisions.len().saturating_sub(1)
     }
 }
 
@@ -544,8 +551,6 @@ pub struct Storage {
     pub readings: HashMap<String, Reading>,
     pub authors: HashMap<String, Author>,
     pub categories: HashMap<String, Category>,
-    #[serde(default)]
-    pub reviews: HashMap<String, Review>,
     /// Yearly reading goals: year -> books and pages targets.
     /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
     #[serde(default)]
@@ -569,7 +574,6 @@ impl Storage {
             readings: HashMap::new(),
             authors: HashMap::new(),
             categories: HashMap::new(),
-            reviews: HashMap::new(),
             goals: HashMap::new(),
             series: HashMap::new(),
         }
@@ -651,21 +655,71 @@ impl Storage {
         self.categories.get(id)
     }
 
-    pub fn add_review(&mut self, review: Review) -> Option<Review> {
-        self.reviews.insert(review.id.clone(), review)
-    }
-
-    pub fn get_review(&self, id: &str) -> Option<&Review> {
-        self.reviews.get(id)
-    }
-
-    /// Returns all reviews for a given book, sorted by creation date (newest first).
-    pub fn get_reviews_for_book(&self, book_id: &str) -> Vec<&Review> {
-        let mut reviews: Vec<&Review> = self
-            .reviews
+    /// Replays a book's review events into its current review.
+    ///
+    /// Returns None if the book has never been reviewed.
+    pub fn review_for_book(&self, book_id: &str) -> Option<Review> {
+        let mut events: Vec<&Reading> = self
+            .readings
             .values()
             .filter(|r| r.book_id == book_id)
+            .filter(|r| {
+                matches!(
+                    r.event,
+                    ReadingEvent::CreateReview | ReadingEvent::EditReview
+                )
+            })
             .collect();
+
+        if events.is_empty() {
+            return None;
+        }
+
+        events.sort_by_key(|r| r.created_on);
+
+        let revisions: Vec<ReviewRevision> = events
+            .iter()
+            .map(|r| ReviewRevision {
+                created_on: r.created_on,
+                event: r.event,
+                text: r.metadata.review_text.clone().unwrap_or_default(),
+            })
+            .collect();
+
+        let first = revisions.first()?;
+        let last = revisions.last()?;
+
+        Some(Review {
+            book_id: book_id.to_string(),
+            created_on: first.created_on,
+            updated_on: last.created_on,
+            text: last.text.clone(),
+            revisions,
+        })
+    }
+
+    /// Every book's review, newest first by creation date.
+    ///
+    /// Sorted on `created_on` rather than `updated_on` so the listing keeps
+    /// its existing order and is sorted by the date column it displays.
+    pub fn all_reviews(&self) -> Vec<Review> {
+        let book_ids: std::collections::HashSet<&str> = self
+            .readings
+            .values()
+            .filter(|r| {
+                matches!(
+                    r.event,
+                    ReadingEvent::CreateReview | ReadingEvent::EditReview
+                )
+            })
+            .map(|r| r.book_id.as_str())
+            .collect();
+
+        let mut reviews: Vec<Review> = book_ids
+            .into_iter()
+            .filter_map(|book_id| self.review_for_book(book_id))
+            .collect();
+
         reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
         reviews
     }
