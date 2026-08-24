@@ -1289,6 +1289,126 @@ fn shift_json_positions_from(
     }
 }
 
+/// Converts legacy `reviews` entries into `CreateReview` reading events.
+///
+/// Must run before deserialization: serde ignores unknown keys, so once
+/// `Storage` lost its `reviews` field a stale file would load cleanly and drop
+/// every review without a word.
+///
+/// Each book keeps only its oldest review; later ones are reported and
+/// discarded (ADR 0017). A backup is written first, since this loses data.
+///
+/// Returns `Ok(false)` when there was nothing to migrate, having touched
+/// nothing.
+pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(storage_path)?;
+    let mut value: serde_json::Value = serde_json::from_str(&contents)?;
+
+    // Absent, null, not an object, or empty: nothing to migrate, and nothing
+    // written. An empty `reviews` key left behind is harmless — serde ignores
+    // unknown keys — and leaving it makes a second run a true no-op.
+    let reviews = match value.get("reviews").and_then(|r| r.as_object()) {
+        Some(reviews) if !reviews.is_empty() => reviews.clone(),
+        _ => return Ok(false),
+    };
+
+    fs::write(
+        format!("{}.pre-review-migration.bak", storage_path),
+        &contents,
+    )?;
+
+    // Group by book, oldest first. Sorting by the raw RFC 3339 string is safe:
+    // these are all UTC with a fixed shape, so lexical order is chronological.
+    let mut by_book: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
+        std::collections::BTreeMap::new();
+    for review in reviews.values() {
+        let book_id = review
+            .get("book_id")
+            .and_then(|b| b.as_str())
+            .unwrap_or_default()
+            .to_string();
+        by_book.entry(book_id).or_default().push(review.clone());
+    }
+
+    let known_books: std::collections::HashSet<String> = value
+        .get("books")
+        .and_then(|b| b.as_object())
+        .map(|books| books.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let mut events = serde_json::Map::new();
+
+    for (book_id, mut group) in by_book {
+        group.sort_by(|a, b| {
+            a.get("created_on")
+                .and_then(|c| c.as_str())
+                .unwrap_or_default()
+                .cmp(
+                    b.get("created_on")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or_default(),
+                )
+        });
+
+        let title = value
+            .get("books")
+            .and_then(|books| books.get(&book_id))
+            .and_then(|book| book.get("title"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("an unknown book")
+            .to_string();
+
+        if !known_books.contains(&book_id) {
+            println!(
+                "Discarded {} review(s) referencing a book that no longer exists.",
+                group.len()
+            );
+            continue;
+        }
+
+        let oldest = group.remove(0);
+        if !group.is_empty() {
+            println!(
+                "Discarded {} later review(s) for \"{}\".",
+                group.len(),
+                title
+            );
+        }
+
+        let id = oldest
+            .get("id")
+            .and_then(|i| i.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let text = oldest.get("text").and_then(|t| t.as_str()).unwrap_or("");
+
+        events.insert(
+            id.clone(),
+            serde_json::json!({
+                "id": id,
+                "created_on": oldest.get("created_on").cloned().unwrap_or(serde_json::Value::Null),
+                "book_id": book_id,
+                "event": "CreateReview",
+                "metadata": { "review_text": text }
+            }),
+        );
+    }
+
+    let root = value
+        .as_object_mut()
+        .ok_or("storage root is not an object")?;
+    let readings = root
+        .entry("readings")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if let Some(readings) = readings.as_object_mut() {
+        readings.extend(events);
+    }
+    root.remove("reviews");
+
+    write_json_value(storage_path, &value)?;
+    Ok(true)
+}
+
 /// Writes a raw JSON tree using the same sorted-key, pretty formatting as
 /// `write_storage`, so a migrated file is byte-identical to a normally saved one.
 fn write_json_value(
@@ -1308,6 +1428,9 @@ pub fn load_and_repair_storage(
 ) -> Result<Storage, Box<dyn std::error::Error>> {
     // Must precede load_storage: an unmigrated position cannot be deserialized.
     migrate_positions(storage_path, prompter)?;
+    // Must also precede it: serde ignores the unknown `reviews` key, so a
+    // stale file would otherwise load cleanly and lose every review.
+    migrate_reviews(storage_path)?;
     let mut storage = load_storage(storage_path)?;
     handle_missing_fields(&mut storage, storage_path, prompter)?;
     Ok(storage)
