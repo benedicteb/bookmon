@@ -223,6 +223,12 @@ enum Commands {
         #[arg(short, long)]
         series: Option<String>,
     },
+    /// Show books you gave up on before finishing
+    PrintAbandoned {
+        /// Filter by series name (case-insensitive substring match)
+        #[arg(short, long)]
+        series: Option<String>,
+    },
     /// Show reading statistics by year
     PrintStatistics,
     /// Change the storage file path
@@ -419,6 +425,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ) {
                             Ok(_) => {}
                             Err(e) => eprintln!("Failed to show want to read books: {}", e),
+                        }
+                    }
+                }
+            }
+            Commands::PrintAbandoned { ref series } => {
+                if cli.interactive {
+                    interactive_mode(&storage, &settings.storage_file, Some(command))?;
+                } else {
+                    let books = storage.get_abandoned_books();
+                    if let Some(filter) = series {
+                        let filtered =
+                            bookmon::series::filter_books_by_series(&storage, &books, filter);
+                        let empty_msg =
+                            bookmon::series::format_series_filter_empty_message(&storage, filter);
+                        match reading::show_abandoned_books_list(&storage, filtered, &empty_msg) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show abandoned books: {}", e),
+                        }
+                    } else {
+                        match reading::show_abandoned_books_list(
+                            &storage,
+                            books,
+                            "No abandoned books found.",
+                        ) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Failed to show abandoned books: {}", e),
                         }
                     }
                 }
@@ -962,6 +994,7 @@ fn interactive_mode(
             Commands::PrintFinished { .. } => storage.get_finished_books(),
             Commands::PrintBacklog { .. } => storage.get_unstarted_books(),
             Commands::PrintWantToRead { .. } => storage.get_want_to_read_books(),
+            Commands::PrintAbandoned { .. } => storage.get_abandoned_books(),
             Commands::PrintStatistics => storage.get_finished_books(),
             _ => storage.get_started_books(), // Fallback to currently reading
         },
@@ -1074,6 +1107,7 @@ fn interactive_mode(
         actions.push("Update progress");
         actions.push("Update progress with notes");
         actions.push("Mark as finished");
+        actions.push("Mark as abandoned");
     }
 
     if !is_bought {
@@ -1318,6 +1352,7 @@ fn interactive_mode(
     let event = match action_selection {
         "Start reading" => storage::ReadingEvent::Started,
         "Mark as finished" => storage::ReadingEvent::Finished,
+        "Mark as abandoned" => storage::ReadingEvent::Abandoned,
         "Update progress" => storage::ReadingEvent::Update,
         "Mark as bought" => storage::ReadingEvent::Bought,
         "Mark as want to read" => storage::ReadingEvent::WantToRead,

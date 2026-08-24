@@ -197,35 +197,126 @@ fn build_started_book_row(
 
     let days = (Utc::now() - most_recent_reading.created_on).num_days();
 
+    Ok(vec![
+        title,
+        author_name.to_string(),
+        days.to_string(),
+        progress_for_book(storage, book),
+    ])
+}
+
+/// Formats the book's progress as a percentage from its most recent Update
+/// event, or an empty string when there is no usable progress.
+fn progress_for_book(storage: &Storage, book: &Book) -> String {
     let most_recent_update = storage
         .readings
         .values()
         .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Update)
         .max_by_key(|r| r.created_on);
 
-    let progress = if let Some(update) = most_recent_update {
-        if let Some(current_page) = update.metadata.current_page {
-            if book.total_pages > 0 {
-                format!(
-                    "{:.1}%",
-                    (current_page as f64 / book.total_pages as f64) * 100.0
-                )
-            } else {
-                "".to_string()
+    match most_recent_update.and_then(|u| u.metadata.current_page) {
+        Some(current_page) if book.total_pages > 0 => format!(
+            "{:.1}%",
+            (current_page as f64 / book.total_pages as f64) * 100.0
+        ),
+        _ => "".to_string(),
+    }
+}
+
+/// Builds the abandoned-books table: title, author, abandon date and progress
+/// reached. Returns no rows when `books` is empty.
+///
+/// Books in a series are grouped under a series header row; others sort by
+/// author then title.
+pub fn build_abandoned_books_table(
+    storage: &Storage,
+    books: Vec<&Book>,
+) -> io::Result<Vec<TableRow>> {
+    if books.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let header = vec![
+        "Title".to_string(),
+        "Author".to_string(),
+        "Abandoned on".to_string(),
+        "Progress".to_string(),
+    ];
+    let mut table_rows = vec![TableRow::Header(header)];
+
+    if books.iter().any(|b| b.series_id.is_some()) {
+        for entry in &group_books_by_series(storage, &books) {
+            match entry {
+                BookEntry::SeriesGroup { name, books } => {
+                    table_rows.push(TableRow::GroupHeader(name.clone(), books.len()));
+                    for book in books {
+                        let title = format!(
+                            "  {}{}",
+                            format_position_prefix(book.position_in_series),
+                            book.title
+                        );
+                        let row = build_abandoned_book_row(storage, book, title)?;
+                        table_rows.push(TableRow::Data(row));
+                    }
+                }
+                BookEntry::Standalone(book) => {
+                    let row = build_abandoned_book_row(storage, book, book.title.clone())?;
+                    table_rows.push(TableRow::Data(row));
+                }
             }
-        } else {
-            "".to_string()
         }
     } else {
-        "".to_string()
-    };
+        let mut sorted_books = books;
+        sorted_books.sort_by(|a, b| {
+            let a_author = storage.author_name_for_book(a);
+            let b_author = storage.author_name_for_book(b);
+            a_author.cmp(b_author).then(a.title.cmp(&b.title))
+        });
 
+        for book in sorted_books {
+            let row = build_abandoned_book_row(storage, book, book.title.clone())?;
+            table_rows.push(TableRow::Data(row));
+        }
+    }
+
+    Ok(table_rows)
+}
+
+/// Builds a data row for an abandoned book.
+fn build_abandoned_book_row(
+    storage: &Storage,
+    book: &Book,
+    title: String,
+) -> io::Result<Vec<String>> {
+    let author_name = storage.author_name_for_book(book);
+    let abandoned_date = event_date_for_book(storage, book, ReadingEvent::Abandoned)?;
     Ok(vec![
         title,
         author_name.to_string(),
-        days.to_string(),
-        progress,
+        abandoned_date,
+        progress_for_book(storage, book),
     ])
+}
+
+/// Displays a table of the given abandoned books, or `empty_message` if none.
+pub fn show_abandoned_books_list(
+    storage: &Storage,
+    books: Vec<&Book>,
+    empty_message: &str,
+) -> io::Result<()> {
+    let table_rows = build_abandoned_books_table(storage, books)?;
+    if table_rows.is_empty() {
+        println!("{}", empty_message);
+    } else {
+        let alignments = [
+            Alignment::Left,  // Title
+            Alignment::Left,  // Author
+            Alignment::Right, // Abandoned on
+            Alignment::Right, // Progress
+        ];
+        print_structured_table(&table_rows, &alignments);
+    }
+    Ok(())
 }
 
 /// Displays a table of currently-reading books with author, days since started, and progress.
@@ -355,10 +446,15 @@ pub fn show_finished_books_list(
 
 /// Returns the formatted finish date for a book (most recent Finished event).
 fn finished_date_for_book(storage: &Storage, book: &Book) -> io::Result<String> {
+    event_date_for_book(storage, book, ReadingEvent::Finished)
+}
+
+/// Returns the formatted date of the book's most recent `event`.
+fn event_date_for_book(storage: &Storage, book: &Book, event: ReadingEvent) -> io::Result<String> {
     let most_recent_reading = storage
         .readings
         .values()
-        .filter(|r| r.book_id == book.id && r.event == ReadingEvent::Finished)
+        .filter(|r| r.book_id == book.id && r.event == event)
         .max_by_key(|r| r.created_on)
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Reading not found"))?;
     Ok(most_recent_reading

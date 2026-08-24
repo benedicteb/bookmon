@@ -10,9 +10,9 @@ Books can be in various states: not started, started, finished, bought, want-to-
 
 ## Decision
 
-Use event sourcing for reading status. Each status change is recorded as an immutable `Reading` event with a timestamp. The current status is derived by looking at the most recent event for each book. Events include: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, and `UnmarkedAsWantToRead`.
+Use event sourcing for reading status. Each status change is recorded as an immutable `Reading` event with a timestamp. The current status is derived by looking at the most recent event for each book. Events include: `Started`, `Finished`, `Update`, `Bought`, `WantToRead`, `UnmarkedAsWantToRead`, and `Abandoned` (see ADR 0016).
 
-For determining "is book started", the algorithm walks events from newest to oldest, skipping non-status events (Update, Bought, WantToRead), and returns true on `Started` or false on `Finished`.
+For determining "is book started", the algorithm walks events from newest to oldest, skipping non-status events (Update, Bought, WantToRead), and returns true on `Started` or false on `Finished` or `Abandoned`.
 
 ## Consequences
 

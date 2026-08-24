@@ -248,6 +248,8 @@ pub fn taken_positions(value: &serde_json::Value, series_id: &str) -> Vec<i32> {
 ///
 /// The most recent event determines the book's current status.
 /// `Update` and `Bought` are non-status events that don't affect started/finished determination.
+/// `Abandoned` ends a read-through without finishing: the book is no longer
+/// being read, but a later `Started` begins a fresh attempt.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum ReadingEvent {
     Finished,
@@ -256,6 +258,7 @@ pub enum ReadingEvent {
     Bought,
     WantToRead,
     UnmarkedAsWantToRead,
+    Abandoned,
 }
 
 /// Optional metadata attached to a reading event.
@@ -679,6 +682,11 @@ impl Storage {
         self.get_books_by_most_recent_event(ReadingEvent::WantToRead)
     }
 
+    /// Returns books the reader gave up on: their most recent event is `Abandoned`.
+    pub fn get_abandoned_books(&self) -> Vec<&Book> {
+        self.get_books_by_most_recent_event(ReadingEvent::Abandoned)
+    }
+
     /// Returns books that are currently being read or marked as want to read
     pub fn get_currently_reading_and_want_to_read_books(&self) -> Vec<&Book> {
         // Get books that are currently being read
@@ -709,7 +717,8 @@ impl Storage {
     /// Returns true if the book is currently being read (most recent status-relevant event is Started)
     ///
     /// Note: Update, Bought, WantToRead, and UnmarkedAsWantToRead events are skipped
-    /// when determining started/finished status — only Started and Finished events matter.
+    /// when determining started/finished status — only Started, Finished and
+    /// Abandoned events matter. Finished and Abandoned both end the read-through.
     pub fn is_book_started(&self, book_id: &str) -> bool {
         let mut readings: Vec<_> = self
             .readings
@@ -722,7 +731,7 @@ impl Storage {
         for reading in readings {
             match reading.event {
                 ReadingEvent::Started => return true,
-                ReadingEvent::Finished => return false,
+                ReadingEvent::Finished | ReadingEvent::Abandoned => return false,
                 ReadingEvent::Update
                 | ReadingEvent::Bought
                 | ReadingEvent::WantToRead

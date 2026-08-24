@@ -173,14 +173,15 @@
           "description": "Foreign key -> a key of `books`. bookmon prompts to recreate the book on load if the id is missing from `books`."
         },
         "event": {
-          "description": "Started: began reading. Finished: completed the book. Update: progress report, carries `metadata.current_page`. Bought: acquired the book. WantToRead / UnmarkedAsWantToRead: added to / removed from the want-to-read list.",
+          "description": "Started: began reading. Finished: completed the book. Update: progress report, carries `metadata.current_page`. Bought: acquired the book. WantToRead / UnmarkedAsWantToRead: added to / removed from the want-to-read list. Abandoned: stopped reading without finishing; a later Started begins a new attempt.",
           "enum": [
             "Started",
             "Finished",
             "Update",
             "Bought",
             "WantToRead",
-            "UnmarkedAsWantToRead"
+            "UnmarkedAsWantToRead",
+            "Abandoned"
           ]
         },
         "metadata": {
