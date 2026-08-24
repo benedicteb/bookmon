@@ -1,5 +1,7 @@
 use bookmon::editor::strip_editor_text;
-use bookmon::review::{review_template, show_review_detail, show_reviews, store_review};
+use bookmon::review::{
+    format_review_detail, review_template, show_review_detail, show_reviews, store_review,
+};
 use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, ReadingMetadata, Storage};
 use chrono::TimeZone;
 
@@ -232,4 +234,58 @@ fn test_show_review_detail_not_found() {
     let storage = Storage::new();
     let result = show_review_detail(&storage, "nonexistent-id");
     assert!(result.is_err());
+}
+
+// --- format_review_detail ---
+
+#[test]
+fn test_detail_without_edits_has_no_last_edited_line() {
+    let (mut storage, book_id) = create_storage_with_book();
+    store_review(&mut storage, &book_id, "A cold book.".to_string()).unwrap();
+
+    let out = format_review_detail(&storage, &book_id).unwrap();
+    assert!(out.contains("Review of \"1984\" by George Orwell"));
+    assert!(out.contains("A cold book."));
+    assert!(!out.contains("Last edited"));
+    assert!(!out.contains("History"));
+}
+
+#[test]
+fn test_detail_with_edits_shows_diff_and_dates() {
+    let (mut storage, book_id) = create_storage_with_book();
+    store_review(&mut storage, &book_id, "Orwell is cold.".to_string()).unwrap();
+    store_review(
+        &mut storage,
+        &book_id,
+        "Orwell is deliberately cold.".to_string(),
+    )
+    .unwrap();
+
+    let out = format_review_detail(&storage, &book_id).unwrap();
+
+    // Current text is the newest version.
+    assert!(out.contains("Orwell is deliberately cold."));
+    assert!(out.contains("Last edited on"));
+    assert!(out.contains("(1 edit)"));
+    assert!(out.contains("History"));
+    assert!(out.contains("- Orwell is cold."));
+    assert!(out.contains("+ Orwell is deliberately cold."));
+    assert!(out.contains("Written on"));
+}
+
+#[test]
+fn test_detail_pluralises_edit_count() {
+    let (mut storage, book_id) = create_storage_with_book();
+    store_review(&mut storage, &book_id, "One.".to_string()).unwrap();
+    store_review(&mut storage, &book_id, "Two.".to_string()).unwrap();
+    store_review(&mut storage, &book_id, "Three.".to_string()).unwrap();
+
+    let out = format_review_detail(&storage, &book_id).unwrap();
+    assert!(out.contains("(2 edits)"));
+}
+
+#[test]
+fn test_detail_for_unreviewed_book_is_none() {
+    let (storage, book_id) = create_storage_with_book();
+    assert!(format_review_detail(&storage, &book_id).is_none());
 }

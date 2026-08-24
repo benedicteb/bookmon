@@ -1,3 +1,4 @@
+use crate::diff::{line_diff, DiffLine};
 use crate::storage::{Reading, ReadingEvent, Storage};
 use std::io;
 
@@ -79,6 +80,7 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
         "Title".to_string(),
         "Author".to_string(),
         "Date".to_string(),
+        "Edits".to_string(),
         "Preview".to_string(),
     ]];
 
@@ -89,12 +91,19 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
             .map(|b| storage.author_name_for_book(b))
             .unwrap_or("Unknown Author");
         let date = review.created_on.format("%Y-%m-%d").to_string();
+        let edits = review.edit_count();
+        let edits_cell = if edits == 0 {
+            String::new()
+        } else {
+            edits.to_string()
+        };
         let preview = truncate_text(&review.text, 60);
 
         table_data.push(vec![
             title.to_string(),
             author_name.to_string(),
             date,
+            edits_cell,
             preview,
         ]);
     }
@@ -103,36 +112,91 @@ pub fn show_reviews(storage: &Storage) -> io::Result<()> {
         Alignment::Left,  // Title
         Alignment::Left,  // Author
         Alignment::Right, // Date
+        Alignment::Right, // Edits
         Alignment::Left,  // Preview
     ];
     print_table(&table_data, &alignments);
     Ok(())
 }
 
-/// Displays the full text of a single review.
+/// Renders the full review detail view: current text, then the history.
+///
+/// Returns `None` if the book has no review. Returned rather than printed so
+/// the layout can be tested without capturing stdout.
+pub fn format_review_detail(storage: &Storage, book_id: &str) -> Option<String> {
+    let review = storage.review_for_book(book_id)?;
+    let book = storage.books.get(book_id);
+    let title = book.map(|b| b.title.as_str()).unwrap_or("Unknown Book");
+    let author_name = book
+        .map(|b| storage.author_name_for_book(b))
+        .unwrap_or("Unknown Author");
+
+    let rule = "-".repeat(60);
+    let mut out = String::new();
+
+    out.push_str(&format!("\nReview of \"{}\" by {}\n", title, author_name));
+    out.push_str(&format!(
+        "Written on {}\n",
+        review.created_on.format("%Y-%m-%d")
+    ));
+
+    let edits = review.edit_count();
+    if edits > 0 {
+        out.push_str(&format!(
+            "Last edited on {} ({} edit{})\n",
+            review.updated_on.format("%Y-%m-%d"),
+            edits,
+            if edits == 1 { "" } else { "s" }
+        ));
+    }
+
+    out.push_str(&format!("{}\n{}\n", rule, review.text));
+
+    if edits > 0 {
+        out.push_str(&format!("\nHistory\n{}\n", rule));
+
+        // Newest first, matching how reviews are listed elsewhere.
+        for index in (1..review.revisions.len()).rev() {
+            let previous = &review.revisions[index - 1];
+            let current = &review.revisions[index];
+
+            out.push_str(&format!(
+                "Edited on {}\n",
+                current.created_on.format("%Y-%m-%d")
+            ));
+            for line in line_diff(&previous.text, &current.text) {
+                out.push_str(&match line {
+                    DiffLine::Context(text) => format!("    {}\n", text),
+                    DiffLine::Added(text) => format!("  + {}\n", text),
+                    DiffLine::Removed(text) => format!("  - {}\n", text),
+                });
+            }
+            out.push('\n');
+        }
+
+        let original = &review.revisions[0];
+        out.push_str(&format!(
+            "Written on {}\n",
+            original.created_on.format("%Y-%m-%d")
+        ));
+        for line in original.text.lines() {
+            out.push_str(&format!("    {}\n", line));
+        }
+    }
+
+    out.push('\n');
+    Some(out)
+}
+
+/// Displays the full text of a single review, with its edit history.
 ///
 /// # Errors
 ///
 /// Returns an error if the book has never been reviewed.
 pub fn show_review_detail(storage: &Storage, book_id: &str) -> io::Result<()> {
-    let review = storage
-        .review_for_book(book_id)
+    let rendered = format_review_detail(storage, book_id)
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Review not found"))?;
-
-    let book = storage.books.get(&review.book_id);
-    let title = book.map(|b| b.title.as_str()).unwrap_or("Unknown Book");
-    let author_name = book
-        .map(|b| storage.author_name_for_book(b))
-        .unwrap_or("Unknown Author");
-    let date = review.created_on.format("%Y-%m-%d").to_string();
-
-    println!();
-    println!("Review of \"{}\" by {}", title, author_name);
-    println!("Written on {}", date);
-    println!("{}", "-".repeat(60));
-    println!("{}", review.text);
-    println!();
-
+    print!("{}", rendered);
     Ok(())
 }
 

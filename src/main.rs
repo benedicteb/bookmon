@@ -1122,7 +1122,12 @@ fn interactive_mode(
     }
 
     // Review is always available for any book
-    actions.push("Write review");
+    let review_action = if storage.review_for_book(&selected_book.id).is_some() {
+        "Edit review"
+    } else {
+        "Write review"
+    };
+    actions.push(review_action);
 
     if actions.is_empty() {
         println!("No available actions for this book.");
@@ -1319,8 +1324,8 @@ fn interactive_mode(
         return Ok(());
     }
 
-    // Handle "Write review" action separately from reading events
-    if action_selection == "Write review" {
+    // Handle "Write review"/"Edit review" action separately from reading events
+    if action_selection == "Write review" || action_selection == "Edit review" {
         let author_name = storage.author_name_for_book(selected_book);
         let author_name = if author_name.is_empty() {
             "Unknown Author"
@@ -1328,14 +1333,24 @@ fn interactive_mode(
             author_name
         };
 
-        match review::get_review_text_from_editor(&selected_book.title, author_name, None) {
+        let existing = storage.review_for_book(&selected_book.id);
+        let current = existing.as_ref().map(|r| r.text.as_str());
+
+        match review::get_review_text_from_editor(&selected_book.title, author_name, current) {
             Ok(Some(text)) => {
                 let book_id = selected_book.id.clone();
+                let unchanged = existing.as_ref().is_some_and(|r| r.text == text);
                 let mut storage = storage.clone();
                 match review::store_review(&mut storage, &book_id, text) {
                     Ok(_) => {
                         storage::write_storage(storage_file, &storage)?;
-                        println!("Review saved successfully!");
+                        if unchanged {
+                            println!("No change recorded (review unchanged).");
+                        } else if existing.is_some() {
+                            println!("Review updated successfully!");
+                        } else {
+                            println!("Review saved successfully!");
+                        }
                     }
                     Err(e) => eprintln!("Failed to store review: {}", e),
                 }
@@ -1435,14 +1450,26 @@ fn review_book_flow(
     };
     let book_title = book.title.clone();
 
-    match review::get_review_text_from_editor(&book_title, author_name, None) {
-        Ok(Some(text)) => match review::store_review(storage, &book_id, text) {
-            Ok(_) => {
-                storage::write_storage(storage_file, storage)?;
-                println!("Review saved successfully!");
+    let existing = storage.review_for_book(&book_id);
+    let current = existing.as_ref().map(|r| r.text.as_str());
+
+    match review::get_review_text_from_editor(&book_title, author_name, current) {
+        Ok(Some(text)) => {
+            let unchanged = existing.as_ref().is_some_and(|r| r.text == text);
+            match review::store_review(storage, &book_id, text) {
+                Ok(_) => {
+                    storage::write_storage(storage_file, storage)?;
+                    if unchanged {
+                        println!("No change recorded (review unchanged).");
+                    } else if existing.is_some() {
+                        println!("Review updated successfully!");
+                    } else {
+                        println!("Review saved successfully!");
+                    }
+                }
+                Err(e) => eprintln!("Failed to store review: {}", e),
             }
-            Err(e) => eprintln!("Failed to store review: {}", e),
-        },
+        }
         Ok(None) => {
             println!("Review aborted (empty text).");
         }
