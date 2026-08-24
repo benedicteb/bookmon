@@ -1,6 +1,7 @@
 use bookmon::editor::strip_editor_text;
 use bookmon::review::{review_template, show_review_detail, show_reviews, store_review};
-use bookmon::storage::{Author, Book, Category, ReadingEvent, Storage};
+use bookmon::storage::{Author, Book, Category, Reading, ReadingEvent, ReadingMetadata, Storage};
+use chrono::TimeZone;
 
 // --- review template abort/round-trip tests ---
 
@@ -126,6 +127,77 @@ fn test_all_reviews_returns_one_per_reviewed_book() {
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].text, "Edited.");
     assert_eq!(all[0].revisions.len(), 2);
+}
+
+// --- Deterministic tie-break for equal `created_on` timestamps ---
+
+/// `readings` is a `HashMap`, so its iteration order is not stable across
+/// `HashMap` instances (a fresh `RandomState` per map). If two review events
+/// for the same book share an identical `created_on`, a fold that sorts on
+/// `created_on` alone (a stable sort) would let that arbitrary iteration
+/// order decide which text wins — meaning the review the user sees could
+/// differ between two runs over the exact same file. Build the same two
+/// events, with identical timestamps, into many fresh `Storage` instances
+/// (alternating insertion order, since insertion order is not the only
+/// source of `HashMap` iteration randomness) and assert every run folds to
+/// the same text and the same revision order.
+#[test]
+fn test_equal_timestamps_resolve_deterministically() {
+    let ts = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+
+    let mut expected: Option<(String, Vec<String>)> = None;
+
+    for i in 0..50 {
+        let (mut storage, book_id) = create_storage_with_book();
+
+        let create = Reading {
+            id: "11111111-1111-1111-1111-111111111111".to_string(),
+            created_on: ts,
+            book_id: book_id.clone(),
+            event: ReadingEvent::CreateReview,
+            metadata: ReadingMetadata {
+                current_page: None,
+                note: None,
+                review_text: Some("First.".to_string()),
+            },
+        };
+        let edit = Reading {
+            id: "22222222-2222-2222-2222-222222222222".to_string(),
+            created_on: ts,
+            book_id: book_id.clone(),
+            event: ReadingEvent::EditReview,
+            metadata: ReadingMetadata {
+                current_page: None,
+                note: None,
+                review_text: Some("Second.".to_string()),
+            },
+        };
+
+        // Alternate insertion order across iterations: insertion order alone
+        // is not the source of HashMap iteration randomness (each `Storage`
+        // gets its own freshly seeded hasher), but varying it too rules out
+        // any accidental determinism from insertion order specifically.
+        if i % 2 == 0 {
+            storage.readings.insert(create.id.clone(), create);
+            storage.readings.insert(edit.id.clone(), edit);
+        } else {
+            storage.readings.insert(edit.id.clone(), edit);
+            storage.readings.insert(create.id.clone(), create);
+        }
+
+        let review = storage.review_for_book(&book_id).unwrap();
+        let texts: Vec<String> = review.revisions.iter().map(|r| r.text.clone()).collect();
+        let actual = (review.text.clone(), texts);
+
+        match &expected {
+            None => expected = Some(actual),
+            Some(want) => assert_eq!(
+                &actual, want,
+                "iteration {} folded differently than iteration 0",
+                i
+            ),
+        }
+    }
 }
 
 // --- Display function tests ---

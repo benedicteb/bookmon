@@ -675,7 +675,12 @@ impl Storage {
             return None;
         }
 
-        events.sort_by_key(|r| r.created_on);
+        // Sort by (created_on, id): `readings` is a HashMap, so plain
+        // iteration order is reseeded per process, and a stable sort on
+        // created_on alone would let that random order leak into the
+        // result whenever two events share a timestamp. The id breaks
+        // ties deterministically regardless of iteration order.
+        events.sort_by(|a, b| (a.created_on, &a.id).cmp(&(b.created_on, &b.id)));
 
         let revisions: Vec<ReviewRevision> = events
             .iter()
@@ -720,7 +725,13 @@ impl Storage {
             .filter_map(|book_id| self.review_for_book(book_id))
             .collect();
 
-        reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+        // Break created_on ties by book_id for the same reason as the
+        // per-book fold above: HashMap iteration order must not leak in.
+        reviews.sort_by(|a, b| {
+            b.created_on
+                .cmp(&a.created_on)
+                .then_with(|| a.book_id.cmp(&b.book_id))
+        });
         reviews
     }
 
