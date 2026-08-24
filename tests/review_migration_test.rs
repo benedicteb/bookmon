@@ -1,4 +1,4 @@
-use bookmon::storage::migrate_reviews;
+use bookmon::storage::{load_storage, migrate_reviews};
 use serde_json::json;
 use std::fs;
 
@@ -255,4 +255,87 @@ fn test_orphaned_book_with_multiple_reviews_reports_and_drops_all() {
         "both reviews for the missing book must be dropped"
     );
     assert!(value.get("reviews").is_none());
+}
+
+/// A book with one well-formed review and one whose `created_on` is not a
+/// parseable timestamp: the corrupt one must never win the "keep" slot, and
+/// the valid one must survive.
+#[test]
+fn test_valid_review_survives_a_corrupt_timestamp_sibling() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-good": {
+            "id": "rev-good",
+            "created_on": "2026-03-04T10:00:00Z",
+            "book_id": "book-1",
+            "text": "Valid timestamp, must survive."
+        },
+        "rev-bad": {
+            "id": "rev-bad",
+            "created_on": "not-a-timestamp",
+            "book_id": "book-1",
+            "text": "Corrupt timestamp, must be discarded."
+        }
+    }));
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    let value = read_json(&path);
+    let readings = value["readings"].as_object().unwrap();
+    assert_eq!(readings.len(), 1);
+    assert!(
+        readings.contains_key("rev-good"),
+        "the review with a valid timestamp must win, regardless of insertion order"
+    );
+    assert_eq!(
+        readings["rev-good"]["metadata"]["review_text"],
+        "Valid timestamp, must survive."
+    );
+}
+
+/// A book whose only review has a corrupt timestamp: there is no dateable
+/// sibling to fall back on, so the review must be skipped entirely rather
+/// than written with a `created_on` that cannot deserialize back to
+/// `DateTime<Utc>`. The migration must still succeed and still remove the
+/// `reviews` key.
+#[test]
+fn test_corrupt_only_review_is_skipped_not_written() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-bad": {
+            "id": "rev-bad",
+            "created_on": "not-a-timestamp",
+            "book_id": "book-1",
+            "text": "Corrupt, and the only review for this book."
+        }
+    }));
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    let value = read_json(&path);
+    assert!(
+        value["readings"].as_object().unwrap().is_empty(),
+        "a review with no parseable timestamp must not be written as an event"
+    );
+    assert!(value.get("reviews").is_none());
+}
+
+/// The whole point of skipping an undateable review rather than writing it:
+/// a migrated file must still load. This calls the real `load_storage`, not
+/// just inspecting JSON shape, because the bug this guards against is a
+/// `DateTime<Utc>` deserialization failure on the *next* load — a corrupt
+/// `created_on` written through would fail the whole file, not just that
+/// review.
+#[test]
+fn test_migrated_file_with_corrupt_timestamp_review_still_loads() {
+    let (_tmp, path) = write_fixture(json!({
+        "rev-bad": {
+            "id": "rev-bad",
+            "created_on": "not-a-timestamp",
+            "book_id": "book-1",
+            "text": "Corrupt."
+        }
+    }));
+
+    assert!(migrate_reviews(&path).unwrap());
+
+    load_storage(&path).expect("a migrated file must always be loadable");
 }

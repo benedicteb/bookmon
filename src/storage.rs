@@ -1297,8 +1297,12 @@ fn shift_json_positions_from(
 ///
 /// Each book keeps only its oldest review, by true chronological instant,
 /// not by string comparison of the timestamp; later ones are reported and
-/// discarded (ADR 0017). A backup is written first, since this loses data,
-/// and an existing backup from an earlier run is never overwritten — see
+/// discarded (ADR 0017). A review with no parseable `created_on` never wins
+/// that slot over a dateable sibling, and if it is the *only* review for its
+/// book, it is skipped and reported rather than written — an unparseable
+/// timestamp on a `Reading` would fail to deserialize the whole storage file
+/// on the next load. A backup is written first, since this loses data, and
+/// an existing backup from an earlier run is never overwritten — see
 /// `next_review_migration_backup_path`.
 ///
 /// Returns `Ok(false)` when there was nothing to migrate, having touched
@@ -1347,16 +1351,17 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
         // digits varies with the value, and lexical order does not agree
         // with chronological order (e.g. "...100500Z" < "...100Z" as
         // strings, even though .100500s is later than .100s). A review
-        // whose timestamp is missing or fails to parse sorts first — it is
-        // treated as the oldest, so a malformed entry still wins the "keep"
-        // slot instead of silently losing to a well-formed later one.
+        // whose timestamp is missing or fails to parse sorts LAST, never
+        // first: we cannot establish that an undateable review is the
+        // oldest, and preferring a dateable sibling for the "keep" slot
+        // keeps the resulting event well-formed (see the check below).
         group.sort_by(|a, b| {
             let a_instant = review_instant(a);
             let b_instant = review_instant(b);
             match (a_instant, b_instant) {
                 (Some(a), Some(b)) => a.cmp(&b),
-                (None, Some(_)) => std::cmp::Ordering::Less,
-                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
                 (None, None) => std::cmp::Ordering::Equal,
             }
         });
@@ -1384,6 +1389,20 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
                 group.len(),
                 title
             );
+        }
+
+        // Never write an event whose `created_on` would not round-trip:
+        // `Reading.created_on` is a `DateTime<Utc>`, so an unparseable value
+        // here would fail to deserialize the *entire* storage file the next
+        // time it is loaded. This can only happen when every review for this
+        // book was undateable (the sort above always prefers a dateable one
+        // when there is one). The backup written above is the recovery path.
+        if review_instant(&oldest).is_none() {
+            println!(
+                "Skipped the review for \"{}\": its created_on is not a valid timestamp.",
+                title
+            );
+            continue;
         }
 
         let id = oldest
@@ -1422,7 +1441,10 @@ pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::E
 
 /// Parses a raw review's `created_on` as an RFC 3339 instant, for ordering
 /// reviews by true chronology rather than by string. Returns `None` when the
-/// field is missing or fails to parse.
+/// field is missing or fails to parse — callers must treat that as the
+/// *least* trustworthy case, not the oldest: we have no evidence about when
+/// an undateable review was written, and letting it win the "keep" slot
+/// would carry an invalid timestamp into the migrated event.
 fn review_instant(review: &serde_json::Value) -> Option<DateTime<FixedOffset>> {
     review
         .get("created_on")
