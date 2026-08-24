@@ -11,16 +11,30 @@ pub fn store_review(storage: &mut Storage, review: Review) -> Result<(), String>
     Ok(())
 }
 
-/// Opens the user's default editor for writing a review of the given book.
+/// Opens the user's default editor for writing or revising a review.
 ///
-/// Returns None if the review is empty after comment-stripping (user aborted).
+/// `current` pre-fills the buffer when revising. Returns None if the body is
+/// empty (user aborted).
 pub fn get_review_text_from_editor(
     book_title: &str,
     author_name: &str,
+    current: Option<&str>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let verb = if current.is_some() { "Edit" } else { "Write" };
+    // Bound to a let, not inlined: an array literal must have one element
+    // type, and `&format!(..)` is a `&String` beside the `&str` literals.
+    let heading = format!(
+        "{} your review of \"{}\" by {} above.",
+        verb, book_title, author_name
+    );
     let template = format!(
-        "\n# Write your review of \"{}\" by {} above.\n# Lines starting with # will be stripped.\n# An empty review (after stripping comments) will abort.\n",
-        book_title, author_name
+        "{}\n\n{}",
+        current.unwrap_or(""),
+        crate::editor::instruction_block(&[
+            heading.as_str(),
+            "Everything below this line is ignored.",
+            "An empty review aborts. Unchanged text records no edit.",
+        ])
     );
     crate::editor::get_text_from_editor(&template)
 }

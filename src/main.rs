@@ -1328,7 +1328,7 @@ fn interactive_mode(
             author_name
         };
 
-        match review::get_review_text_from_editor(&selected_book.title, author_name) {
+        match review::get_review_text_from_editor(&selected_book.title, author_name, None) {
             Ok(Some(text)) => {
                 let review_obj = storage::Review::new(selected_book.id.clone(), text);
                 let mut storage = storage.clone();
@@ -1435,7 +1435,7 @@ fn review_book_flow(
     };
     let book_title = book.title.clone();
 
-    match review::get_review_text_from_editor(&book_title, author_name) {
+    match review::get_review_text_from_editor(&book_title, author_name, None) {
         Ok(Some(text)) => {
             let review_obj = storage::Review::new(book_id, text);
             match review::store_review(storage, review_obj) {

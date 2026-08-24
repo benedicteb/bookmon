@@ -1,21 +1,39 @@
 use std::io::Write;
 use tempfile::NamedTempFile;
 
-/// Strips comment lines (starting with #) and trims whitespace from editor text.
-/// Returns None if the resulting text is empty (indicating the user aborted).
-pub fn strip_editor_text(text: &str) -> Option<String> {
-    let stripped: String = text
-        .lines()
-        .filter(|line| !line.starts_with('#'))
-        .collect::<Vec<&str>>()
-        .join("\n")
-        .trim()
-        .to_string();
+/// Marks the start of the instruction block. Everything from this line down is
+/// discarded, which lets the body keep lines that begin with `#` — a review or
+/// a note may legitimately use markdown headings.
+pub const SCISSORS: &str = "# ------------------------ >8 ------------------------";
 
-    if stripped.is_empty() {
+/// Builds an instruction block: the scissors line followed by each line
+/// commented out. Placed at the end of an editor template.
+pub fn instruction_block(lines: &[&str]) -> String {
+    let mut block = String::from(SCISSORS);
+    for line in lines {
+        block.push_str("\n# ");
+        block.push_str(line);
+    }
+    block.push('\n');
+    block
+}
+
+/// Keeps everything above the scissors line, trimmed.
+///
+/// Returns None if nothing is left, which is how the user aborts: saving an
+/// untouched template leaves an empty body.
+pub fn strip_editor_text(text: &str) -> Option<String> {
+    let body = match text.split_once(SCISSORS) {
+        Some((above, _)) => above,
+        None => text,
+    };
+
+    let trimmed = body.trim().to_string();
+
+    if trimmed.is_empty() {
         None
     } else {
-        Some(stripped)
+        Some(trimmed)
     }
 }
 
