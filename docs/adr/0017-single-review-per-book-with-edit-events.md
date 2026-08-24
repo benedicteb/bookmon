@@ -94,12 +94,16 @@ with a markdown heading would lose it on every edit, and the diff would show a
 deletion the user never made. The change applies to all callers, since progress
 notes (ADR 0014) share the function and the bug.
 
-### 7. `similar` is capped below 3.0
+### 7. `similar` is capped at the minor version
 
-`similar = ">=2.7, <3"`. Version 3.x is edition 2024 with MSRV 1.85, which Rust
-1.83 cannot parse the manifest of (ADR 0006). Version 2.7 is edition 2018, MSRV
-1.60, with no non-optional dependencies. The diff call sits behind `src/diff.rs`
-so the crate can be swapped for a hand-rolled LCS diff in one file.
+`similar = ">=2.7, <2.8"`, matching the minor-level cap already used for
+`uuid` and `tempfile`. A plain `<3` would guarantee nothing beyond Cargo's
+default caret behavior for `"2.7"` — the real risk isn't only a 3.x release:
+any future 2.x could just as well raise its own edition or MSRV, the same way
+a 3.x could, so the cap is pinned to the minor version rather than the major
+one. Version 2.7 is edition 2018, MSRV 1.60, with no non-optional
+dependencies. The diff call sits behind `src/diff.rs` so the crate can be
+swapped for a hand-rolled LCS diff in one file.
 
 ### Rejected: renaming `Reading` to `BookEvent`
 
