@@ -20,6 +20,7 @@ fn event(event: ReadingEvent, page: Option<i32>, created_on: DateTime<Utc>) -> R
         metadata: ReadingMetadata {
             current_page: page,
             note: None,
+            review_text: None,
         },
     }
 }

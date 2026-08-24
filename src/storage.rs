@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, TimeZone, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 use serde_json::Map;
@@ -246,8 +246,9 @@ pub fn taken_positions(value: &serde_json::Value, series_id: &str) -> Vec<i32> {
 
 /// The type of reading event recorded for a book.
 ///
-/// The most recent event determines the book's current status.
-/// `Update` and `Bought` are non-status events that don't affect started/finished determination.
+/// The most recent status-bearing event determines the book's current status.
+/// Progress updates (`Update`) don't participate in status determination — they record
+/// how far the reader got but don't change whether the book is started, finished, or owned.
 /// `Abandoned` ends a read-through without finishing: the book is no longer
 /// being read, but a later `Started` begins a fresh attempt.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
@@ -259,6 +260,29 @@ pub enum ReadingEvent {
     WantToRead,
     UnmarkedAsWantToRead,
     Abandoned,
+    /// The first review written for a book. At most one per book.
+    CreateReview,
+    /// A revision of an existing review. Carries the full revised text.
+    EditReview,
+}
+
+impl ReadingEvent {
+    /// Whether this event participates in determining a book's current status.
+    ///
+    /// Progress updates say how far the reader got, not whether the book is
+    /// started or finished, so they must not displace the last real status
+    /// event when the most recent event is looked up.
+    pub fn affects_status(self) -> bool {
+        match self {
+            ReadingEvent::Started
+            | ReadingEvent::Finished
+            | ReadingEvent::WantToRead
+            | ReadingEvent::UnmarkedAsWantToRead
+            | ReadingEvent::Bought
+            | ReadingEvent::Abandoned => true,
+            ReadingEvent::Update | ReadingEvent::CreateReview | ReadingEvent::EditReview => false,
+        }
+    }
 }
 
 /// Optional metadata attached to a reading event.
@@ -267,19 +291,25 @@ pub enum ReadingEvent {
 /// free-text remarks about that progress, written in their editor.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadingMetadata {
-    /// Both fields are omitted from the JSON entirely when absent, so events
-    /// that carry no progress data are not written with null keys.
+    /// `current_page`, `note`, and `review_text` are each omitted from the
+    /// JSON entirely when absent, so an event that doesn't carry a given
+    /// field is not written with a null key for it. This also means adding a
+    /// new optional field here does not rewrite every existing stored event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_page: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The complete review text as of this event, for `CreateReview` and
+    /// `EditReview`. A full snapshot, not a patch — see ADR 0017.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_text: Option<String>,
 }
 
 impl ReadingMetadata {
     /// True when no metadata is set. Lets `Reading` omit the whole object for
     /// events that carry none, rather than writing an empty `{}`.
     pub fn is_empty(&self) -> bool {
-        self.current_page.is_none() && self.note.is_none()
+        self.current_page.is_none() && self.note.is_none() && self.review_text.is_none()
     }
 }
 
@@ -299,28 +329,35 @@ pub struct Reading {
     pub metadata: ReadingMetadata,
 }
 
-/// A user-written review of a book.
-///
-/// Each review is linked to a book by `book_id` and contains free-form text
-/// written via the user's default editor (git-commit style).
-/// A book can have multiple reviews.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Review {
-    pub id: String,
+/// One recorded state of a review, as of a single event.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewRevision {
     pub created_on: DateTime<Utc>,
-    pub book_id: String,
+    pub event: ReadingEvent,
     pub text: String,
 }
 
+/// A book's review, derived by replaying its review events.
+///
+/// Not persisted. A book has at most one, identified by the book itself —
+/// there is no review id. Built by `Storage::review_for_book`.
+#[derive(Debug, Clone)]
+pub struct Review {
+    pub book_id: String,
+    /// When the review was first written.
+    pub created_on: DateTime<Utc>,
+    /// When it was last changed. Equal to `created_on` if never edited.
+    pub updated_on: DateTime<Utc>,
+    /// The current text: the newest snapshot.
+    pub text: String,
+    /// Every revision, oldest first.
+    pub revisions: Vec<ReviewRevision>,
+}
+
 impl Review {
-    /// Creates a new review with a generated UUID and current timestamp.
-    pub fn new(book_id: String, text: String) -> Self {
-        Self {
-            id: Uuid::new_v4().to_string(),
-            created_on: Utc::now(),
-            book_id,
-            text,
-        }
+    /// How many times the review has been revised since it was written.
+    pub fn edit_count(&self) -> usize {
+        self.revisions.len().saturating_sub(1)
     }
 }
 
@@ -412,6 +449,7 @@ impl Reading {
             metadata: ReadingMetadata {
                 current_page: Some(current_page),
                 note: None,
+                review_text: None,
             },
         }
     }
@@ -427,6 +465,24 @@ impl Reading {
             metadata: ReadingMetadata {
                 current_page: Some(current_page),
                 note: Some(note),
+                review_text: None,
+            },
+        }
+    }
+
+    /// Creates a review event carrying the full review text as of this change.
+    ///
+    /// `event` must be `CreateReview` or `EditReview`.
+    pub fn with_review(book_id: String, event: ReadingEvent, text: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_on: Utc::now(),
+            book_id,
+            event,
+            metadata: ReadingMetadata {
+                current_page: None,
+                note: None,
+                review_text: Some(text),
             },
         }
     }
@@ -497,8 +553,6 @@ pub struct Storage {
     pub readings: HashMap<String, Reading>,
     pub authors: HashMap<String, Author>,
     pub categories: HashMap<String, Category>,
-    #[serde(default)]
-    pub reviews: HashMap<String, Review>,
     /// Yearly reading goals: year -> books and pages targets.
     /// Uses `#[serde(default)]` for backward compatibility with existing JSON files.
     #[serde(default)]
@@ -522,7 +576,6 @@ impl Storage {
             readings: HashMap::new(),
             authors: HashMap::new(),
             categories: HashMap::new(),
-            reviews: HashMap::new(),
             goals: HashMap::new(),
             series: HashMap::new(),
         }
@@ -604,22 +657,83 @@ impl Storage {
         self.categories.get(id)
     }
 
-    pub fn add_review(&mut self, review: Review) -> Option<Review> {
-        self.reviews.insert(review.id.clone(), review)
-    }
-
-    pub fn get_review(&self, id: &str) -> Option<&Review> {
-        self.reviews.get(id)
-    }
-
-    /// Returns all reviews for a given book, sorted by creation date (newest first).
-    pub fn get_reviews_for_book(&self, book_id: &str) -> Vec<&Review> {
-        let mut reviews: Vec<&Review> = self
-            .reviews
+    /// Replays a book's review events into its current review.
+    ///
+    /// Returns None if the book has never been reviewed.
+    pub fn review_for_book(&self, book_id: &str) -> Option<Review> {
+        let mut events: Vec<&Reading> = self
+            .readings
             .values()
             .filter(|r| r.book_id == book_id)
+            .filter(|r| {
+                matches!(
+                    r.event,
+                    ReadingEvent::CreateReview | ReadingEvent::EditReview
+                )
+            })
             .collect();
-        reviews.sort_by(|a, b| b.created_on.cmp(&a.created_on));
+
+        if events.is_empty() {
+            return None;
+        }
+
+        // Sort by (created_on, id): `readings` is a HashMap, so plain
+        // iteration order is reseeded per process, and a stable sort on
+        // created_on alone would let that random order leak into the
+        // result whenever two events share a timestamp. The id breaks
+        // ties deterministically regardless of iteration order.
+        events.sort_by(|a, b| (a.created_on, &a.id).cmp(&(b.created_on, &b.id)));
+
+        let revisions: Vec<ReviewRevision> = events
+            .iter()
+            .map(|r| ReviewRevision {
+                created_on: r.created_on,
+                event: r.event,
+                text: r.metadata.review_text.clone().unwrap_or_default(),
+            })
+            .collect();
+
+        let first = revisions.first()?;
+        let last = revisions.last()?;
+
+        Some(Review {
+            book_id: book_id.to_string(),
+            created_on: first.created_on,
+            updated_on: last.created_on,
+            text: last.text.clone(),
+            revisions,
+        })
+    }
+
+    /// Every book's review, newest first by creation date.
+    ///
+    /// Sorted on `created_on` rather than `updated_on` so the listing keeps
+    /// its existing order and is sorted by the date column it displays.
+    pub fn all_reviews(&self) -> Vec<Review> {
+        let book_ids: std::collections::HashSet<&str> = self
+            .readings
+            .values()
+            .filter(|r| {
+                matches!(
+                    r.event,
+                    ReadingEvent::CreateReview | ReadingEvent::EditReview
+                )
+            })
+            .map(|r| r.book_id.as_str())
+            .collect();
+
+        let mut reviews: Vec<Review> = book_ids
+            .into_iter()
+            .filter_map(|book_id| self.review_for_book(book_id))
+            .collect();
+
+        // Break created_on ties by book_id for the same reason as the
+        // per-book fold above: HashMap iteration order must not leak in.
+        reviews.sort_by(|a, b| {
+            b.created_on
+                .cmp(&a.created_on)
+                .then_with(|| a.book_id.cmp(&b.book_id))
+        });
         reviews
     }
 
@@ -646,11 +760,15 @@ impl Storage {
             .collect()
     }
 
-    /// Returns the most recent reading event for a given book, or None if no readings exist
+    /// The most recent status-bearing event for a book.
+    ///
+    /// Non-status events (progress updates, review activity) are skipped, so
+    /// they never displace the book's actual status.
     pub fn most_recent_reading_event(&self, book_id: &str) -> Option<ReadingEvent> {
         self.readings
             .values()
             .filter(|r| r.book_id == book_id)
+            .filter(|r| r.event.affects_status())
             .max_by_key(|r| r.created_on)
             .map(|r| r.event)
     }
@@ -662,7 +780,10 @@ impl Storage {
             .collect()
     }
 
-    /// Helper method to get books with a specific event as their most recent reading
+    /// Returns books whose most recent status-bearing event matches the target.
+    ///
+    /// Only status-bearing events (see [`ReadingEvent::affects_status`]) can be matched.
+    /// Passing a non-status event like `Update` always returns an empty vector.
     pub fn get_books_by_most_recent_event(&self, target_event: ReadingEvent) -> Vec<&Book> {
         self.books
             .values()
@@ -735,7 +856,9 @@ impl Storage {
                 ReadingEvent::Update
                 | ReadingEvent::Bought
                 | ReadingEvent::WantToRead
-                | ReadingEvent::UnmarkedAsWantToRead => continue,
+                | ReadingEvent::UnmarkedAsWantToRead
+                | ReadingEvent::CreateReview
+                | ReadingEvent::EditReview => continue,
             }
         }
         false
@@ -1233,6 +1356,251 @@ fn shift_json_positions_from(
     }
 }
 
+/// Converts legacy `reviews` entries into `CreateReview` reading events.
+///
+/// Must run before deserialization: serde ignores unknown keys, so once
+/// `Storage` lost its `reviews` field a stale file would load cleanly and drop
+/// every review without a word.
+///
+/// Each book keeps only its oldest review, by true chronological instant,
+/// not by string comparison of the timestamp; later ones are reported and
+/// discarded (ADR 0017). A review with no parseable `created_on` never wins
+/// that slot over a dateable sibling, and if it is the *only* review for its
+/// book, it is skipped and reported rather than written — an unparseable
+/// timestamp on a `Reading` would fail to deserialize the whole storage file
+/// on the next load. A backup is written first, since this loses data, and
+/// an existing backup from an earlier run is never overwritten — see
+/// `next_review_migration_backup_path`.
+///
+/// Returns `Ok(false)` when there was nothing to migrate, having touched
+/// nothing.
+///
+/// # Errors
+///
+/// Returns `Err` — without writing anything, backup included — if the file's
+/// `reviews` key is present but not a JSON object, or if its `readings` key
+/// is present but not a JSON object. Both shapes are ones this migration
+/// cannot safely handle: proceeding would either silently discard every
+/// review, or silently discard every migrated event while still removing
+/// `reviews`. Also returns `Err` if a migrated review's id collides with an
+/// id already present in `readings`, rather than overwriting it.
+pub fn migrate_reviews(storage_path: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(storage_path)?;
+    let mut value: serde_json::Value = serde_json::from_str(&contents)?;
+
+    // Absent, null, or an empty object: nothing to migrate, and nothing
+    // written. An empty `reviews` key left behind is harmless — serde ignores
+    // unknown keys — and leaving it makes a second run a true no-op.
+    let reviews = match value.get("reviews") {
+        None | Some(serde_json::Value::Null) => return Ok(false),
+        Some(serde_json::Value::Object(map)) if map.is_empty() => return Ok(false),
+        Some(serde_json::Value::Object(map)) => map.clone(),
+        Some(_) => {
+            return Err("storage's `reviews` key is present but is not a JSON \
+                         object; refusing to migrate to avoid silently \
+                         losing reviews"
+                .into());
+        }
+    };
+
+    // Guard the write target's shape before touching the disk at all: an
+    // existing `readings` key that is not an object would otherwise silently
+    // swallow every migrated event once it is merged in below.
+    if let Some(readings) = value.get("readings") {
+        if !readings.is_object() {
+            return Err("storage's `readings` key is present but is not a \
+                         JSON object; refusing to migrate to avoid silently \
+                         losing reviews"
+                .into());
+        }
+    }
+
+    // Never overwrite a backup already on disk from an earlier run — it may
+    // be the only surviving copy of reviews a previous run discarded.
+    let backup_path = next_review_migration_backup_path(storage_path);
+    fs::write(&backup_path, &contents)?;
+    println!("Backed up the original file to {}", backup_path);
+
+    // Group by book, oldest first.
+    let mut by_book: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
+        std::collections::BTreeMap::new();
+    for review in reviews.values() {
+        let book_id = review
+            .get("book_id")
+            .and_then(|b| b.as_str())
+            .unwrap_or_default()
+            .to_string();
+        by_book.entry(book_id).or_default().push(review.clone());
+    }
+
+    let known_books: std::collections::HashSet<String> = value
+        .get("books")
+        .and_then(|b| b.as_object())
+        .map(|books| books.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let mut events = serde_json::Map::new();
+
+    for (book_id, mut group) in by_book {
+        // Sort by the parsed instant, not the raw string: chrono serializes
+        // with `SecondsFormat::AutoSi`, so the number of fractional-second
+        // digits varies with the value, and lexical order does not agree
+        // with chronological order (e.g. "...100500Z" < "...100Z" as
+        // strings, even though .100500s is later than .100s). A review
+        // whose timestamp is missing or fails to parse sorts LAST, never
+        // first: we cannot establish that an undateable review is the
+        // oldest, and preferring a dateable sibling for the "keep" slot
+        // keeps the resulting event well-formed (see the check below).
+        group.sort_by(|a, b| {
+            let a_instant = review_instant(a);
+            let b_instant = review_instant(b);
+            match (a_instant, b_instant) {
+                (Some(a), Some(b)) => a.cmp(&b),
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
+        });
+
+        if !known_books.contains(&book_id) {
+            // The book is missing from `books`, so a title lookup here would
+            // always fall through to "an unknown book" anyway — book_id is
+            // the only thing left that identifies what was discarded.
+            println!(
+                "Discarded {} review(s) referencing a book that no longer exists (book_id {}).",
+                group.len(),
+                book_id
+            );
+            continue;
+        }
+
+        let title = value
+            .get("books")
+            .and_then(|books| books.get(&book_id))
+            .and_then(|book| book.get("title"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("an unknown book")
+            .to_string();
+
+        let oldest = group.remove(0);
+        if !group.is_empty() {
+            println!(
+                "Discarded {} later review(s) for \"{}\".",
+                group.len(),
+                title
+            );
+        }
+
+        // Never write an event whose `created_on` would not round-trip:
+        // `Reading.created_on` is a `DateTime<Utc>`, so an unparseable value
+        // here would fail to deserialize the *entire* storage file the next
+        // time it is loaded. This can only happen when every review for this
+        // book was undateable (the sort above always prefers a dateable one
+        // when there is one). The backup written above is the recovery path.
+        if review_instant(&oldest).is_none() {
+            println!(
+                "Skipped the review for \"{}\": its created_on is not a valid timestamp.",
+                title
+            );
+            continue;
+        }
+
+        let id = match oldest.get("id").and_then(|i| i.as_str()) {
+            Some(id) if !id.is_empty() => id.to_string(),
+            _ => {
+                // A missing or empty id would otherwise make every id-less
+                // review key on the same "" — later ones silently
+                // overwriting earlier ones, for different books. Minting a
+                // fresh id keeps each book's review distinct instead.
+                let fresh = Uuid::new_v4().to_string();
+                println!(
+                    "Review for \"{}\" had no id; assigned a new one ({}).",
+                    title, fresh
+                );
+                fresh
+            }
+        };
+        let text = oldest.get("text").and_then(|t| t.as_str()).unwrap_or("");
+
+        if events.contains_key(&id) {
+            return Err(format!(
+                "migrated review id {id} collides with another migrated \
+                 review's id; refusing to overwrite it"
+            )
+            .into());
+        }
+
+        events.insert(
+            id.clone(),
+            serde_json::json!({
+                "id": id,
+                "created_on": oldest.get("created_on").cloned().unwrap_or(serde_json::Value::Null),
+                "book_id": book_id,
+                "event": "CreateReview",
+                "metadata": { "review_text": text }
+            }),
+        );
+    }
+
+    let root = value
+        .as_object_mut()
+        .ok_or("storage root is not an object")?;
+    let readings = root
+        .entry("readings")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    // The shape was verified above, before the backup was written.
+    let readings = readings
+        .as_object_mut()
+        .ok_or("storage's `readings` key is present but is not a JSON object")?;
+    for (id, event) in events {
+        if readings.contains_key(&id) {
+            return Err(format!(
+                "migrated review id {id} collides with an existing reading id; \
+                 refusing to overwrite it"
+            )
+            .into());
+        }
+        readings.insert(id, event);
+    }
+    root.remove("reviews");
+
+    write_json_value(storage_path, &value)?;
+    Ok(true)
+}
+
+/// Parses a raw review's `created_on` as an RFC 3339 instant, for ordering
+/// reviews by true chronology rather than by string. Returns `None` when the
+/// field is missing or fails to parse — callers must treat that as the
+/// *least* trustworthy case, not the oldest: we have no evidence about when
+/// an undateable review was written, and letting it win the "keep" slot
+/// would carry an invalid timestamp into the migrated event.
+fn review_instant(review: &serde_json::Value) -> Option<DateTime<FixedOffset>> {
+    review
+        .get("created_on")
+        .and_then(|c| c.as_str())
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+}
+
+/// Returns the first backup path for `storage_path` that does not already
+/// exist, so a second migration run never overwrites a backup left behind by
+/// an earlier one — that backup may be the only remaining copy of reviews an
+/// earlier run discarded. Tries `<path>.pre-review-migration.bak` first,
+/// then `<path>.pre-review-migration.<n>.bak` for increasing `n`.
+fn next_review_migration_backup_path(storage_path: &str) -> String {
+    let primary = format!("{storage_path}.pre-review-migration.bak");
+    if !Path::new(&primary).exists() {
+        return primary;
+    }
+    let mut n = 2;
+    loop {
+        let candidate = format!("{storage_path}.pre-review-migration.{n}.bak");
+        if !Path::new(&candidate).exists() {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 /// Writes a raw JSON tree using the same sorted-key, pretty formatting as
 /// `write_storage`, so a migrated file is byte-identical to a normally saved one.
 fn write_json_value(
@@ -1252,6 +1620,9 @@ pub fn load_and_repair_storage(
 ) -> Result<Storage, Box<dyn std::error::Error>> {
     // Must precede load_storage: an unmigrated position cannot be deserialized.
     migrate_positions(storage_path, prompter)?;
+    // Must also precede it: serde ignores the unknown `reviews` key, so a
+    // stale file would otherwise load cleanly and lose every review.
+    migrate_reviews(storage_path)?;
     let mut storage = load_storage(storage_path)?;
     handle_missing_fields(&mut storage, storage_path, prompter)?;
     Ok(storage)

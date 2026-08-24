@@ -2,6 +2,7 @@ pub mod author;
 pub mod book;
 pub mod category;
 pub mod config;
+pub mod diff;
 pub mod editor;
 pub mod goal;
 pub mod pages;

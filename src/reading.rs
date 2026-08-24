@@ -102,9 +102,19 @@ pub fn store_reading(storage: &mut Storage, reading: Reading) -> Result<(), Stri
 /// Every line is a comment, so an untouched template strips to nothing and
 /// aborts the update.
 pub fn progress_note_template(book_title: &str, author_name: &str) -> String {
-    format!(
-        "\n# Write a note about your progress in \"{}\" by {} above.\n# Lines starting with # will be stripped.\n# An empty note (after stripping comments) will abort the update.\n",
+    // Bound to a let for the same reason as the review template: one element
+    // type per array literal.
+    let heading = format!(
+        "Write a note about your progress in \"{}\" by {} above.",
         book_title, author_name
+    );
+    format!(
+        "\n\n{}",
+        crate::editor::instruction_block(&[
+            heading.as_str(),
+            "Everything below this line is ignored.",
+            "An empty note aborts the update.",
+        ])
     )
 }
 
