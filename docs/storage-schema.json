@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/kodeklang/bookmon/docs/storage-schema.json",
   "title": "bookmon storage file",
-  "description": "The complete on-disk format of a bookmon storage file: a single JSON object holding every book, reading event, author, category, review, series and yearly goal. All collections are objects keyed by the entity's own id (a UUID v4 string), except `goals`, which is keyed by year. Reading status is not stored directly; it is derived from the most recent reading event for a book (event sourcing). This schema describes what bookmon writes and is strict about it; bookmon's own reader is more lenient (it ignores unknown fields and accepts the legacy shapes noted below), so treat this as the target format for writers and the superset notes as compatibility hints for readers.",
+  "description": "The complete on-disk format of a bookmon storage file: a single JSON object holding every book, reading event, author, category, series and yearly goal. Reviews are not a collection of their own: a book's review is derived by replaying its `CreateReview`/`EditReview` reading events. All collections are objects keyed by the entity's own id (a UUID v4 string), except `goals`, which is keyed by year. Reading status is not stored directly; it is derived from the most recent *status-bearing* reading event for a book (event sourcing). This schema describes what bookmon writes and is strict about it; bookmon's own reader is more lenient (it ignores unknown fields and accepts the legacy shapes noted below), so treat this as the target format for writers and the superset notes as compatibility hints for readers.",
   "type": "object",
   "required": ["books", "readings", "authors", "categories"],
   "additionalProperties": false,
@@ -30,12 +30,6 @@
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/uuidKey" },
       "additionalProperties": { "$ref": "#/$defs/category" }
-    },
-    "reviews": {
-      "description": "All book reviews, keyed by review id. The key MUST equal the `id` field of its value. Optional: a missing `reviews` object is read as empty.",
-      "type": "object",
-      "propertyNames": { "$ref": "#/$defs/uuidKey" },
-      "additionalProperties": { "$ref": "#/$defs/review" }
     },
     "series": {
       "description": "All book series, keyed by series id. The key MUST equal the `id` field of its value. Optional: a missing `series` object is read as empty.",
@@ -162,7 +156,7 @@
     },
     "reading": {
       "type": "object",
-      "description": "A single timestamped reading event for a book. Events are append-only; a book's current status is derived from its most recent event by `created_on`. `Update` and `Bought` do not change started/finished status.",
+      "description": "A single timestamped reading event for a book. Events are append-only; a book's current status is derived from its most recent *status-bearing* event by `created_on`. `Update`, `CreateReview` and `EditReview` are non-status events and are skipped when deriving status, so recording progress or writing a review never changes whether a book counts as started or finished.",
       "required": ["id", "created_on", "book_id", "event"],
       "additionalProperties": false,
       "properties": {
@@ -173,7 +167,7 @@
           "description": "Foreign key -> a key of `books`. bookmon prompts to recreate the book on load if the id is missing from `books`."
         },
         "event": {
-          "description": "Started: began reading. Finished: completed the book. Update: progress report, carries `metadata.current_page`. Bought: acquired the book. WantToRead / UnmarkedAsWantToRead: added to / removed from the want-to-read list. Abandoned: stopped reading without finishing; a later Started begins a new attempt.",
+          "description": "Started: began reading. Finished: completed the book. Update: progress report, carries `metadata.current_page`. Bought: acquired the book. WantToRead / UnmarkedAsWantToRead: added to / removed from the want-to-read list. Abandoned: stopped reading without finishing; a later Started begins a new attempt. CreateReview: the first review written for a book, at most one per book. EditReview: a revision of that review. Both carry the full review text as of that event in `metadata.review_text`.",
           "enum": [
             "Started",
             "Finished",
@@ -181,12 +175,14 @@
             "Bought",
             "WantToRead",
             "UnmarkedAsWantToRead",
-            "Abandoned"
+            "Abandoned",
+            "CreateReview",
+            "EditReview"
           ]
         },
         "metadata": {
           "type": "object",
-          "description": "Extra data for the event. Omitted entirely when it would be empty, which is the case for every event except `Update`.",
+          "description": "Extra data for the event. Omitted entirely when it would be empty, which is the case for every event except `Update`, `CreateReview` and `EditReview`.",
           "additionalProperties": false,
           "properties": {
             "current_page": {
@@ -198,26 +194,12 @@
             "note": {
               "type": "string",
               "description": "Free-text note the reader wrote about this progress, may span multiple lines. Omitted entirely when absent (never written as null)."
+            },
+            "review_text": {
+              "type": "string",
+              "description": "The complete review text as of this event, on `CreateReview` and `EditReview`. A full snapshot, not a patch: the current review is the newest snapshot, and diffs between consecutive events are computed at display time, never stored. Omitted entirely when absent (never written as null)."
             }
           }
-        }
-      }
-    },
-    "review": {
-      "type": "object",
-      "description": "A free-text review of a book. A book may have several; they are shown newest first.",
-      "required": ["id", "created_on", "book_id", "text"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "created_on": { "$ref": "#/$defs/timestamp" },
-        "book_id": {
-          "type": "string",
-          "description": "Foreign key -> a key of `books`."
-        },
-        "text": {
-          "type": "string",
-          "description": "The review body, may span multiple lines."
         }
       }
     },
