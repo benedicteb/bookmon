@@ -67,6 +67,18 @@ fn test_body_containing_a_scissors_line_is_kept_up_to_the_last_one() {
 }
 
 #[test]
+fn test_crlf_line_endings_are_normalized_to_lf() {
+    let input = format!(
+        "First.\r\nSecond.\r\n\r\n{}\r\n# Instructions.\r\n",
+        SCISSORS
+    );
+    assert_eq!(
+        strip_editor_text(&input),
+        Some("First.\nSecond.".to_string())
+    );
+}
+
+#[test]
 fn test_instruction_block_comments_every_line_and_leads_with_scissors() {
     let block = instruction_block(&["First instruction.", "Second instruction."]);
     let lines: Vec<&str> = block.lines().collect();

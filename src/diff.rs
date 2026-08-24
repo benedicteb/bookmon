@@ -28,7 +28,11 @@ pub fn line_diff(old: &str, new: &str) -> Vec<DiffLine> {
     TextDiff::from_lines(old.as_ref(), new.as_ref())
         .iter_all_changes()
         .map(|change| {
-            let text = change.value().trim_end_matches('\n').to_string();
+            // Defensive: normal input is already `\n`-only (`strip_editor_text`
+            // normalizes CRLF before anything is stored), but stray `\r\n`
+            // from an older stored review, or any future caller, must not
+            // leave a trailing `\r` on a rendered line.
+            let text = change.value().trim_end_matches(['\r', '\n']).to_string();
             match change.tag() {
                 ChangeTag::Equal => DiffLine::Context(text),
                 ChangeTag::Insert => DiffLine::Added(text),

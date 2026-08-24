@@ -26,6 +26,12 @@ pub fn instruction_block(lines: &[&str]) -> String {
 /// text happens to contain a line that looks like the scissors marker must
 /// not have their trailing text truncated at that line.
 ///
+/// Line endings are normalized to `\n`: an editor that writes CRLF (common on
+/// Windows, and configurable elsewhere) must never leave `\r\n` in stored
+/// text — a stray `\r` would otherwise survive into the JSON and show up on
+/// every rendered diff line. This does not strip `#`-prefixed lines; the
+/// scissors behaviour is unchanged.
+///
 /// Returns None if nothing is left, which is how the user aborts: saving an
 /// untouched template leaves an empty body.
 pub fn strip_editor_text(text: &str) -> Option<String> {
@@ -34,7 +40,8 @@ pub fn strip_editor_text(text: &str) -> Option<String> {
         None => text,
     };
 
-    let trimmed = body.trim().to_string();
+    let normalized = body.replace("\r\n", "\n");
+    let trimmed = normalized.trim().to_string();
 
     if trimmed.is_empty() {
         None

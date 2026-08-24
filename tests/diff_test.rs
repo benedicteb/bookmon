@@ -55,6 +55,18 @@ fn test_text_to_empty_is_all_removals() {
 }
 
 #[test]
+fn test_stray_carriage_returns_are_trimmed_from_rendered_lines() {
+    // Defensive: normal input is `\n`-only by the time it reaches here, but a
+    // `\r\n`-carrying line (e.g. from an older stored review) must not leave
+    // a trailing `\r` baked into the rendered text.
+    let out = rendered(
+        "Line one.\r\nLine two.\r\n",
+        "Line one.\r\nLine two.\r\nLine three.\r\n",
+    );
+    assert_eq!(out, vec!["  Line one.", "  Line two.", "+ Line three."]);
+}
+
+#[test]
 fn test_lines_starting_with_hash_survive() {
     let out = rendered("# Heading", "# Heading\nBody.");
     assert_eq!(out, vec!["  # Heading", "+ Body."]);
